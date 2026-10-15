@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("nav.my_bids") }}{% endblock %}
+{% block content %}
+<h1>{{ _("nav.my_bids") }}</h1>
+{% if rows %}<div class="table-wrap"><table><thead><tr><th>{{ _("order.route") }}</th><th class="num">{{ _("bids.price") }}</th><th>{{ _("bids.status") }}</th><th>{{ _("order.title") }}</th><th>{{ _("common.date") }}</th></tr></thead>
+<tbody>{% for b, o in rows %}<tr><td><a href="/market/{{ o.id }}">{{ ui.route(o) }}</a></td><td class="num">{{ money(b.price_minor, b.currency) }}</td><td>{{ ui.status(b.status) }}</td><td>{{ ui.status(o.status) }}</td><td>{{ fmt_dt(b.created_at) }}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}{{ ui.empty(_("bids.my_empty"), "", "/market", _("nav.market")) }}{% endif %}
+{% endblock %}

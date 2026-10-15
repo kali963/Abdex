@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("account.consents") }}{% endblock %}
+{% block content %}
+<h1>{{ _("nav.account") }}</h1>
+{% include "account/_tabs.html" %}
+<p class="muted">{{ _("consent.text") }}</p>
+<div class="table-wrap"><table>
+<thead><tr><th>{{ _("consent.purpose") }}</th><th>{{ _("common.status") }}</th><th></th></tr></thead>
+<tbody>{% for p in purposes %}<tr><td><b>{{ _("consent." ~ p) }}</b><br><small class="muted">{{ _("consent." ~ p ~ "_hint") }}</small></td>
+<td>{% if p in active %}<span class="badge ok">{{ _("consent.given") }}</span>{% else %}<span class="badge">{{ _("consent.not_given") }}</span>{% endif %}</td>
+<td>{% if p != "registration" %}<form method="post" action="/account/consents/{{ p }}">{{ ui.csrf() }}
+  {% if p in active %}<button class="btn small danger">{{ _("consent.revoke") }}</button>{% else %}<input type="hidden" name="grant" value="1"><button class="btn small">{{ _("consent.grant") }}</button>{% endif %}
+</form>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+<h2>{{ _("consent.history") }}</h2>
+<div class="table-wrap"><table><thead><tr><th>{{ _("consent.purpose") }}</th><th>{{ _("consent.version") }}</th><th>{{ _("consent.date") }}</th><th>{{ _("consent.revoked") }}</th></tr></thead>
+<tbody>{% for c in items %}<tr><td>{{ _("consent." ~ c.purpose) }}</td><td>{{ c.text_version }}</td><td>{{ fmt_dt(c.created_at) }}</td><td>{{ fmt_dt(c.revoked_at) if c.revoked_at else "—" }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.integrations") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.integrations") }}</h1>
+<div class="grid three">{% for name, a in adapters.items() %}<div class="card stat"><b>{{ name }}</b><span>ok {{ a.metrics.ok }} · err {{ a.metrics.error }}{% if a.open %} · <span class="badge err">circuit open</span>{% endif %}</span></div>{% endfor %}</div>
+<h2>{{ _("integr.calls") }}</h2>
+<div class="table-wrap"><table><thead><tr><th>{{ _("common.date") }}</th><th>{{ _("integr.adapter") }}</th><th>{{ _("integr.operation") }}</th><th>{{ _("kyc.basis") }}</th><th>{{ _("common.status") }}</th><th class="num">ms</th><th>{{ _("integr.summary") }}</th></tr></thead>
+<tbody>{% for c in calls %}<tr><td><small>{{ fmt_dt(c.created_at) }}</small></td><td>{{ c.adapter }}</td><td>{{ c.operation }}</td><td>{{ c.basis }}</td><td>{{ c.status }}</td><td class="num">{{ c.duration_ms }}</td><td><small>{{ c.request_summary }}{{ c.error }}</small></td></tr>{% endfor %}</tbody></table></div>
+<h2>{{ _("integr.outbox") }}</h2>
+<div class="table-wrap"><table><thead><tr><th>{{ _("common.date") }}</th><th>{{ _("dev.channel") }}</th><th>{{ _("integr.event") }}</th><th>{{ _("common.status") }}</th><th>{{ _("integr.attempts") }}</th></tr></thead>
+<tbody>{% for m in outbox %}<tr><td><small>{{ fmt_dt(m.created_at) }}</small></td><td>{{ m.channel }}</td><td>{{ m.event }}</td><td>{{ ui.status(m.status) }}</td><td>{{ m.attempts }}{% if m.last_error %} <small>{{ m.last_error }}</small>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

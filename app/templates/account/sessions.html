@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("account.sessions") }}{% endblock %}
+{% block content %}
+<h1>{{ _("nav.account") }}</h1>
+{% include "account/_tabs.html" %}
+<div class="table-wrap"><table>
+<thead><tr><th>{{ _("session.device") }}</th><th>IP</th><th>{{ _("session.started") }}</th><th>{{ _("session.last") }}</th><th></th></tr></thead>
+<tbody>{% for s in items %}<tr>
+  <td>{{ s.user_agent[:80] }}{% if s.id == me.session.id %} <span class="badge ok">{{ _("session.current") }}</span>{% endif %}</td>
+  <td>{{ s.ip }}</td><td>{{ fmt_dt(s.created_at) }}</td><td>{{ fmt_dt(s.last_seen_at) }}</td>
+  <td>{% if s.id != me.session.id %}<form method="post" action="/account/sessions/{{ s.id }}/revoke">{{ ui.csrf() }}<button class="btn small danger">{{ _("session.end") }}</button></form>{% endif %}</td>
+</tr>{% endfor %}</tbody></table></div>
+<form method="post" action="/account/sessions/revoke-all" class="actions" data-confirm="{{ _('session.end_all_confirm') }}">{{ ui.csrf() }}<button class="btn danger">{{ _("session.end_all") }}</button></form>
+{% endblock %}

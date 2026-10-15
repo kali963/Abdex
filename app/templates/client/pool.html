@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("company.pool") }}{% endblock %}
+{% block content %}
+<h1>{{ _("company.pool") }}</h1>
+{% include "company/_tabs.html" %}
+<p class="muted">{{ _("pool.text") }}</p>
+{% if me.can("company.manage") %}
+<form method="post" action="/pool" class="card form-grid">{{ ui.csrf() }}
+  <div class="field"><label for="f-company_id">{{ _("pool.company") }}</label><select id="f-company_id" name="company_id">{% for c in candidates %}<option value="{{ c.id }}">{{ c.name }} (L{{ c.verification_level }})</option>{% endfor %}</select></div>
+  {{ ui.select("kind", _("pool.kind"), [("trusted", _("pool.trusted")), ("blocked", _("pool.blocked"))], "trusted") }}
+  <div class="field"><label>&nbsp;</label><button class="btn primary">{{ _("action.add") }}</button></div>
+</form>{% endif %}
+<div class="table-wrap"><table><thead><tr><th>{{ _("pool.company") }}</th><th>{{ _("pool.kind") }}</th><th></th></tr></thead><tbody>
+{% for pm, c in rows %}<tr><td><a href="/company/card/{{ c.id }}">{{ c.name }}</a></td><td>{% if pm.kind == "trusted" %}<span class="badge ok">{{ _("pool.trusted") }}</span>{% else %}<span class="badge err">{{ _("pool.blocked") }}</span>{% endif %}</td>
+<td>{% if me.can("company.manage") %}<form method="post" action="/pool/{{ pm.id }}/remove">{{ ui.csrf() }}<button class="btn small">{{ _("action.remove") }}</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="3" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

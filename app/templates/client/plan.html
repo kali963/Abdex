@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("nav.plan") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("plan.title") }}</h1><div class="row"><a class="btn small" href="/plan?week={{ prev }}">← {{ _("plan.prev") }}</a><a class="btn small" href="/plan">{{ _("plan.today") }}</a><a class="btn small" href="/plan?week={{ next }}">{{ _("plan.next") }} →</a></div></div>
+<div class="calendar">
+{% for d in days %}{% set key = fmt_date(d) %}
+  <div class="day"><b>{{ _("weekday." ~ d.weekday()) }}, {{ key }}</b>
+  {% for o in by_day[key] %}<a class="item" href="{{ ('/orders/' ~ o.id) if me.company.kind == 'client' else '/deals' }}">{{ o.origin.city if o.origin else '' }} → {{ o.destination.city if o.destination else '' }}<br><small>{{ status_label(o.status) }}</small></a>{% endfor %}
+  </div>
+{% endfor %}
+</div>
+{% if prelim %}<h2>{{ _("plan.preliminary") }}</h2><ul>{% for o in prelim %}<li><a href="/orders/{{ o.id }}/edit">{{ o.number }}</a> {{ o.cargo_name }}</li>{% endfor %}</ul>{% endif %}
+{% endblock %}

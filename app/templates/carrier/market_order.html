@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ order.number }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ ui.route(order) }}</h1><div class="row">{{ ui.status(order.status) }} <span class="muted">{{ order.number }} · v{{ order.version }}</span></div></div><a class="btn" href="/market">← {{ _("nav.market") }}</a></div>
+<div class="grid side">
+<div class="stack">
+  <section class="card"><h2>{{ _("order.details") }}</h2>
+    <p class="muted"><small>{{ _("market.limited_card") }}</small></p>
+    {% set show_address = false %}{% include "client/_order_details.html" %}
+  </section>
+  {% if my_bid %}
+  <section class="card"><h2>{{ _("bids.my") }}</h2>
+    <p>{{ ui.status(my_bid.status) }} <b>{{ money(my_bid.price_minor, my_bid.currency) }}</b></p>
+    {% if my_bid.status == "countered" %}<div class="alert info">{{ _("bids.counter_received") }}: <b>{{ money(my_bid.counter_price_minor, my_bid.currency) }}</b>
+      <div class="actions"><form method="post" action="/my-bids/{{ my_bid.id }}/counter">{{ ui.csrf() }}<input type="hidden" name="accept" value="1"><button class="btn ok small">{{ _("bids.agree") }}</button></form>
+      <form method="post" action="/my-bids/{{ my_bid.id }}/counter">{{ ui.csrf() }}<input type="hidden" name="accept" value="0"><button class="btn small">{{ _("bids.keep_mine") }}</button></form></div></div>{% endif %}
+    {% if my_bid.status == "needs_confirmation" %}<div class="alert warn">{{ _("bids.order_changed") }}
+      <form method="post" action="/my-bids/{{ my_bid.id }}/confirm">{{ ui.csrf() }}<button class="btn small primary">{{ _("bids.confirm_price") }}</button></form></div>{% endif %}
+    {% if my_bid.status in ("active", "countered", "needs_confirmation") %}<form method="post" action="/my-bids/{{ my_bid.id }}/withdraw" data-confirm="{{ _('bids.withdraw_confirm') }}">{{ ui.csrf() }}<button class="btn small danger">{{ _("bids.withdraw") }}</button></form>{% endif %}
+    <h3>{{ _("bids.history") }}</h3><ul class="timeline">{% for e in events %}<li>{{ fmt_dt(e.created_at) }} · {{ _("bidev." ~ e.kind) }}{% if e.price_minor %} · {{ money(e.price_minor, my_bid.currency) }}{% endif %}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+  {% if order.status in ("published", "bidding") and (not my_bid or my_bid.status in ("active", "countered", "needs_confirmation")) and me.can("bid.create") %}
+  <form class="card" method="post" action="/market/{{ order.id }}/bid" novalidate>
+    <h2>{{ _("bids.update") if my_bid else _("bids.place") }}</h2>
+    {% if me.company.verification_level < 1 %}<div class="alert warn">{{ _("market.need_verification") }}</div>{% endif %}
+    {{ ui.csrf() }}
+    <div class="form-grid">
+      {{ ui.field("price", _("bids.price") ~ " (" ~ order.currency ~ ")", form.price or (from_minor(my_bid.price_minor) if my_bid else ""), errors=errors, required=true, attrs='inputmode="decimal"') }}
+      {{ ui.select("payment_terms", _("order.payment_terms"), [("prepay", _("pay.prepay")), ("on_unload", _("pay.on_unload")), ("deferred", _("pay.deferred"))], form.payment_terms or order.payment_terms) }}
+      <div class="field{{ ' has-error' if errors.vehicle_id }}"><label for="f-vehicle_id">{{ _("bids.vehicle") }}</label><select id="f-vehicle_id" name="vehicle_id"><option value="">{{ _("bids.later") }}</option>{% for v in vehicles %}<option value="{{ v.id }}" {{ 'selected' if my_bid and my_bid.vehicle_id == v.id }}>{{ v.plate }} · {{ body_map.get(v.body_type, v.body_type) }} · {{ v.capacity_kg }} {{ _("unit.kg") }}</option>{% endfor %}</select>{% if errors.vehicle_id %}<span class="err">{{ _(errors.vehicle_id) }}</span>{% endif %}</div>
+      <div class="field"><label for="f-driver_id">{{ _("bids.driver") }}</label><select id="f-driver_id" name="driver_id"><option value="">{{ _("bids.later") }}</option>{% for d in drivers %}<option value="{{ d.id }}" {{ 'selected' if my_bid and my_bid.driver_id == d.id }}>{{ d.full_name }}</option>{% endfor %}</select></div>
+      {{ ui.field("ready_at", _("bids.ready"), form.ready_at, type="datetime-local") }}
+      {{ ui.field("valid_until", _("bids.valid_until"), form.valid_until, type="datetime-local") }}
+    </div>
+    {{ ui.textarea("comment", _("bids.comment"), form.comment or (my_bid.comment if my_bid else ""), rows=2, hint=_("bids.comment_hint")) }}
+    <div class="actions"><button class="btn primary">{{ _("action.send") }}</button></div>
+  </form>
+  {% endif %}
+</div>
+<aside class="stack">
+  <section class="card"><h3>{{ _("market.client") }}</h3>{{ ui.level(client_level) }}<dl class="kv"><dt>{{ _("stats.completed") }}</dt><dd>{{ client_stats.completed }}</dd><dt>{{ _("stats.rating") }}</dt><dd>{{ client_stats.rating or "—" }}</dd><dt>{{ _("stats.days_on_platform") }}</dt><dd>{{ client_stats.days_on_platform }}</dd></dl>
+  <p class="muted"><small>{{ _("market.contacts_after") }}</small></p></section>
+  {{ ui.role_note(role_text) }}
+</aside>
+</div>
+{% endblock %}

@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local data: database, uploaded files, logs (never commit real user data)
+var/
+*.db
+*.sqlite3
+*.log
+media/
+uploads/
+
+# Secrets (NFR-ARC-06): only .env.example is committed
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Archives and OS / IDE junk
+*.rar
+*.zip
+*.7z
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+node_modules/

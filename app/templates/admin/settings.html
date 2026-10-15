@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.settings") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.settings") }}</h1>
+<p class="muted">{{ _("settings.text") }}</p>
+{% for s in items %}<form method="post" action="/admin/settings/{{ s.id }}" class="card stack">{{ ui.csrf() }}
+<label for="s-{{ s.id }}"><code>{{ s.key }}</code> — {{ s.description }}</label>
+<textarea id="s-{{ s.id }}" name="value" rows="{{ 4 if s.value|length > 80 else 1 }}">{{ s.value }}</textarea><div><button class="btn small">{{ _("action.save") }}</button></div></form>{% endfor %}
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("nav.company") }}{% endblock %}
+{% block content %}
+{% set c = me.company %}
+<div class="page-head"><h1>{{ c.name }}</h1><div class="row">{{ ui.level(c.verification_level) }}<a class="btn small" href="/company/card/{{ c.id }}">{{ _("company.public_card") }}</a></div></div>
+{% include "company/_tabs.html" %}
+{% set can_manage = me.can("company.manage") %}
+<form class="card" method="post" action="/company">
+  {{ ui.csrf() }}
+  <h2>{{ _("company.requisites") }}</h2>
+  <div class="form-grid">
+    {{ ui.field("name", _("company.name"), c.name, required=true) }}
+    <div class="field"><label>{{ _("auth.bin_iin") }}</label><input type="text" value="{{ c.bin_iin }}" disabled></div>
+    {{ ui.field("legal_form", _("company.legal_form"), c.legal_form) }}
+    {{ ui.field("legal_address", _("company.legal_address"), c.legal_address) }}
+    {{ ui.field("actual_address", _("company.actual_address"), c.actual_address) }}
+    {{ ui.field("contact_phone", _("company.contact_phone"), c.contact_phone, type="tel") }}
+    {{ ui.field("contact_email", _("company.contact_email"), c.contact_email, type="email") }}
+    {{ ui.select("locale", _("company.doc_language"), [("ru", "Русский"), ("kk", "Қазақша")], c.locale) }}
+  </div>
+  {{ ui.checkbox("vat_payer", _("company.vat_payer"), c.vat_payer) }}
+  {% if c.kind == "carrier" %}{{ ui.checkbox("show_finance_to_drivers", _("company.show_finance_to_drivers"), c.show_finance_to_drivers) }}{% endif %}
+  {% if can_manage %}<div class="actions"><button class="btn primary">{{ _("action.save") }}</button></div>{% endif %}
+</form>
+
+<section class="card" id="bank">
+  <h2>{{ _("company.bank") }}</h2>
+  <p class="muted">{{ _("company.bank_hint") }}</p>
+  {% if banks %}<div class="table-wrap"><table><thead><tr><th>IBAN</th><th>{{ _("company.bank_name") }}</th><th>{{ _("common.status") }}</th><th>{{ _("company.effective") }}</th></tr></thead><tbody>
+  {% for b in banks %}<tr><td><code>{{ b.iban }}</code></td><td>{{ b.bank_name }}</td><td>{{ ui.status(b.status) }}</td>
+    <td>{% if b.effective_at %}{{ fmt_dt(b.effective_at) }}{% if b.effective_at > now %} <span class="badge warn">{{ _("company.cooldown") }}</span>{% endif %}{% else %}—{% endif %}
+    {% if b.status == "pending" and can_manage %}<form method="post" action="/company/bank/{{ b.id }}/confirm" class="row">{{ ui.csrf() }}<input type="text" name="code" placeholder="{{ _('auth.code') }}" inputmode="numeric" aria-label="{{ _('auth.code') }}"><button class="btn small primary">{{ _("auth.confirm") }}</button></form>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>{% endif %}
+  {% if can_manage %}
+  <form method="post" action="/company/bank" class="form-grid">{{ ui.csrf() }}
+    {{ ui.field("iban", "IBAN", "", required=true, hint="KZ00 0000 0000 0000 0000") }}
+    {{ ui.field("bank_name", _("company.bank_name"), "") }}
+    {{ ui.field("bik", _("company.bik"), "") }}
+    <div class="field"><label>&nbsp;</label><button class="btn">{{ _("company.bank_change") }}</button></div>
+  </form>{% endif %}
+</section>
+
+<section class="card">
+  <h2>{{ _("company.members") }}</h2>
+  <div class="table-wrap"><table><thead><tr><th>{{ _("auth.full_name") }}</th><th>{{ _("auth.phone") }}</th><th>{{ _("company.role") }}</th><th>{{ _("common.status") }}</th><th></th></tr></thead><tbody>
+  {% for m, u in members %}<tr><td>{{ u.full_name }}</td><td>{{ u.phone }}</td><td>{{ _("role." ~ m.role) }}</td>
+    <td>{% if m.is_active %}<span class="badge ok">{{ _("company.active") }}</span>{% else %}<span class="badge">{{ _("company.disabled") }}</span>{% endif %}</td>
+    <td>{% if can_manage and m.is_active and u.id != me.user.id %}<form method="post" action="/company/members/{{ m.id }}/disable" data-confirm="{{ _('company.disable_confirm') }}">{{ ui.csrf() }}<button class="btn small danger">{{ _("company.disable") }}</button></form>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% if can_manage %}
+  <h3>{{ _("company.invite") }}</h3>
+  {% if new_invite %}<div class="alert success">{{ _("company.invite_link") }}<div class="secret">{{ request.base_url }}invite/{{ new_invite }}</div></div>{% endif %}
+  <form method="post" action="/company/invite" class="form-grid">{{ ui.csrf() }}
+    <div class="field"><label for="f-role">{{ _("company.role") }}</label><select id="f-role" name="role">{% for r in roles %}<option value="{{ r }}">{{ _("role." ~ r) }}</option>{% endfor %}</select></div>
+    {{ ui.field("note", _("company.invite_note"), "") }}
+    <div class="field"><label>&nbsp;</label><button class="btn primary">{{ _("company.invite_create") }}</button></div>
+  </form>
+  {% if invites %}<p class="muted">{{ _("company.invites_active") }}:</p><ul>{% for i in invites %}<li>{{ _("role." ~ i.role) }} · {{ i.note }} · {{ _("company.until") }} {{ fmt_dt(i.expires_at) }}
+    <form class="inline" method="post" action="/company/invite/{{ i.id }}/revoke">{{ ui.csrf() }}<button class="btn link">{{ _("company.revoke") }}</button></form></li>{% endfor %}</ul>{% endif %}
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.antifraud") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("admin.antifraud") }}</h1><span class="muted">{{ _("admin.fp_rate") }}: <b>{{ fp_rate }}%</b></span></div>
+<nav class="tabs">{% for s in ("open", "confirmed", "false_positive") %}<a href="?status={{ s }}" class="{{ 'active' if s == status }}">{{ status_label(s) }}</a>{% endfor %}</nav>
+<div class="table-wrap"><table><thead><tr><th>{{ _("admin.alert") }}</th><th>{{ _("pool.company") }}</th><th>{{ _("deal.number") }}</th><th>{{ _("admin.details") }}</th><th>{{ _("common.date") }}</th><th></th></tr></thead>
+<tbody>{% for a in items %}<tr><td><span class="badge {{ 'err' if a.severity == 'high' else 'warn' }}">{{ a.severity }}</span> {{ _("alert." ~ a.kind) }}</td>
+<td>{% if a.company_id %}{% if me.can("admin.users") %}<a href="/admin/companies/{{ a.company_id }}">{{ names.get(a.company_id, "—") }}</a>{% else %}{{ names.get(a.company_id, "—") }}{% endif %}{% endif %}</td>
+<td>{% if a.deal_id %}{% if me.can("admin.deal_content") %}<a href="/admin/deals/{{ a.deal_id }}">{{ deal_nums.get(a.deal_id) }}</a>{% else %}{{ deal_nums.get(a.deal_id) }}{% endif %}{% endif %}</td>
+<td><small><code>{{ a.details }}</code></small></td><td>{{ fmt_dt(a.created_at) }}</td>
+<td>{% if a.status == "open" %}<form method="post" action="/admin/antifraud/{{ a.id }}" class="stack">{{ ui.csrf() }}<input type="text" name="note" placeholder="{{ _('admin.comment') }}" aria-label="{{ _('admin.comment') }}"><div class="row"><button class="btn small danger" name="decision" value="confirmed">{{ _("admin.confirm_fraud") }}</button><button class="btn small" name="decision" value="false_positive">{{ _("admin.false_positive") }}</button></div></form>{% else %}{{ a.decision_note }}{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

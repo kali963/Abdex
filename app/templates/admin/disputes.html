@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.disputes") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.disputes") }}</h1>
+{% for d, deal in rows %}
+<section class="card">
+  <div class="page-head"><h3><a href="/admin/deals/{{ deal.id }}">{{ deal.number }}</a> · {{ subject_map.get(d.subject, d.subject) }}</h3>{{ ui.status(d.status) }}</div>
+  <p>{{ d.description }}</p>
+  <dl class="kv"><dt>{{ _("dispute.client_position") }}</dt><dd>{{ d.client_position or "—" }}</dd><dt>{{ _("dispute.carrier_position") }}</dt><dd>{{ d.carrier_position or "—" }}</dd>{% if d.resolution %}<dt>{{ _("dispute.resolution") }}</dt><dd>{{ d.resolution }} ({{ status_label(d.outcome) }})</dd>{% endif %}</dl>
+  {% if d.status == "open" %}<form method="post" action="/admin/disputes/{{ d.id }}/resolve" class="stack">{{ ui.csrf() }}
+    {{ ui.textarea("resolution", _("dispute.resolution"), "", required=true, rows=2) }}
+    <div class="row"><button class="btn ok" name="outcome" value="closed_docs">{{ _("dispute.close_docs") }}</button><button class="btn danger" name="outcome" value="cancelled">{{ _("dispute.cancel_deal") }}</button></div>
+    <p class="muted"><small>{{ _("dispute.resolve_hint") }}</small></p></form>{% endif %}
+</section>
+{% else %}{{ ui.empty(_("common.empty")) }}{% endfor %}
+{% endblock %}

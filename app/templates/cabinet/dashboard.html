@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("nav.dashboard") }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ me.company.name }}</h1>
+  <div class="row">{{ ui.level(me.company.verification_level) }} <span class="badge">{{ _("role." ~ me.role) }}</span>
+    {% if me.company.is_blocked %}<span class="badge err">{{ _("company.blocked") }}</span>{% endif %}</div></div>
+  <div class="row">
+    {% if me.can("order.create") %}<a class="btn primary" href="/orders/new">+ {{ _("orders.new") }}</a>{% endif %}
+    {% if me.can("market.view") %}<a class="btn primary" href="/market">{{ _("nav.market") }}</a>{% endif %}
+  </div>
+</div>
+{% if me.company.verification_level < 1 %}
+<div class="card warn"><b>{{ _("dash.verify_title") }}</b><p>{{ _("dash.verify_text") }}</p>
+  {% if me.can("company.manage") %}<a class="btn primary" href="/company/verification">{{ _("dash.verify_btn") }}</a>{% endif %}</div>
+{% endif %}
+{% if not me.user.phone_verified %}<div class="alert warn">{{ _("dash.phone_unverified") }} <a href="/verify-phone">{{ _("auth.confirm") }}</a></div>{% endif %}
+<div class="grid three">
+  <div class="card stat"><b>{{ stats.completed }}</b><span>{{ _("stats.completed") }}</span></div>
+  <div class="card stat"><b>{{ stats.rating if stats.rating else "—" }}</b><span>{{ _("stats.rating") }}</span></div>
+  <div class="card stat"><b>{{ deals|length }}</b><span>{{ _("stats.active_deals") }}</span></div>
+</div>
+<div class="grid two">
+  <section>
+    <h2>{{ _("dash.active_deals") }}</h2>
+    {% if deals %}<div class="table-wrap"><table>
+      <thead><tr><th>{{ _("deal.number") }}</th><th>{{ _("order.route") }}</th><th>{{ _("common.status") }}</th></tr></thead>
+      <tbody>{% for d, o in deals %}<tr><td><a href="/deals/{{ d.id }}">{{ d.number }}</a></td><td>{{ ui.route(o) }}</td><td>{{ ui.status(o.status) }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}{{ ui.empty(_("dash.no_deals")) }}{% endif %}
+  </section>
+  <section>
+  {% if orders is defined %}
+    <h2>{{ _("dash.my_orders") }}</h2>
+    {% if orders %}<div class="table-wrap"><table>
+      <thead><tr><th>№</th><th>{{ _("order.route") }}</th><th>{{ _("common.status") }}</th></tr></thead>
+      <tbody>{% for o in orders %}<tr><td><a href="/orders/{{ o.id }}">{{ o.number }}</a></td><td>{{ ui.route(o) }}</td><td>{{ ui.status(o.status) }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}{{ ui.empty(_("orders.empty"), _("orders.empty_hint"), "/orders/new", _("orders.new")) }}{% endif %}
+  {% elif market is defined %}
+    <h2>{{ _("dash.new_orders") }}</h2>
+    {% if market %}<div class="table-wrap"><table>
+      <thead><tr><th>{{ _("order.route") }}</th><th>{{ _("order.load_date") }}</th><th class="num">{{ _("order.rate") }}</th></tr></thead>
+      <tbody>{% for o in market %}<tr><td><a href="/market/{{ o.id }}">{{ ui.route(o) }}</a></td><td>{{ fmt_dt(o.load_from, false) }}</td><td class="num">{{ money(o.desired_rate_minor, o.currency) if o.desired_rate_minor else _("order.rate_open") }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}{{ ui.empty(_("market.empty")) }}{% endif %}
+  {% endif %}
+  </section>
+</div>
+{% endblock %}

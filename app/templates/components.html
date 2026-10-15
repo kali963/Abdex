@@ -1,0 +1,69 @@
+{# UI component library (NFR-FE-01). Every form element is rendered through these macros. #}
+
+{% macro csrf() -%}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{%- endmacro %}
+
+{% macro field(name, label, value="", type="text", errors={}, required=false, hint="", attrs="", id=None) -%}
+{% set fid = id or ("f-" ~ name) %}
+<div class="field{{ ' has-error' if errors.get(name) }}">
+  <label for="{{ fid }}">{{ label }}{% if required %} *{% endif %}</label>
+  <input id="{{ fid }}" type="{{ type }}" name="{{ name }}" value="{{ value if value is not none else '' }}"{{ ' required' if required }} {{ attrs|safe }}{% if errors.get(name) %} aria-invalid="true" aria-describedby="{{ fid }}-err"{% endif %}>
+  {% if hint %}<span class="hint">{{ hint }}</span>{% endif %}
+  {% if errors.get(name) %}<span class="err" id="{{ fid }}-err">{{ _(errors.get(name)) }}</span>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro select(name, label, options, value="", errors={}, required=false, empty=None, hint="") -%}
+<div class="field{{ ' has-error' if errors.get(name) }}">
+  <label for="f-{{ name }}">{{ label }}{% if required %} *{% endif %}</label>
+  <select id="f-{{ name }}" name="{{ name }}"{{ ' required' if required }}>
+    {% if empty is not none %}<option value="">{{ empty }}</option>{% endif %}
+    {% for v, l in options %}<option value="{{ v }}" {{ 'selected' if (value|string) == (v|string) }}>{{ l }}</option>{% endfor %}
+  </select>
+  {% if hint %}<span class="hint">{{ hint }}</span>{% endif %}
+  {% if errors.get(name) %}<span class="err">{{ _(errors.get(name)) }}</span>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro textarea(name, label, value="", errors={}, required=false, hint="", rows=4) -%}
+<div class="field{{ ' has-error' if errors.get(name) }}">
+  <label for="f-{{ name }}">{{ label }}{% if required %} *{% endif %}</label>
+  <textarea id="f-{{ name }}" name="{{ name }}" rows="{{ rows }}"{{ ' required' if required }}>{{ value or '' }}</textarea>
+  {% if hint %}<span class="hint">{{ hint }}</span>{% endif %}
+  {% if errors.get(name) %}<span class="err">{{ _(errors.get(name)) }}</span>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro checkbox(name, label, checked=false, errors={}) -%}
+<div class="field">
+  <label class="check"><input type="checkbox" name="{{ name }}" value="on" {{ 'checked' if checked }}> <span>{{ label }}</span></label>
+  {% if errors.get(name) %}<span class="err">{{ _(errors.get(name)) }}</span>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro status(s) -%}
+{% set cls = {"draft": "", "moderation": "warn", "published": "info", "bidding": "info", "assigned": "brand",
+  "docs_signed": "brand", "loading": "brand", "in_transit": "brand", "unloaded": "brand", "closed_docs": "ok",
+  "fee_invoiced": "ok", "completed": "ok", "dispute": "err", "cancelled": "",
+  "active": "info", "countered": "warn", "needs_confirmation": "warn", "accepted": "ok", "rejected": "", "withdrawn": "",
+  "expired": "", "pending": "warn", "approved": "ok", "open": "warn", "resolved": "ok", "in_progress": "info",
+  "issued": "warn", "paid": "ok", "required": "warn", "uploaded": "info", "checked": "ok", "signed": "ok",
+  "proposed": "warn", "confirmed": "ok", "false_positive": "", "superseded": "", "failed": "err", "sent": "ok", "queued": "warn"} %}
+<span class="badge {{ cls.get(s, '') }}">{{ status_label(s) }}</span>
+{%- endmacro %}
+
+{% macro level(n) -%}
+<span class="badge {{ 'ok' if n >= 2 else ('info' if n == 1 else '') }}" title="{{ _('level.hint' ~ n) }}">L{{ n }} · {{ _("level." ~ n) }}</span>
+{%- endmacro %}
+
+{% macro route(order) -%}
+<span class="route">{{ order.origin.city if order.origin else '—' }}<span class="arrow">→</span>{{ order.destination.city if order.destination else '—' }}</span>
+{%- endmacro %}
+
+{% macro empty(title, text="", action_url=None, action_label=None) -%}
+<div class="empty card flat"><b>{{ title }}</b>{% if text %}<span>{{ text }}</span>{% endif %}
+{% if action_url %}<div class="actions center"><a class="btn primary" href="{{ action_url }}">{{ action_label }}</a></div>{% endif %}</div>
+{%- endmacro %}
+
+{% macro role_note(text) -%}
+{% if text %}<div class="card note"><strong>{{ _("pvd.role_title") }}</strong><p>{{ text }}</p></div>{% endif %}
+{%- endmacro %}

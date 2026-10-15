@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("nav.notifications") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("nav.notifications") }}</h1><a class="btn" href="/account/notifications">{{ _("ntf.settings") }}</a></div>
+{% if items %}<div class="table-wrap"><table><tbody>
+{% for n in items %}<tr><td>{% if not n.read_at %}<span class="badge info">{{ _("ntf.new") }}</span> {% endif %}
+  {% if n.link %}<a href="{{ n.link }}">{{ _("ntf." ~ n.event, **json_loads(n.params)) }}</a>{% else %}{{ _("ntf." ~ n.event, **json_loads(n.params)) }}{% endif %}</td>
+  <td class="muted num">{{ fmt_dt(n.created_at) }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}{{ ui.empty(_("common.empty")) }}{% endif %}
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("nav.analytics") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("nav.analytics") }}</h1><div class="row"><a class="btn small" href="/analytics/export.xlsx">XLSX</a><a class="btn small" href="/analytics/export.csv">CSV</a></div></div>
+{% if me.company.kind == "client" %}
+<div class="grid three">
+  <div class="card stat"><b>{{ data.deals }}</b><span>{{ _("stats.deals") }}</span></div>
+  <div class="card stat"><b>{{ money(data.spend_minor) }}</b><span>{{ _("an.spend") }}</span></div>
+  <div class="card stat"><b>{{ money(data.cost_per_km_minor) }}</b><span>{{ _("an.cost_per_km") }}</span></div>
+  <div class="card stat"><b>{{ data.km }}</b><span>{{ _("an.km") }}</span></div>
+  <div class="card stat"><b>{{ data.on_time }} / {{ data.late }}</b><span>{{ _("an.on_time_late") }}</span></div>
+</div>
+<div class="grid two">
+<section><h2>{{ _("an.directions") }}</h2><div class="table-wrap"><table>{% for k, v in data.directions %}<tr><td>{{ k }}</td><td class="num">{{ v }}</td></tr>{% else %}<tr><td class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</table></div></section>
+<section><h2>{{ _("an.carriers") }}</h2><div class="table-wrap"><table>{% for k, v in data.carriers %}<tr><td>{{ k }}</td><td class="num">{{ v }}</td></tr>{% else %}<tr><td class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</table></div></section>
+</div>
+{% else %}
+<div class="grid three">
+  <div class="card stat"><b>{{ data.deals }}</b><span>{{ _("stats.deals") }}</span></div>
+  <div class="card stat"><b>{{ money(data.income_minor) }}</b><span>{{ _("fin.income") }}</span></div>
+  <div class="card stat"><b>{{ data.rating or "—" }}</b><span>{{ _("stats.rating") }}</span></div>
+  <div class="card stat"><b>{{ data.bids }}</b><span>{{ _("an.bids") }}</span></div>
+  <div class="card stat"><b>{{ data.win_rate }}%</b><span>{{ _("stats.win_rate") }}</span></div>
+</div>
+<h2>{{ _("an.income_directions") }}</h2><div class="table-wrap"><table>{% for k, v in data.directions %}<tr><td>{{ k }}</td><td class="num">{{ money(v) }}</td></tr>{% else %}<tr><td class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</table></div>
+{% endif %}
+{% endblock %}

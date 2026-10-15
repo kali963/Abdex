@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.home") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.ops_dashboard") }}</h1>
+<p class="muted">{{ _("account.staff_role") }}: <b>{{ _("staff." ~ me.user.staff_role) }}</b>{% if not me.user.totp_enabled %} · <a href="/account/security">{{ _("account.2fa_enable") }}</a>{% endif %}</p>
+{% if ops %}
+<div class="grid three">
+  <div class="card stat"><b>{{ ops.funnel.orders }}</b><span>{{ _("kpi.orders") }}</span></div>
+  <div class="card stat"><b>{{ ops.funnel.conv_bid }}% → {{ ops.funnel.conv_deal }}%</b><span>{{ _("admin.funnel") }}</span></div>
+  <div class="card stat"><b>{{ ops.processing.all.median if ops.processing.all.median is not none else "—" }} / {{ ops.processing.all.mean if ops.processing.all.mean is not none else "—" }}</b><span>{{ _("kpi.processing") }}</span></div>
+  <div class="card stat"><b>{{ ops.open_alerts }}</b><span>{% if me.can("admin.antifraud") %}<a href="/admin/antifraud">{{ _("admin.antifraud") }}</a>{% else %}{{ _("admin.antifraud") }}{% endif %}</span></div>
+  <div class="card stat"><b>{{ ops.moderation_queue }}</b><span>{% if me.can("admin.moderation") %}<a href="/admin/moderation">{{ _("admin.moderation") }}</a>{% else %}{{ _("admin.moderation") }}{% endif %}</span></div>
+  <div class="card stat"><b>{{ ops.disputes }}</b><span>{% if me.can("admin.disputes") %}<a href="/admin/disputes">{{ _("admin.disputes") }}</a>{% else %}{{ _("admin.disputes") }}{% endif %}</span></div>
+  <div class="card stat"><b>{{ money(ops.revenue_minor) }}</b><span>{{ _("admin.revenue") }}</span></div>
+</div>
+<h2>{{ _("admin.by_status") }}</h2>
+<div class="table-wrap"><table>{% for s, n in ops.by_status|dictsort %}<tr><td>{{ ui.status(s) }}</td><td class="num">{% if me.can("admin.orders") %}<a href="/admin/orders?status={{ s }}">{{ n }}</a>{% else %}{{ n }}{% endif %}</td></tr>{% endfor %}</table></div>
+{% else %}<div class="card">{{ _("admin.welcome") }}</div>{% endif %}
+{% endblock %}

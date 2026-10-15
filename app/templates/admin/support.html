@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.support") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.support") }}</h1>
+<div class="grid side">
+<div class="table-wrap"><table><thead><tr><th>№</th><th>{{ _("support.subject") }}</th><th>{{ _("support.category") }}</th><th>SLA</th><th>{{ _("common.status") }}</th></tr></thead>
+<tbody>{% for t in items %}<tr><td><a href="/admin/support/{{ t.id }}">{{ t.number }}</a></td><td>{{ t.subject }}</td><td>{{ cat_map.get(t.category, t.category) }} <span class="badge">{{ t.priority }}</span></td>
+<td>{% if t.status != "resolved" and t.sla_due_at and t.sla_due_at < now %}<span class="badge err">{{ _("admin.sla_overdue") }}</span>{% else %}{{ fmt_dt(t.sla_due_at) }}{% endif %}</td><td>{{ ui.status(t.status) }}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+<aside class="card"><h3>{{ _("support.problem_report") }}</h3><table>{% for cat, cnt, overdue in report %}<tr><td>{{ cat_map.get(cat, cat) }}</td><td class="num">{{ cnt }}</td><td class="num">{% if overdue %}<span class="badge err">{{ overdue }}</span>{% endif %}</td></tr>{% endfor %}</table></aside>
+</div>
+{% endblock %}

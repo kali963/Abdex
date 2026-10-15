@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("invite.title") }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>{{ _("invite.title") }}</h1>
+  {% if me %}
+  <p>{{ _("invite.text") }}</p>
+  <form method="post" action="/invite/{{ raw }}">{{ ui.csrf() }}<button class="btn primary">{{ _("invite.accept") }}</button></form>
+  {% else %}
+  <p>{{ _("invite.login_first") }}</p>
+  <div class="actions"><a class="btn primary" href="/login?next=/invite/{{ raw }}">{{ _("nav.login") }}</a><a class="btn" href="/register?type=driver">{{ _("nav.register") }}</a></div>
+  {% endif %}
+</div>
+{% endblock %}

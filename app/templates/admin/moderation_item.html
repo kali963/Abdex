@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ company.name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ company.name }}</h1>{{ ui.level(company.verification_level) }} {{ ui.status(req.status) }}</div><a class="btn" href="/admin/companies/{{ company.id }}">{{ _("admin.company_card") }}</a></div>
+<div class="grid two">
+<section class="card"><h2>{{ _("kyc.documents") }}</h2>
+<div class="table-wrap"><table>{% for d in docs %}<tr><td>{{ _("doc." ~ d.doc_type) }}<br><small class="muted">{{ _("kyc.subject_" ~ d.subject_type) }}{% if d.expires_on %} · {{ _("kyc.expires") }} {{ fmt_date(d.expires_on) }}{% endif %}</small></td><td>{{ ui.status(d.status) }}</td><td><a href="{{ file_url(d.file_id) }}" target="_blank" rel="noopener">{{ _("action.open") }}</a></td></tr>{% else %}<tr><td class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</table></div>
+<h3>{{ _("fleet.vehicles") }}</h3><ul>{% for v in vehicles %}<li>{{ v.plate }} · {{ v.vin }} · {{ ui.status(v.status) }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+<h3>{{ _("fleet.drivers") }}</h3><ul>{% for d in drivers %}<li>{{ d.full_name }} · {{ _("fleet.iin") }} ••••{{ d.iin[-4:] }} · {{ ui.status(d.status) }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+</section>
+<section class="stack">
+<div class="card"><h2>{{ _("kyc.registry") }}</h2>{% for ch in checks %}<p>{{ ch.source }} · <b>{{ ch.status }}</b> · {{ fmt_dt(ch.created_at) }} · {{ _("kyc.basis") }}: {{ ch.basis }}</p>{% else %}<p class="muted">{{ _("common.empty") }}</p>{% endfor %}</div>
+{% if alerts %}<div class="card warn"><h2>{{ _("admin.antifraud") }}</h2><ul>{% for a in alerts %}<li>{{ _("alert." ~ a.kind) }} · {{ ui.status(a.status) }}</li>{% endfor %}</ul></div>{% endif %}
+{% if req.status == "pending" %}
+<form class="card stack" method="post" action="/admin/moderation/{{ req.id }}">{{ ui.csrf() }}
+  <h2>{{ _("admin.decision") }}</h2>
+  <div class="field"><label for="f-rc">{{ _("admin.reason") }}</label><select id="f-rc" name="reason_code">{% for r in reasons %}<option value="{{ r.code }}">{{ r.name_ru }}</option>{% endfor %}</select></div>
+  {{ ui.textarea("comment", _("admin.comment"), "", rows=2) }}
+  <div class="row"><button class="btn ok" name="decision" value="approve">{{ _("admin.approve") }} (L{{ req.level_requested }})</button><button class="btn danger" name="decision" value="reject">{{ _("admin.reject") }}</button></div>
+  <p class="muted"><small>{{ _("admin.l2_note") }}</small></p>
+</form>{% else %}<div class="card"><p>{{ ui.status(req.status) }} · {{ req.reason_code }} · {{ req.comment }}</p></div>{% endif %}
+</section></div>
+{% endblock %}

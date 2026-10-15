@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ _("help.title") }}{% endblock %}
+{% block content %}
+<h1>{{ _("help.title") }}</h1>
+<div class="stack">
+{% for i in range(1, 11) %}
+<details class="card"><summary>{{ _("help.q" ~ i) }}</summary><p>{{ _("help.a" ~ i) }}</p></details>
+{% endfor %}
+</div>
+{% if not me or me.company %}<p class="muted">{{ _("help.more") }} <a href="/support">{{ _("nav.support") }}</a></p>{% endif %}
+{% endblock %}

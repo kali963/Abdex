@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("account.security") }}{% endblock %}
+{% block content %}
+<h1>{{ _("nav.account") }}</h1>
+{% include "account/_tabs.html" %}
+{% if must %}<div class="alert warn">{{ _("account.2fa_mandatory") }}</div>{% endif %}
+<div class="grid two">
+<section class="card">
+  <h2>{{ _("account.2fa") }}</h2>
+  {% if me.user.totp_enabled %}
+    <p><span class="badge ok">{{ _("account.2fa_on") }}</span></p>
+    <form method="post" action="/account/2fa/disable" class="stack">{{ ui.csrf() }}
+      {{ ui.field("code", _("auth.code"), "", attrs='inputmode="numeric" autocomplete="one-time-code"') }}
+      <button class="btn danger">{{ _("account.2fa_disable") }}</button></form>
+  {% else %}
+    <p>{{ _("account.2fa_text") }}</p>
+    <p class="muted">{{ _("account.2fa_secret") }}</p>
+    <div class="secret">{{ secret }}</div>
+    <p class="muted"><small>{{ uri }}</small></p>
+    <form method="post" action="/account/2fa/enable" class="stack">{{ ui.csrf() }}
+      {{ ui.field("code", _("account.2fa_code"), "", required=true, attrs='inputmode="numeric" autocomplete="one-time-code"') }}
+      <button class="btn primary">{{ _("account.2fa_enable") }}</button></form>
+  {% endif %}
+</section>
+<section class="card">
+  <h2>{{ _("account.password") }}</h2>
+  <form method="post" action="/account/password" class="stack">{{ ui.csrf() }}
+    {{ ui.field("current_password", _("account.current_password"), "", type="password", required=true, attrs='autocomplete="current-password"') }}
+    {{ ui.field("new_password", _("auth.new_password"), "", type="password", required=true, hint=_("auth.password_hint"), attrs='autocomplete="new-password"') }}
+    <button class="btn primary">{{ _("action.save") }}</button>
+  </form>
+</section>
+</div>
+{% endblock %}

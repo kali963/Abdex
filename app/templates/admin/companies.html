@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.companies") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.companies") }}</h1>
+<form class="card row" method="get"><input type="search" name="q" value="{{ q }}" placeholder="{{ _('admin.company_search') }}" aria-label="{{ _('common.search') }}"><button class="btn">{{ _("common.find") }}</button></form>
+<div class="table-wrap"><table><thead><tr><th>{{ _("company.name") }}</th><th>{{ _("auth.bin_iin") }}</th><th>{{ _("company.kind") }}</th><th>{{ _("level.col_level") }}</th><th>{{ _("common.date") }}</th></tr></thead>
+<tbody>{% for c in items %}<tr><td><a href="/admin/companies/{{ c.id }}">{{ c.name }}</a>{% if c.is_blocked %} <span class="badge err">{{ _("company.blocked") }}</span>{% endif %}</td><td>{{ c.bin_iin }}</td><td>{{ _("company.kind_" ~ c.kind) }}{% if c.is_self_employed_driver %} ({{ _("role.driver") }}){% endif %}</td><td>L{{ c.verification_level }}</td><td>{{ fmt_dt(c.created_at, false) }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

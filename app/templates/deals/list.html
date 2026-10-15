@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("nav.deals") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("nav.deals") }}</h1><div class="row"><a class="btn small" href="/analytics/export.xlsx">XLSX</a><a class="btn small" href="/analytics/export.csv">CSV</a></div></div>
+{% if rows %}<div class="table-wrap"><table>
+<thead><tr><th>{{ _("deal.number") }}</th><th>{{ _("order.route") }}</th><th>{{ _("deal.counterparty") }}</th><th class="num">{{ _("deal.price") }}</th><th>{{ _("common.status") }}</th><th>{{ _("common.date") }}</th></tr></thead>
+<tbody>{% for d, o in rows %}<tr><td><a href="/deals/{{ d.id }}">{{ d.number }}</a>{% if d.flagged %} <span class="badge err">!</span>{% endif %}</td><td>{{ ui.route(o) }}</td>
+<td>{{ names.get(d.carrier_company_id if me.company.id == d.client_company_id else d.client_company_id, "") }}</td>
+<td class="num">{{ money(d.price_minor, d.currency) }}</td><td>{{ ui.status(o.status) }}</td><td>{{ fmt_dt(d.created_at, false) }}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}{{ ui.empty(_("dash.no_deals")) }}{% endif %}
+{% endblock %}

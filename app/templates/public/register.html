@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("auth.register_title") }}{% endblock %}
+{% block content %}
+<h1>{{ _("auth.register_title") }}</h1>
+<form class="card" method="post" action="/register" novalidate>
+  {{ ui.csrf() }}
+  <fieldset><legend>{{ _("auth.account_type") }}</legend>
+    <div class="grid three">
+    {% for t in ("client", "carrier", "driver") %}
+      <label class="check card flat"><input type="radio" name="account_type" value="{{ t }}" {{ 'checked' if form.account_type == t }}>
+        <span><b>{{ _("auth.type_" ~ t) }}</b><br><small>{{ _("auth.type_" ~ t ~ "_hint") }}</small></span></label>
+    {% endfor %}
+    </div>
+    {% if errors.account_type %}<span class="err">{{ _(errors.account_type) }}</span>{% endif %}
+  </fieldset>
+  <div class="form-grid">
+    {{ ui.field("full_name", _("auth.full_name"), form.full_name, errors=errors, required=true, attrs='autocomplete="name"') }}
+    {{ ui.field("phone", _("auth.phone"), form.phone, type="tel", errors=errors, required=true, hint="+7 7XX XXX XX XX", attrs='autocomplete="tel"') }}
+    {{ ui.field("email", _("auth.email"), form.email, type="email", errors=errors, attrs='autocomplete="email"') }}
+    {{ ui.field("password", _("auth.password"), "", type="password", errors=errors, required=true, hint=_("auth.password_hint"), attrs='autocomplete="new-password" minlength="12"') }}
+    {{ ui.field("company_name", _("auth.company_name"), form.company_name, errors=errors, hint=_("auth.company_hint")) }}
+    {{ ui.field("bin_iin", _("auth.bin_iin"), form.bin_iin, errors=errors, hint=_("auth.bin_hint"), attrs='inputmode="numeric" maxlength="12"') }}
+  </div>
+  {{ ui.checkbox("consent_registration", _("auth.consent"), form.consent_registration, errors=errors) }}
+  <p class="muted"><a href="/legal/privacy">{{ _("footer.privacy") }}</a> · <a href="/legal/terms">{{ _("footer.terms") }}</a></p>
+  <div class="actions"><button class="btn primary" type="submit">{{ _("auth.register_btn") }}</button></div>
+</form>
+{% endblock %}

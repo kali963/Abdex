@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.users") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.users") }}</h1>
+<form class="card row" method="get"><input type="search" name="q" value="{{ q }}" placeholder="{{ _('admin.user_search') }}" aria-label="{{ _('common.search') }}"><button class="btn">{{ _("common.find") }}</button></form>
+<div class="table-wrap"><table><thead><tr><th>{{ _("auth.full_name") }}</th><th>{{ _("auth.phone") }}</th><th>2FA</th><th>{{ _("admin.last_login") }}</th><th>{{ _("admin.actions") }}</th></tr></thead>
+<tbody>{% for u in items %}<tr><td>{{ u.full_name }}{% if u.staff_role %} <span class="badge brand">{{ _("staff." ~ u.staff_role) }}</span>{% endif %}{% if u.is_blocked %} <span class="badge err">{{ _("company.blocked") }}</span>{% endif %}<br><small class="muted">{{ u.email or "" }}</small></td><td>{{ u.phone }}</td><td>{{ "✓" if u.totp_enabled else "—" }}</td><td>{{ fmt_dt(u.last_login_at) if u.last_login_at else "—" }}</td>
+<td><form method="post" action="/admin/users/{{ u.id }}/action" class="row">{{ ui.csrf() }}<input type="text" name="reason" placeholder="{{ _('admin.reason') }}" aria-label="{{ _('admin.reason') }}" required>
+<select name="action" aria-label="{{ _('admin.actions') }}"><option value="{{ 'unblock' if u.is_blocked else 'block' }}">{{ _("admin.unblock") if u.is_blocked else _("admin.block") }}</option><option value="reset_2fa">{{ _("admin.reset_2fa") }}</option></select><button class="btn small">OK</button></form></td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}
