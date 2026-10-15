@@ -15,5 +15,16 @@
   </div>
   <div class="actions"><button class="btn primary">{{ _("action.save") }}</button></div>
 </form>
+{% if not me.is_staff %}
+<details class="card flat" id="delete">
+  <summary class="muted">{{ _("account.delete") }}</summary>
+  <p>{{ _("account.delete_text") }}</p>
+  <form method="post" action="/account/delete" class="stack" data-confirm="{{ _('account.delete_confirm') }}">{{ ui.csrf() }}
+    {{ ui.field("password", _("auth.password"), "", type="password", required=true, attrs='autocomplete="current-password"', id="f-del-pass") }}
+    {{ ui.checkbox("confirm", _("account.delete_check")) }}
+    <button class="btn danger">{{ _("account.delete_btn") }}</button>
+  </form>
+</details>
+{% endif %}
 {% if me.is_staff %}<p class="muted">{{ _("account.staff_role") }}: <b>{{ _("staff." ~ me.user.staff_role) }}</b></p>{% endif %}
 {% endblock %}

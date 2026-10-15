@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core import ratelimit
 from app.core.audit import audit
-from app.core.errors import NotFound, ValidationFailed
+from app.core.errors import Forbidden, NotFound, ValidationFailed
 from app.db import get_db
 from app.modules.analytics import service as analytics
 from app.modules.billing import service as billing
@@ -50,7 +50,11 @@ def analytics_export(fmt: str, db: Session = Depends(get_db), me: Principal = De
         route = f"{o.origin.city if o.origin else ''} → {o.destination.city if o.destination else ''}"
         rows.append([d.number, o.number, o.status, route, d.price_minor / 100, d.currency,
                      d.created_at.strftime("%d.%m.%Y")])
-    audit(db, "export.deals", object_type="company", object_id=me.company.id, details={"rows": len(rows) - 1})
+    # FR-ACL-07: exports over 100 records only for roles allowed bulk export; logged separately
+    if len(rows) - 1 > 100 and not me.can("export.bulk"):
+        raise Forbidden("bulk_export_restricted")
+    audit(db, "export.bulk" if len(rows) - 1 > 100 else "export.deals", object_type="company",
+          object_id=me.company.id, details={"rows": len(rows) - 1})
     db.commit()
     if fmt == "csv":
         return Response(analytics.to_csv(rows), media_type="text/csv; charset=utf-8",
@@ -97,7 +101,12 @@ async def support_create(request: Request, db: Session = Depends(get_db), me: Pr
     if form.get("deal_id"):
         from app.web.access import deal_access
 
-        deal_id = deal_access(db, me, parse_uuid(form.get("deal_id"))).deal.id
+        import uuid as _uuid
+
+        try:
+            deal_id = deal_access(db, me, _uuid.UUID(str(form.get("deal_id")).strip())).deal.id
+        except (ValueError, NotFound):
+            raise ValidationFailed({"deal_id": "error.deal_not_found"})
     t = support.create_ticket(db, category=str(form.get("category", "")), subject=str(form.get("subject", "")),
                               body=str(form.get("body", "")), deal_id=deal_id)
     db.commit()

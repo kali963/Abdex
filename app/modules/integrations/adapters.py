@@ -81,20 +81,35 @@ class RegistryAdapter(Adapter):
         return self.call("check_person", _do, basis=basis, initiator=initiator, summary=f"iin:{iin[:2]}**********")
 
 
+def _mask(recipient: str) -> str:
+    recipient = recipient or ""
+    if "@" in recipient:
+        return recipient[:1] + "***@" + recipient.split("@", 1)[1]
+    return recipient[:4] + "***" + recipient[-2:] if len(recipient) > 6 else "***"
+
+
 class _OutboundAdapter(Adapter):
     """Dev transports write to the log and to an in-memory outbox visible at /dev/outbox."""
 
     sent: list[dict] = []
 
     def send(self, recipient: str, body: str) -> None:
+        from app.config import settings
+
         def _do():
-            entry = {"channel": self.name, "to": recipient, "body": body, "at": utcnow().isoformat()}
-            _OutboundAdapter.sent.append(entry)
-            del _OutboundAdapter.sent[:-200]
-            log.info("[%s] -> %s: %s", self.name, recipient, body)
+            if settings.is_dev:  # the demo outbox exists only outside production
+                entry = {"channel": self.name, "to": recipient, "body": body, "at": utcnow().isoformat()}
+                _OutboundAdapter.sent.append(entry)
+                del _OutboundAdapter.sent[:-200]
+            self._deliver(recipient, body)
+            # SEC-LOG-05: never log the text (it may hold one-time codes or links) nor the full address
+            log.info("[%s] message sent to %s", self.name, _mask(recipient))
             return True
 
         self.call("send", _do, summary=self.name)
+
+    def _deliver(self, recipient: str, body: str) -> None:
+        """Real transport; the base class is a no-op stub (dev / demo)."""
 
 
 class SmsAdapter(_OutboundAdapter):
@@ -107,6 +122,24 @@ class EmailAdapter(_OutboundAdapter):
 
 class TelegramAdapter(_OutboundAdapter):
     name = "telegram"
+    timeout = 5.0
+
+    def _deliver(self, recipient: str, body: str) -> None:
+        """Bot API sendMessage when TELEGRAM_BOT_TOKEN is configured (FR-NTF-02, INT-TG-01)."""
+        import json as _json
+        import urllib.request
+
+        from app.config import settings
+
+        if not settings.telegram_bot_token:
+            return
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+            data=_json.dumps({"chat_id": recipient, "text": body, "disable_web_page_preview": True}).encode(),
+            headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 — fixed https host
+            if resp.status != 200:
+                raise RuntimeError(f"telegram status {resp.status}")
 
 
 class PushAdapter(_OutboundAdapter):

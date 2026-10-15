@@ -44,7 +44,7 @@ def trips(request: Request, db: Session = Depends(get_db), me: Principal = Depen
 
 @router.get("/deals/{did}")
 def deal_card(did: str, request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
-    acc = deal_access(db, me, parse_uuid(did))
+    acc = deal_access(db, me, parse_uuid(did), staff=request.url.path.startswith("/admin/"))
     d, o = acc.deal, acc.order
     client = db.get(Company, d.client_company_id)
     carrier = db.get(Company, d.carrier_company_id)

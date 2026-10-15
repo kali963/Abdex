@@ -42,7 +42,7 @@ from app.modules.platform.models import (
 )
 from app.modules.platform.service import dictionary, dictionary_map, update_dictionary_item
 from app.modules.support.service import problem_report
-from app.web.deps import Principal, csrf_protect, parse_uuid, redirect, render, require
+from app.web.deps import Principal, csrf_protect, parse_uuid, redirect, render, require, safe_next
 
 
 def _admin_host(request: Request):
@@ -167,7 +167,10 @@ async def hide_message(mid: str, request: Request, db: Session = Depends(get_db)
     form = await request.form()
     chat.hide(db, parse_uuid(mid), str(form.get("reason", "")))
     db.commit()
-    return redirect(request.headers.get("referer", "/admin"))
+    from urllib.parse import urlparse
+
+    back = urlparse(request.headers.get("referer", "")).path
+    return redirect(safe_next(back, "/admin"))
 
 
 # ------------------------------------------------------------------ disputes
@@ -338,6 +341,7 @@ async def user_action(uid: str, request: Request, db: Session = Depends(get_db),
     reason = str(form.get("reason", "")).strip()
     if not reason:
         raise ValidationFailed({"reason": "error.reason_required"})
+    from app.modules.accounts import service as accounts_service
     from app.modules.accounts.service import revoke_all_sessions
 
     if action == "block":
@@ -345,6 +349,9 @@ async def user_action(uid: str, request: Request, db: Session = Depends(get_db),
         revoke_all_sessions(db, u.id)
     elif action == "unblock":
         u.is_blocked = False
+    elif action == "anonymize":
+        # SEC-DAT-07: data subject requests are executed through the admin UI, never by SQL
+        accounts_service.anonymize_user(db, u, reason=reason, by_staff=True)
     elif action == "reset_2fa":
         u.totp_enabled = False
         u.totp_secret = None

@@ -48,3 +48,23 @@ def problem_report(db: Session) -> list[tuple[str, int, int]]:
                                                                  Ticket.sla_due_at < now)).scalar_one()
         out.append((cat, cnt, overdue))
     return sorted(out, key=lambda x: -x[1])
+
+
+def escalate_overdue(db: Session) -> int:
+    """FR-SUP-02 / FR-NTF-07: tickets past their SLA go to platform managers once."""
+    from app.modules.accounts.models import STAFF_MANAGER, User
+    from app.modules.notifications.service import notify_user
+
+    now = utcnow()
+    rows = db.execute(select(Ticket).where(Ticket.status != "resolved", Ticket.sla_due_at < now,
+                                           Ticket.priority != "urgent")).scalars().all()
+    managers = list(db.execute(select(User.id).where(User.staff_role == STAFF_MANAGER,
+                                                     User.is_blocked.is_(False))).scalars())
+    for t in rows:
+        t.priority = "urgent"  # marks the ticket as escalated, so this runs once per ticket
+        for uid in managers:
+            notify_user(db, uid, "support.sla_overdue", {"number": t.number}, link=f"/admin/support/{t.id}",
+                        channels=["web", "email"], dedup=f"sla:{t.id}:{uid}")
+        audit(db, "support.sla_escalated", object_type="ticket", object_id=t.id, role="system")
+    db.commit()
+    return len(rows)

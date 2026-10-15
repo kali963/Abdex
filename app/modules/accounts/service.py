@@ -228,19 +228,36 @@ def authenticate(db: Session, login: str, password: str) -> User:
 
 
 def requires_second_factor(db: Session, user: User) -> bool:
-    """SEC-AUT-05: mandatory for platform staff and company owners."""
-    if user.totp_enabled:
-        return True
-    return False
+    return user.has_2fa
 
 
-def must_enroll_2fa(db: Session, user: User) -> bool:
-    if not settings.require_2fa_privileged or user.totp_enabled:
+def must_enroll_2fa(db: Session, user: User, *, totp: bool | None = None, sms: bool | None = None) -> bool:
+    """SEC-AUT-05: mandatory for platform staff and company owners.
+    Staff need an authenticator app (SMS is only a reserve channel for them); company owners may use SMS.
+    `totp` / `sms` let callers ask "would 2FA still be sufficient after this change"."""
+    totp = user.totp_enabled if totp is None else totp
+    sms = user.sms_2fa_enabled if sms is None else sms
+    if not settings.require_2fa_privileged:
         return False
     if user.staff_role:
-        return True
+        return not totp
+    if totp or sms:
+        return False
     roles = db.execute(select(Membership.role).where(Membership.user_id == user.id, Membership.is_active.is_(True)))
     return any(r in OWNER_ROLES for r in roles.scalars())
+
+
+def start_login_sms(db: Session, user: User) -> None:
+    send_otp(db, user.phone, "login_2fa")
+
+
+def set_sms_2fa(db: Session, user: User, enabled: bool) -> None:
+    user.sms_2fa_enabled = enabled
+    audit(db, "auth.2fa_sms_enabled" if enabled else "auth.2fa_sms_disabled", object_type="user", object_id=user.id,
+          user_id=user.id)
+    from app.modules.notifications.service import notify_user
+
+    notify_user(db, user.id, "security.2fa_changed", {}, link="/account/security", critical=True)
 
 
 def create_session(db: Session, user: User, *, mfa_passed: bool, is_admin: bool = False) -> tuple[str, UserSession]:
@@ -251,6 +268,7 @@ def create_session(db: Session, user: User, *, mfa_passed: bool, is_admin: bool 
     known_device = db.execute(
         select(UserSession.id).where(UserSession.user_id == user.id, UserSession.device_id == ctx.device_id)
     ).first() if ctx.device_id else None
+    had_sessions = db.execute(select(UserSession.id).where(UserSession.user_id == user.id)).first() is not None
     company_id = default_company_id(db, user)
     sess = UserSession(user_id=user.id, token_hash=hash_token(raw), csrf_token=token(24), active_company_id=company_id,
                        mfa_passed=mfa_passed, is_admin=is_admin, last_seen_at=now,
@@ -260,7 +278,7 @@ def create_session(db: Session, user: User, *, mfa_passed: bool, is_admin: bool 
     user.last_login_at = now
     db.flush()
     audit(db, "auth.login", object_type="user", object_id=user.id, user_id=user.id, company_id=company_id)
-    if not known_device and user.last_login_at and ctx.device_id:
+    if not known_device and had_sessions and ctx.device_id:
         # SEC-AUT-11 / FR-NTF-05: security notifications cannot be disabled
         from app.modules.notifications.service import notify_user
 
@@ -306,10 +324,20 @@ def revoke_all_sessions(db: Session, user_id, *, except_id=None) -> int:
     return res.rowcount or 0
 
 
+def verify_totp_code(user: User, code: str) -> bool:
+    if not user.totp_enabled and not user.totp_secret:
+        return False
+    step = verify_totp(user.totp_secret, code, last_step=user.totp_last_step or 0)
+    if step is None:
+        return False
+    user.totp_last_step = step
+    return True
+
+
 def verify_second_factor(db: Session, user: User, code: str) -> bool:
-    ok = verify_totp(user.totp_secret, code)
+    ok = user.totp_enabled and verify_totp_code(user, code)
     if not ok:
-        ok = check_otp(db, user.phone, "login_2fa", code)  # SMS reserve channel
+        ok = check_otp(db, user.phone, "login_2fa", code)  # SMS code (primary for SMS-2FA users, reserve for TOTP)
     audit(db, "auth.2fa_check", object_type="user", object_id=user.id, result="ok" if ok else "denied",
           user_id=user.id)
     return ok
@@ -510,3 +538,43 @@ def revoke_consent(db: Session, user_id, purpose: str) -> None:
 def has_consent(db: Session, user_id, purpose: str) -> bool:
     return db.execute(select(Consent.id).where(Consent.user_id == user_id, Consent.purpose == purpose,
                                                Consent.revoked_at.is_(None))).first() is not None
+
+
+# ------------------------------------------------------------------------ deletion (FR-AUTH-10, SEC-DAT-07)
+
+
+def anonymize_user(db: Session, user: User, *, reason: str, by_staff: bool = False) -> None:
+    """Soft delete: personal data is wiped, the deal history stays with an anonymous author.
+    Refused while the user is the last active owner of a company (ownership must move first)."""
+    for m in db.execute(select(Membership).where(Membership.user_id == user.id, Membership.is_active.is_(True))).scalars():
+        if m.role in OWNER_ROLES:
+            others = db.execute(select(Membership.id).where(Membership.company_id == m.company_id,
+                                                            Membership.role.in_(OWNER_ROLES),
+                                                            Membership.is_active.is_(True),
+                                                            Membership.user_id != user.id)).first()
+            company = db.get(Company, m.company_id)
+            if others is None and not (company and company.is_self_employed_driver):
+                raise AppError("last_owner_delete")
+    from app.modules.fleet.models import Driver
+
+    tag = user.id.hex[:12]
+    user.full_name = "Удалённый пользователь"
+    user.phone = f"+del{tag}"
+    user.email = None
+    user.password_hash = None
+    user.totp_secret = None
+    user.totp_enabled = False
+    user.sms_2fa_enabled = False
+    user.is_blocked = True
+    user.is_deleted = True
+    user.anonymized_at = utcnow()
+    for m in db.execute(select(Membership).where(Membership.user_id == user.id)).scalars():
+        m.is_active = False
+    for d in db.execute(select(Driver).where(Driver.user_id == user.id)).scalars():
+        d.full_name, d.phone, d.iin, d.license_number = "Удалённый водитель", "", "", ""
+    for c in db.execute(select(Consent).where(Consent.user_id == user.id, Consent.revoked_at.is_(None))).scalars():
+        c.revoked_at = utcnow()
+    db.execute(update(UserSession).where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
+               .values(revoked_at=utcnow()))
+    audit(db, "user.anonymized", object_type="user", object_id=user.id, reason=reason[:300],
+          details={"by_staff": by_staff})

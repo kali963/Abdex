@@ -2,13 +2,18 @@
 {% import "components.html" as ui with context %}
 {% block title %}{{ _("auth.2fa_title") }}{% endblock %}
 {% block content %}
-<form class="card" method="post" action="/login/2fa">
+<div class="auth-wrap">
+<form class="card panel-3d auth-card" method="post" action="/login/2fa">
+  <div class="auth-icon" aria-hidden="true">🔐</div>
   <h1>{{ _("auth.2fa_title") }}</h1>
-  <p class="muted">{{ _("auth.2fa_text") }}</p>
+  {% if sms_mode %}<p class="muted">{{ _("auth.2fa_sms_text", phone=phone_masked) }}</p>
+  {% else %}<p class="muted">{{ _("auth.2fa_text") }}</p>{% endif %}
   {% if error %}<div class="alert error" role="alert">{{ _(error) }}</div>{% endif %}
   {{ ui.csrf() }}
-  {{ ui.field("code", _("auth.code"), "", required=true, attrs='inputmode="numeric" autocomplete="one-time-code" autofocus maxlength="8"') }}
-  <div class="actions"><button class="btn primary">{{ _("auth.confirm") }}</button>
-    <button class="btn" name="send_sms" value="1" formnovalidate>{{ _("auth.sms_reserve") }}</button></div>
+  {{ ui.field("code", _("auth.code"), "", required=true, attrs='inputmode="numeric" autocomplete="one-time-code" autofocus maxlength="6" pattern="[0-9]*" class="otp-input"') }}
+  <div class="actions"><button class="btn primary block">{{ _("auth.confirm") }}</button>
+    <button class="btn block" name="send_sms" value="1" formnovalidate>{{ _("auth.resend") if sms_mode else _("auth.sms_reserve") }}</button></div>
+  {% if settings.is_dev %}<p class="muted center"><small><a href="/dev/outbox" target="_blank" rel="noopener">{{ _("footer.dev_outbox") }}</a></small></p>{% endif %}
 </form>
+</div>
 {% endblock %}

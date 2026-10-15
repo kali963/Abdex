@@ -8,6 +8,7 @@
 {% set can_manage = me.can("company.manage") %}
 <form class="card" method="post" action="/company">
   {{ ui.csrf() }}
+  <fieldset class="plain" {{ 'disabled' if not can_manage }}>
   <h2>{{ _("company.requisites") }}</h2>
   <div class="form-grid">
     {{ ui.field("name", _("company.name"), c.name, required=true) }}
@@ -21,6 +22,7 @@
   </div>
   {{ ui.checkbox("vat_payer", _("company.vat_payer"), c.vat_payer) }}
   {% if c.kind == "carrier" %}{{ ui.checkbox("show_finance_to_drivers", _("company.show_finance_to_drivers"), c.show_finance_to_drivers) }}{% endif %}
+  </fieldset>
   {% if can_manage %}<div class="actions"><button class="btn primary">{{ _("action.save") }}</button></div>{% endif %}
 </form>
 

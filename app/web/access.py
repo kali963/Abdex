@@ -15,9 +15,11 @@ from app.modules.fleet.models import VerificationDocument
 from app.web.deps import Principal
 
 
-def deal_access(db: Session, me: Principal, deal_id):
-    """Staff use the admin interface; in the cabinet only company sides / the driver get access."""
-    return get_access(db, deal_id, user=me.user, company_id=me.company.id if me.company else None, role=me.role)
+def deal_access(db: Session, me: Principal, deal_id, *, staff: bool = False):
+    """Staff see deals only through the audited admin route (staff=True); in the cabinet only the
+    company sides and the assigned driver get access."""
+    return get_access(db, deal_id, user=me.user, company_id=me.company.id if me.company else None, role=me.role,
+                      allow_staff=staff and me.session.is_admin)
 
 
 def assert_file_access(db: Session, me: Principal, file_id) -> None:

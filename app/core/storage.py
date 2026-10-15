@@ -87,6 +87,7 @@ def strip_image_metadata(data: bytes, content_type: str) -> tuple[bytes, dict]:
         return data, {}
     meta: dict = {}
     try:
+        Image.MAX_IMAGE_PIXELS = 40_000_000  # ~40 MP; larger images are rejected as decompression bombs
         img = Image.open(io.BytesIO(data))
         exif = img.getexif()
         if exif:

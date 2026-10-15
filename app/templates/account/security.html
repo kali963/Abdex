@@ -6,25 +6,38 @@
 {% include "account/_tabs.html" %}
 {% if must %}<div class="alert warn">{{ _("account.2fa_mandatory") }}</div>{% endif %}
 <div class="grid two">
-<section class="card">
-  <h2>{{ _("account.2fa") }}</h2>
+<section class="card panel-3d" id="sms">
+  <h2>📱 {{ _("account.2fa_sms") }}</h2>
+  <p class="muted">{{ _("account.2fa_sms_text", phone=phone_masked) }}</p>
+  {% set action = "disable" if me.user.sms_2fa_enabled else "enable" %}
+  <p>{% if me.user.sms_2fa_enabled %}<span class="badge ok">{{ _("account.2fa_on") }}</span>{% else %}<span class="badge">{{ _("account.2fa_off") }}</span>{% endif %}</p>
+  {% if sms_action == action %}
+    <form method="post" action="/account/2fa/sms/confirm" class="stack">{{ ui.csrf() }}<input type="hidden" name="action" value="{{ action }}">
+      {{ ui.field("code", _("auth.code"), "", required=true, attrs='inputmode="numeric" autocomplete="one-time-code" maxlength="6" class="otp-input" autofocus', id="f-sms-code") }}
+      <button class="btn {{ 'danger' if action == 'disable' else 'primary' }}">{{ _("account.2fa_sms_" ~ action) }}</button></form>
+  {% else %}
+    <form method="post" action="/account/2fa/sms/code">{{ ui.csrf() }}<input type="hidden" name="action" value="{{ action }}">
+      <button class="btn {{ 'danger' if action == 'disable' else 'primary' }}">{{ _("account.2fa_sms_" ~ action) }}</button></form>
+  {% endif %}
+</section>
+<section class="card panel-3d">
+  <h2>🔑 {{ _("account.2fa_app") }}</h2>
   {% if me.user.totp_enabled %}
     <p><span class="badge ok">{{ _("account.2fa_on") }}</span></p>
     <form method="post" action="/account/2fa/disable" class="stack">{{ ui.csrf() }}
-      {{ ui.field("code", _("auth.code"), "", attrs='inputmode="numeric" autocomplete="one-time-code"') }}
+      {{ ui.field("code", _("account.2fa_code"), "", attrs='inputmode="numeric" autocomplete="one-time-code" maxlength="6"') }}
       <button class="btn danger">{{ _("account.2fa_disable") }}</button></form>
   {% else %}
-    <p>{{ _("account.2fa_text") }}</p>
-    <p class="muted">{{ _("account.2fa_secret") }}</p>
-    <div class="secret">{{ secret }}</div>
-    <p class="muted"><small>{{ uri }}</small></p>
+    <p class="muted">{{ _("account.2fa_text") }}</p>
+    {% if qr %}<img class="qr" src="{{ qr }}" alt="{{ _('account.2fa_qr') }}" width="180" height="180">{% endif %}
+    <details><summary class="muted">{{ _("account.2fa_secret") }}</summary><div class="secret">{{ secret }}</div></details>
     <form method="post" action="/account/2fa/enable" class="stack">{{ ui.csrf() }}
-      {{ ui.field("code", _("account.2fa_code"), "", required=true, attrs='inputmode="numeric" autocomplete="one-time-code"') }}
+      {{ ui.field("code", _("account.2fa_code"), "", required=true, attrs='inputmode="numeric" autocomplete="one-time-code" maxlength="6"') }}
       <button class="btn primary">{{ _("account.2fa_enable") }}</button></form>
   {% endif %}
 </section>
-<section class="card">
-  <h2>{{ _("account.password") }}</h2>
+<section class="card panel-3d">
+  <h2>🔒 {{ _("account.password") }}</h2>
   <form method="post" action="/account/password" class="stack">{{ ui.csrf() }}
     {{ ui.field("current_password", _("account.current_password"), "", type="password", required=true, attrs='autocomplete="current-password"') }}
     {{ ui.field("new_password", _("auth.new_password"), "", type="password", required=true, hint=_("auth.password_hint"), attrs='autocomplete="new-password"') }}

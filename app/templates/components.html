@@ -1,3 +1,5 @@
+{% macro icon(name, cls="ico") -%}<svg class="{{ cls }}" aria-hidden="true"><use href="/static/icons/sprite.svg#i-{{ name }}"></use></svg>{%- endmacro %}
+
 {# UI component library (NFR-FE-01). Every form element is rendered through these macros. #}
 
 {% macro csrf() -%}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{%- endmacro %}

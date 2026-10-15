@@ -109,6 +109,14 @@ def notify_company_owners(db: Session, company_id, event: str, params: dict | No
                     dedup=f"{dedup}:{uid}" if dedup else None)
 
 
+def _staff_link(link: str) -> str:
+    """Platform staff open deals and orders only through the audited admin interface."""
+    for prefix in ("/deals/", "/orders/"):
+        if link.startswith(prefix):
+            return "/admin" + link
+    return "/admin/finance" if link.startswith("/finance") else link
+
+
 def notify_event(db: Session, event: str, *, params: dict | None = None, link: str = "", client_company_id=None,
                  carrier_company_id=None, driver_user_id=None, include_managers: bool = False,
                  dedup: str | None = None) -> None:
@@ -125,12 +133,13 @@ def notify_event(db: Session, event: str, *, params: dict | None = None, link: s
     if include_managers and matrix.get("manager"):
         mgrs = db.execute(select(User.id).where(User.staff_role == STAFF_MANAGER, User.is_blocked.is_(False))).scalars()
         targets += [(u, matrix["manager"]) for u in mgrs]
+    staff_ids = set(db.execute(select(User.id).where(User.staff_role.is_not(None))).scalars()) if include_managers else set()
     seen = set()
     for uid, chans in targets:
         if uid in seen:
             continue
         seen.add(uid)
-        notify_user(db, uid, event, params, link=link, channels=chans, dedup=f"{dedup}:{uid}" if dedup else None)
+        notify_user(db, uid, event, params, link=_staff_link(link) if uid in staff_ids else link, channels=chans, dedup=f"{dedup}:{uid}" if dedup else None)
 
 
 def unread_count(db: Session, user_id) -> int:

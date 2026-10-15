@@ -46,13 +46,14 @@ class DealAccess:
     role: str
 
 
-def get_access(db: Session, deal_id, *, user: User, company_id, role: str | None) -> DealAccess:
+def get_access(db: Session, deal_id, *, user: User, company_id, role: str | None,
+               allow_staff: bool = False) -> DealAccess:
     """FR-ACL-01/03, SEC-AZ-02: access by membership in a side of the deal, checked every request."""
     deal = db.get(Deal, deal_id)
     if deal is None:
         raise NotFound()
     order = db.get(Order, deal.order_id)
-    if user.staff_role and staff_can(user.staff_role, "admin.deal_content") and company_id is None:
+    if allow_staff and user.staff_role and staff_can(user.staff_role, "admin.deal_content") and company_id is None:
         return DealAccess(deal, order, "staff", user.staff_role)
     if not company_can(role, "deal.view"):
         raise NotFound()

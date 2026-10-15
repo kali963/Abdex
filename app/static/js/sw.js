@@ -1,7 +1,7 @@
 /* AbdEX service worker (FR-MOB-02): offline cache of the app shell and key driver screens.
    Personal data pages are never cached (network-only); only static assets and /trips shell. */
-var CACHE = "abdex-v1";
-var SHELL = ["/static/css/app.css", "/static/js/app.js", "/static/icons/icon.svg", "/manifest.webmanifest"];
+var CACHE = "abdex-v2";
+var SHELL = ["/static/css/app.css?v=2", "/static/js/app.js?v=2", "/static/icons/icon.svg", "/static/icons/sprite.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }));
@@ -19,11 +19,12 @@ self.addEventListener("fetch", function (e) {
   var url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
   if (url.pathname.startsWith("/static/")) {
-    e.respondWith(caches.match(e.request).then(function (hit) {
-      return hit || fetch(e.request).then(function (resp) {
-        var copy = resp.clone();
-        caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
-        return resp;
+    // stale-while-revalidate: instant from cache, refreshed in the background
+    e.respondWith(caches.open(CACHE).then(function (c) {
+      return c.match(e.request).then(function (hit) {
+        var net = fetch(e.request).then(function (resp) { if (resp.ok) c.put(e.request, resp.clone()); return resp; })
+          .catch(function () { return hit; });
+        return hit || net;
       });
     }));
     return;

@@ -22,6 +22,8 @@ if ON_VERCEL:
     os.environ.setdefault("STORAGE_DIR", "/tmp/abdex-storage")  # noqa: S108 — only writable, per-instance dir on Vercel
     os.environ.setdefault("RUN_BACKGROUND_WORKER", "false")
     os.environ.setdefault("AUTO_MIGRATE", "true")
+    os.environ.setdefault("SECURE_COOKIES", "true")  # Vercel always serves HTTPS
+    os.environ.setdefault("TRUST_PROXY", "true")  # Vercel's edge sets X-Forwarded-For itself
 
 
 def _normalize_db_url(url: str) -> str:
@@ -57,6 +59,9 @@ class Settings:
     # Admin interface lives on a separate host in production (FR-ACL-04). Empty = same host.
     admin_host: str = field(default_factory=lambda: os.getenv("ADMIN_HOST", ""))
     secure_cookies: bool = field(default_factory=lambda: _bool("SECURE_COOKIES", False))
+    # Take the client IP from X-Forwarded-For only behind a proxy that overwrites it; otherwise
+    # anyone could spoof their IP and bypass per-IP rate limits (SEC-AUT-03, SEC-APP-06).
+    trust_proxy: bool = field(default_factory=lambda: _bool("TRUST_PROXY", False))
     require_2fa_privileged: bool = field(default_factory=lambda: _bool("REQUIRE_2FA_PRIVILEGED", False))
     run_background_worker: bool = field(default_factory=lambda: _bool("RUN_BACKGROUND_WORKER", True))
     seed_demo_data: bool = field(default_factory=lambda: _bool("SEED_DEMO_DATA", True))
@@ -70,6 +75,8 @@ class Settings:
     # SEC-AUT-10: cooling-off period for new bank details
     iban_cooldown_hours: int = field(default_factory=lambda: _int("IBAN_COOLDOWN_HOURS", 24))
     telegram_bot_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
+    # Secret Telegram sends in X-Telegram-Bot-Api-Secret-Token (set via setWebhook secret_token)
+    telegram_webhook_secret: str = field(default_factory=lambda: os.getenv("TELEGRAM_WEBHOOK_SECRET", ""))
 
     @property
     def is_production(self) -> bool:

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("import.title") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("import.title") }}</h1><a class="btn" href="/orders">← {{ _("nav.orders") }}</a></div>
+{% if result and result.errors %}
+<div class="alert error" role="alert">{{ _("import.failed", count=result.errors|length) }}</div>
+<div class="table-wrap"><table><thead><tr><th>{{ _("import.row") }}</th><th>{{ _("import.column") }}</th><th>{{ _("import.problem") }}</th></tr></thead>
+<tbody>{% for row, col, msg in result.errors %}<tr><td>{{ row }}</td><td><code>{{ col }}</code></td><td>{{ _(msg) }}</td></tr>{% endfor %}</tbody></table></div>
+{% elif result %}
+<div class="alert success">{{ _("import.done", count=result.created|length) }}</div>
+<div class="table-wrap"><table><thead><tr><th>№</th><th>{{ _("order.route") }}</th><th>{{ _("common.status") }}</th></tr></thead>
+<tbody>{% for o in result.created %}<tr><td><a href="/orders/{{ o.id }}">{{ o.number }}</a></td><td>{{ ui.route(o) }}</td><td>{{ ui.status(o.status) }}</td></tr>{% endfor %}</tbody></table></div>
+{% endif %}
+<div class="grid two">
+<form class="card panel-3d stack" method="post" action="/orders/import" enctype="multipart/form-data">{{ ui.csrf() }}
+  <h2>{{ _("import.upload") }}</h2>
+  <p class="muted">{{ _("import.text", max=max_rows) }}</p>
+  <div class="field"><label for="f-file">{{ _("kyc.file") }} (CSV / XLSX)</label><input id="f-file" type="file" name="file" accept=".csv,.xlsx" required></div>
+  <button class="btn primary">{{ _("import.run") }}</button>
+</form>
+<section class="card panel-3d">
+  <h2>{{ _("import.format") }}</h2>
+  <p><a class="btn" href="/orders/import/template.xlsx">⬇ {{ _("import.template") }}</a></p>
+  <p class="muted">{{ _("import.columns") }}:</p>
+  <p>{% for c in columns %}<code>{{ c }}</code>{% if c in required %} *{% endif %}{{ ", " if not loop.last }}{% endfor %}</p>
+  <p class="muted"><small>{{ _("import.hint") }}</small></p>
+</section>
+</div>
+{% endblock %}
