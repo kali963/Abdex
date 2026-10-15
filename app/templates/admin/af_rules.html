@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("af.rules") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("af.rules") }}</h1><a class="btn" href="/admin/antifraud">{{ _("admin.antifraud") }}</a></div>
+<p class="muted">{{ _("af.text") }}</p>
+<div class="table-wrap"><table><thead><tr><th>{{ _("af.rule") }}</th><th>{{ _("af.action") }} · {{ _("af.severity") }} · {{ _("af.threshold") }}</th></tr></thead><tbody>
+{% for r in rules %}<tr>
+<td><b>{{ _("alert." ~ r.code) }}</b><br><small class="muted"><code>{{ r.code }}</code></small></td>
+<td><form method="post" action="/admin/antifraud/rules/{{ r.id }}" class="row af-rule">{{ ui.csrf() }}
+  <label class="check"><input type="checkbox" name="enabled" value="on" {{ 'checked' if r.enabled }}> <span>{{ _("af.on") }}</span></label>
+  <label class="sr-only" for="a-{{ r.id }}">{{ _("af.action") }}</label><select id="a-{{ r.id }}" name="action">{% for a in actions %}<option value="{{ a }}" {{ 'selected' if a == r.action }}>{{ _("af.act." ~ a) }}</option>{% endfor %}</select>
+  <label class="sr-only" for="s-{{ r.id }}">{{ _("af.severity") }}</label><select id="s-{{ r.id }}" name="severity">{% for s in ("low", "medium", "high") %}<option value="{{ s }}" {{ 'selected' if s == r.severity }}>{{ _("af.sev." ~ s) }}</option>{% endfor %}</select>
+  {% if r.code in velocity %}<label class="inline-num">{{ _("af.more_than") }} <input name="threshold" value="{{ r.threshold }}" inputmode="numeric" size="4" aria-label="{{ _('af.threshold') }}"></label><label class="inline-num">{{ _("af.per_minutes") }} <input name="window_minutes" value="{{ r.window_minutes }}" inputmode="numeric" size="6" aria-label="{{ _('af.window') }}"></label>{% else %}<input type="hidden" name="threshold" value="0"><input type="hidden" name="window_minutes" value="0">{% endif %}
+  <button class="btn small">{{ _("action.save") }}</button></form></td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

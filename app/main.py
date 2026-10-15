@@ -126,8 +126,12 @@ def create_app() -> FastAPI:
                                 samesite="lax", secure=settings.secure_cookies)
         if new_pre:
             response.set_cookie("abdex_pre_csrf", new_pre, httponly=True, samesite="lax", secure=settings.secure_cookies)
+        elapsed = time.monotonic() - started
         logging.getLogger("abdex.http").info("%s %s %s %dms", request.method, request.url.path,
-                                             response.status_code, int((time.monotonic() - started) * 1000))
+                                             response.status_code, int(elapsed * 1000))
+        from app.core.metrics import observe
+
+        observe(request.method, request.url.path, response.status_code, elapsed)
         return response
 
     _install_error_handlers(app)
@@ -160,6 +164,27 @@ def create_app() -> FastAPI:
     return app
 
 
+def _journal_denied(request: Request, code: str) -> None:
+    """SEC-LOG-06: access-denied answers of signed-in users feed the security correlation."""
+    from app.core.context import get_ctx
+
+    if not get_ctx().user_id:
+        return
+    from app.core.audit import audit
+    from app.db import SessionLocal
+
+    db = SessionLocal()
+    try:
+        audit(db, "access.denied", object_type="path", object_id=request.url.path[:64], result="denied",
+              details={"code": code, "method": request.method})
+        db.commit()
+    except Exception:  # noqa: BLE001 — journaling must never turn a 403 into a 500
+        db.rollback()
+        logging.getLogger("abdex").warning("could not journal access.denied")
+    finally:
+        db.close()
+
+
 def _install_error_handlers(app: FastAPI) -> None:
     from app.web.deps import LoginRequired, MfaRequired, render, safe_next, set_flash
 
@@ -187,6 +212,8 @@ def _install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError):
         message = translate(exc.message_key, **exc.params)
+        if exc.status_code == 403:
+            _journal_denied(request, exc.code)
         if _is_api(request):
             return _error_json(request, exc.code, message, exc.status_code, exc.fields)
         if request.method == "POST" and exc.status_code not in (403, 404):

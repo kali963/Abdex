@@ -33,8 +33,42 @@ LIMITS = {
 }
 
 
+DEFAULTS = dict(LIMITS)
+_overrides: dict[str, tuple[int, int]] = {}
+_loaded_at = 0.0
+REFRESH_SECONDS = 60
+loader = None  # set at start-up: returns {"bucket": [limit, window_seconds]} from the platform setting
+
+
+def configure(overrides: dict | None) -> None:
+    """SEC-APP-07: thresholds come from the setting ``ratelimit.limits`` and change without a release."""
+    clean = {}
+    for bucket, value in (overrides or {}).items():
+        try:
+            lim, win = int(value[0]), int(value[1])
+        except (TypeError, ValueError, IndexError, KeyError):
+            continue
+        if bucket in DEFAULTS and lim > 0 and win > 0:
+            clean[bucket] = (lim, win)
+    _overrides.clear()
+    _overrides.update(clean)
+
+
+def _limits(bucket: str) -> tuple[int, int]:
+    global _loaded_at
+    if loader is not None and time.monotonic() - _loaded_at > REFRESH_SECONDS:
+        _loaded_at = time.monotonic()
+        try:
+            configure(loader())
+        except Exception:  # noqa: BLE001 — a settings read failure keeps the previous limits
+            import logging
+
+            logging.getLogger("abdex.ratelimit").warning("rate limit settings could not be loaded")
+    return _overrides.get(bucket) or DEFAULTS.get(bucket, (100, 60))
+
+
 def hit(bucket: str, key: str, *, limit: int | None = None, window: int | None = None, raise_exc: bool = True) -> bool:
-    lim, win = LIMITS.get(bucket, (100, 60))
+    lim, win = _limits(bucket)
     lim = limit or lim
     win = window or win
     now = time.monotonic()
@@ -52,7 +86,7 @@ def hit(bucket: str, key: str, *, limit: int | None = None, window: int | None =
 
 
 def count(bucket: str, key: str) -> int:
-    _, win = LIMITS.get(bucket, (100, 60))
+    _, win = _limits(bucket)
     now = time.monotonic()
     with _lock:
         q = _store.get(f"{bucket}:{key}")

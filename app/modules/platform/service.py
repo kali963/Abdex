@@ -131,18 +131,30 @@ def next_number(db: Session, doc_type: str, prefix: str, *, width: int = 6) -> s
 
 
 def raise_alert(db: Session, kind: str, *, severity: str = "medium", company_id=None, deal_id=None,
-                details: dict | None = None) -> AntifraudAlert:
-    """Alerts go to the manual review queue; nothing is blocked silently (FR-KYC-07)."""
+                details: dict | None = None) -> AntifraudAlert | None:
+    """Alerts go to the manual review queue; nothing is blocked silently (FR-KYC-07).
+
+    The rule for `kind` (SEC-FRD-01) decides: disabled or "allow" -> nothing; "flag" -> a low-priority record;
+    "review" -> the manual review queue; "restrict"/"block" -> also an immediate restriction of the company."""
+    from app.modules.platform.antifraud import apply_action, rule
+
+    r = rule(db, kind)
+    if not r.enabled or r.action == "allow":
+        return None
+    severity = r.severity or severity
     existing = db.execute(
         select(AntifraudAlert).where(AntifraudAlert.kind == kind, AntifraudAlert.company_id == company_id,
-                                     AntifraudAlert.deal_id == deal_id, AntifraudAlert.status == "open")
+                                     AntifraudAlert.deal_id == deal_id,
+                                     AntifraudAlert.status.in_(("open", "flagged")))
     ).scalar_one_or_none()
     if existing:
         return existing
     alert = AntifraudAlert(kind=kind, severity=severity, company_id=company_id, deal_id=deal_id,
+                           status="flagged" if r.action == "flag" else "open",
                            details=json.dumps(details or {}, ensure_ascii=False, default=str))
     db.add(alert)
     db.flush()
+    apply_action(db, r, alert)
     return alert
 
 

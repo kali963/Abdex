@@ -29,6 +29,26 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db),
     ratelimit.hit("api", "telegram-hook")
     update = await request.json()
     message = (update or {}).get("message") or {}
+    # SEC-APP-12: timestamp and replay protection on top of the secret header
+    import time
+    import uuid
+
+    from sqlalchemy.exc import IntegrityError
+
+    from app.modules.platform.models import IdempotencyKey
+
+    sent_at = int(message.get("date") or 0)
+    if not sent_at or abs(time.time() - sent_at) > 600:
+        return {"ok": True}
+    update_id = str((update or {}).get("update_id") or "")
+    if update_id:
+        try:
+            with db.begin_nested():
+                db.add(IdempotencyKey(user_id=uuid.UUID(int=0), key=f"tg:{update_id}"[:80], scope="telegram_update"))
+                db.flush()
+        except IntegrityError:
+            return {"ok": True}  # the same update delivered twice
+        db.commit()
     text = str(message.get("text") or "").strip()
     chat_id = str((message.get("chat") or {}).get("id") or "")
     if not chat_id or not text.startswith("/start "):
@@ -46,3 +66,16 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db),
 
     telegram.send(chat_id, "AbdEX: Telegram привязан к вашему аккаунту.")
     return {"ok": True}
+
+
+@router.get("/metrics")
+def metrics(request: Request, db: Session = Depends(get_db)):
+    """NFR-OBS-01/02: Prometheus scrape endpoint; invisible without the bearer token."""
+    from fastapi.responses import PlainTextResponse
+
+    from app.core.metrics import render
+
+    sent = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not settings.metrics_token or not hmac.compare_digest(sent, settings.metrics_token):
+        raise NotFound()
+    return PlainTextResponse(render(db), media_type="text/plain; version=0.0.4")

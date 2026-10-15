@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.approvals") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.approvals") }}</h1>
+<p class="muted">{{ _("approval.text") }}</p>
+{% for r in items %}
+<section class="card">
+  <div class="page-head"><div><h3>{{ _("approval.kind." ~ r.kind) }}</h3><small class="muted">{{ r.summary }}</small></div>
+    <span class="badge warn">{{ _("approval.until", until=fmt_dt(r.expires_at)) }}</span></div>
+  <dl class="kv"><dt>{{ _("approval.requested_by") }}</dt><dd>{{ names.get(r.requested_by, "—") }} · {{ fmt_dt(r.created_at) }}</dd>
+    <dt>{{ _("admin.reason") }}</dt><dd>{{ r.reason }}</dd></dl>
+  {% if can.get(r.id) %}
+  <form method="post" action="/admin/approvals/{{ r.id }}" class="stack" data-confirm="{{ _('approval.confirm') }}">{{ ui.csrf() }}
+    {{ ui.field("note", _("admin.comment"), "", id="note-" ~ r.id) }}
+    <div class="row"><button class="btn ok" name="decision" value="approve">{{ _("approval.approve") }}</button><button class="btn danger" name="decision" value="reject">{{ _("admin.reject") }}</button></div>
+  </form>
+  {% elif r.requested_by == me.user.id %}<p class="muted"><small>{{ _("approval.wait_other") }}</small></p>
+  {% else %}<p class="muted"><small>{{ _("approval.no_right") }}</small></p>{% endif %}
+</section>
+{% else %}{{ ui.empty(_("approval.none")) }}{% endfor %}
+{% if recent %}
+<h2>{{ _("approval.history") }}</h2>
+<div class="table-wrap"><table><thead><tr><th>{{ _("common.date") }}</th><th>{{ _("approval.kind_col") }}</th><th>{{ _("approval.requested_by") }}</th><th>{{ _("approval.decided_by") }}</th><th>{{ _("common.status") }}</th></tr></thead><tbody>
+{% for r in recent %}<tr><td>{{ fmt_dt(r.decided_at or r.updated_at) }}</td><td>{{ _("approval.kind." ~ r.kind) }}<br><small class="muted">{{ r.summary }}</small></td><td>{{ names.get(r.requested_by, "—") }}</td><td>{{ names.get(r.decided_by, "—") }}</td><td>{{ ui.status(r.status) }}{% if r.decision_note %}<br><small class="muted">{{ r.decision_note }}</small>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% endblock %}

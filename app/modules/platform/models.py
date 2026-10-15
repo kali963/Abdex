@@ -162,3 +162,71 @@ class CalcResult(Model):
     methodology_version: Mapped[str] = mapped_column(String(20))
     inputs: Mapped[str] = mapped_column(Text)
     result: Mapped[str] = mapped_column(Text)
+
+
+class ApprovalRequest(Model):
+    """SEC-AZ-05: a privileged operation waits for a second staff member before it is executed."""
+
+    __tablename__ = "approval_requests"
+
+    kind: Mapped[str] = mapped_column(String(30), index=True)  # company_block / tariff_change / status_rollback / storno
+    object_id: Mapped[str] = mapped_column(String(64), default="")
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+    summary: Mapped[str] = mapped_column(String(300), default="")
+    reason: Mapped[str] = mapped_column(String(500), default="")
+    status: Mapped[str] = mapped_column(String(10), default="pending", index=True)  # pending/executed/rejected/failed/expired
+    requested_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id"))
+    decided_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+    decision_note: Mapped[str] = mapped_column(String(500), default="")
+    expires_at: Mapped[datetime] = mapped_column(AwareDateTime)
+
+
+class AntifraudRule(Model):
+    """SEC-FRD-01: rules with thresholds and actions, changed by an administrator without a release."""
+
+    __tablename__ = "antifraud_rules"
+
+    code: Mapped[str] = mapped_column(String(40), unique=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    action: Mapped[str] = mapped_column(String(10), default="review")  # allow / flag / review / restrict / block
+    severity: Mapped[str] = mapped_column(String(10), default="medium")
+    threshold: Mapped[int] = mapped_column(Integer, default=0)   # for velocity rules: events per window
+    window_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    description: Mapped[str] = mapped_column(String(300), default="")
+
+
+class DeviceEvent(Model):
+    """SEC-FRD-02/03: device and network marks at registration, login and key actions (purged by retention)."""
+
+    __tablename__ = "device_events"
+
+    action: Mapped[str] = mapped_column(String(30), index=True)
+    device_id: Mapped[str] = mapped_column(String(64), default="", index=True)
+    ip: Mapped[str] = mapped_column(String(64), default="", index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
+    company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
+
+
+class SecurityAlert(Model):
+    """SEC-LOG-06: correlated security events for the security officer."""
+
+    __tablename__ = "security_alerts"
+
+    kind: Mapped[str] = mapped_column(String(40), index=True)
+    severity: Mapped[str] = mapped_column(String(10), default="medium")
+    user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    details: Mapped[str] = mapped_column(Text, default="{}")
+    dedup_key: Mapped[str] = mapped_column(String(120), unique=True)
+    status: Mapped[str] = mapped_column(String(10), default="open", index=True)  # open / closed
+    closed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+
+class ProductEvent(Model):
+    """FR-BI-07: interface funnel events without personal data (anonymous session hash only)."""
+
+    __tablename__ = "product_events"
+
+    name: Mapped[str] = mapped_column(String(40), index=True)
+    anon_id: Mapped[str] = mapped_column(String(16), index=True)
+    role: Mapped[str] = mapped_column(String(20), default="")

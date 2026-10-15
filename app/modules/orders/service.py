@@ -179,6 +179,12 @@ def create_order(db: Session, company: Company, form: dict, *, preliminary: bool
     _calc_route(order)
     db.flush()
     audit(db, "order.created", object_type="order", object_id=order.id)
+    from app.modules.platform.antifraud import track
+
+    track(db, "order_create", company_id=company.id)
+    from app.modules.analytics.product import track as product_event
+
+    product_event(db, "order_created")
     return order
 
 
@@ -215,6 +221,9 @@ def submit(db: Session, order: Order) -> Order:
             order.moderation_note = "; ".join(problems)
             return order  # stays in moderation for a manager
     flow.transition(db, order, flow.PUBLISHED, actor=flow.SYSTEM, reason="auto checks passed")
+    from app.modules.analytics.product import track as product_event
+
+    product_event(db, "order_published")
     if order.bidding_deadline is None:
         hours = int(get_setting(db, "orders.default_bidding_hours", 24))
         order.bidding_deadline = utcnow() + timedelta(hours=hours)
@@ -264,6 +273,9 @@ order_as_form = _order_as_form
 
 def cancel(db: Session, order: Order, reason: str) -> None:
     flow.transition(db, order, flow.CANCELLED, actor=flow.CLIENT, reason=reason)
+    from app.modules.platform.antifraud import track
+
+    track(db, "order_cancel", company_id=order.client_company_id)  # SEC-APP-07: control of cancellations
     from app.modules.bids.models import Bid
 
     for bid in db.execute(select(Bid).where(Bid.order_id == order.id, Bid.status.in_(

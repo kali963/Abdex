@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.security") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.security") }}</h1>
+<p class="muted">{{ _("secr.text") }}</p>
+<nav class="tabs">{% for s in ("open", "closed") %}<a href="?status={{ s }}" class="{{ 'active' if s == status }}">{{ status_label(s) }}</a>{% endfor %}</nav>
+<div class="table-wrap"><table><thead><tr><th>{{ _("common.date") }}</th><th>{{ _("secr.alert") }}</th><th>{{ _("audit.user") }}</th><th>{{ _("admin.details") }}</th><th></th></tr></thead><tbody>
+{% for a in alerts %}<tr><td>{{ fmt_dt(a.created_at) }}</td><td><span class="badge {{ 'err' if a.severity == 'high' else 'warn' }}">{{ _("af.sev." ~ a.severity) }}</span> {{ _("secalert." ~ a.kind) }}</td>
+<td>{{ names.get(a.user_id, a.user_id or "—") }}</td><td><small><code>{{ a.details }}</code></small></td>
+<td>{% if a.status == "open" %}<form method="post" action="/admin/security/{{ a.id }}/close">{{ ui.csrf() }}<button class="btn small">{{ _("secr.close") }}</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+
+<section class="card">
+  <div class="page-head"><h2>{{ _("secr.title") }} {{ month.strftime("%m.%Y") }}</h2>
+    <form method="get" class="row"><label for="m">{{ _("kpi.month") }}</label><input id="m" type="month" name="month" value="{{ month.strftime('%Y-%m') }}"><button class="btn small">{{ _("common.show") }}</button><a class="btn small" href="/admin/security/report.pdf?month={{ month.strftime('%Y-%m') }}">PDF</a></form></div>
+  <div class="grid three">
+    <div class="card stat"><b>{{ report.alerts_total }}</b><span>{{ _("secr.alerts") }} ({{ _("secr.open") }}: {{ report.alerts_open }})</span></div>
+    <div class="card stat"><b>{{ report.failed_logins }} / {{ report.logins }}</b><span>{{ _("secr.failed") }} / {{ _("secr.logins") }}</span></div>
+    <div class="card stat"><b>{{ report.exports }}</b><span>{{ _("secr.exports") }}</span></div>
+    <div class="card stat"><b>{{ report.access_denied }}</b><span>{{ _("secr.denied") }}</span></div>
+    <div class="card stat"><b>{{ report.impersonations }}</b><span>{{ _("secr.impersonations") }}</span></div>
+    <div class="card stat"><b>{{ report.approvals }}</b><span>{{ _("secr.approvals") }}</span></div>
+  </div>
+  {% if report.alerts_by_kind %}<h3>{{ _("secr.by_kind") }}</h3><ul class="plain-list">{% for k, v in report.alerts_by_kind|dictsort %}<li>{{ _("secalert." ~ k) }}: <b>{{ v }}</b></li>{% endfor %}</ul>{% endif %}
+  <h3>{{ _("secr.rights") }}</h3>
+  <ul class="timeline">{% for r in report.rights_changes %}<li>{{ fmt_dt(r.at) }} · <code>{{ r.action }}</code> · {{ r.object }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+  <h3>{{ _("secr.vulns") }}</h3><p>{{ report.vulnerabilities or "—" }}</p>
+</section>
+{% endblock %}

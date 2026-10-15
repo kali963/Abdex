@@ -186,3 +186,24 @@ class OrderInvite(Model):
 
     order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("orders.id"), index=True)
     carrier_company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"))
+
+
+class ShipmentPlan(Model):
+    """FR-PLAN-03: a plan for a period loaded from a file; fact is computed from orders and deals."""
+
+    __tablename__ = "shipment_plans"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    period_from: Mapped[date] = mapped_column(Date)
+    period_to: Mapped[date] = mapped_column(Date)
+
+
+class ShipmentPlanLine(Model):
+    __tablename__ = "shipment_plan_lines"
+
+    plan_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("shipment_plans.id"), index=True)
+    from_city: Mapped[str] = mapped_column(String(100))
+    to_city: Mapped[str] = mapped_column(String(100))
+    trips: Mapped[int] = mapped_column(Integer, default=0)
+    weight_kg: Mapped[int] = mapped_column(Integer, default=0)

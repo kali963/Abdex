@@ -72,6 +72,13 @@ def market_order(oid: str, request: Request, db: Session = Depends(get_db),
     if not orders.carrier_can_see(db, order, me.company) and my_bid is None:
         raise NotFound()
     client = db.get(Company, order.client_company_id)
+    from app.modules.platform.antifraud import track
+
+    track(db, "card_view", company_id=me.company.id)  # SEC-APP-07: mass viewing of order cards
+    from app.modules.analytics.product import track as product_event
+
+    product_event(db, "market_card_view")
+    db.commit()
     return render(request, "carrier/market_order.html", {
         "order": order, "my_bid": my_bid, "events": bids.bid_history(db, my_bid.id) if my_bid else [],
         "client_stats": fleet.company_stats(db, client.id), "client_level": client.verification_level,

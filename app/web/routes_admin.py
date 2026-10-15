@@ -123,20 +123,23 @@ async def moderate(oid: str, request: Request, db: Session = Depends(get_db),
 @router.post("/orders/{oid}/rollback")
 async def rollback(oid: str, request: Request, db: Session = Depends(get_db),
                    me: Principal = Depends(require("admin.rollback"))):
-    """FR-FLOW-03: manager only, with a reason; both sides notified."""
-    form = await request.form()
-    order = flow.lock_order(db, parse_uuid(oid))
-    flow.rollback(db, order, str(form.get("to", "")), reason=str(form.get("reason", "")), user_id=me.user.id)
-    deal = db.execute(select(Deal).where(Deal.order_id == order.id)).scalar_one_or_none()
-    from app.modules.notifications.service import notify_event
+    """FR-FLOW-03 + SEC-AZ-05: manager asks with a reason; a second staff member confirms; both sides notified."""
+    from app.modules.orders.models import StatusHistory
+    from app.modules.platform import approvals
 
-    notify_event(db, "order.status", params={"number": order.number, "status": order.status},
-                 link=f"/deals/{deal.id}" if deal else f"/orders/{order.id}",
-                 client_company_id=order.client_company_id,
-                 carrier_company_id=deal.carrier_company_id if deal else None)
-    audit(db, "staff.status_rollback", object_type="order", object_id=order.id, reason=str(form.get("reason", "")))
+    form = await request.form()
+    order = db.get(Order, parse_uuid(oid))
+    if order is None:
+        raise NotFound()
+    to = str(form.get("to", ""))
+    history = set(db.execute(select(StatusHistory.from_status).where(StatusHistory.order_id == order.id)).scalars())
+    if to == order.status or to not in history:
+        raise ValidationFailed({"to": "error.rollback_target_not_in_history"})
+    approvals.request(db, "status_rollback", staff=db.get(User, me.user.id), object_id=order.id,
+                      payload={"order_id": str(order.id), "to": to},
+                      summary=f"{order.number}: {order.status} → {to}", reason=str(form.get("reason", "")))
     db.commit()
-    return redirect(f"/admin/orders/{oid}", flash=("success", "msg.saved"))
+    return redirect(f"/admin/orders/{oid}", flash=("success", "approval.sent"))
 
 
 @router.get("/deals/{did}")
@@ -298,9 +301,15 @@ async def restrict(cid: str, request: Request, db: Session = Depends(get_db), me
     if kind not in ("block", "limit", "no_new_orders", "no_bids"):
         raise ValidationFailed({"kind": "error.invalid_choice"})
     until = _d(str(form.get("until", "")), None) if form.get("until") else None
+    if kind == "block":  # SEC-AZ-05: blocking a company needs a second staff member
+        from app.modules.platform import approvals
+
+        approvals.request(db, "company_block", staff=db.get(User, me.user.id), object_id=c.id,
+                          payload={"company_id": str(c.id), "until": until.isoformat() if until else ""},
+                          summary=f"{c.name} ({c.bin_iin})", reason=reason)
+        db.commit()
+        return redirect(f"/admin/companies/{cid}", flash=("success", "approval.sent"))
     db.add(Restriction(company_id=c.id, kind=kind, reason=reason, until=until, created_by=me.user.id))
-    if kind == "block":
-        c.is_blocked = True
     if kind == "limit" and form.get("limit"):
         c.deal_limit_minor = to_minor(str(form["limit"]))
     audit(db, "staff.company_restricted", object_type="company", object_id=c.id, reason=reason,
@@ -452,11 +461,14 @@ async def statement(request: Request, db: Session = Depends(get_db), me: Princip
 async def storno(aid: str, request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("admin.finance"))):
     form = await request.form()
     a = db.get(Accrual, parse_uuid(aid))
-    if a is None:
+    if a is None or a.storno_of_id:
         raise NotFound()
-    billing.storno(db, a, str(form.get("reason", "")))
+    from app.modules.platform import approvals
+
+    approvals.request(db, "storno", staff=db.get(User, me.user.id), object_id=a.id, payload={"accrual_id": str(a.id)},
+                      summary=f"storno {a.amount_minor / 100:.2f} {a.currency}", reason=str(form.get("reason", "")))
     db.commit()
-    return redirect("/admin/finance", flash=("success", "msg.saved"))
+    return redirect("/admin/finance", flash=("success", "approval.sent"))
 
 
 @router.post("/finance/tariffs")
@@ -477,16 +489,22 @@ async def tariff_create(request: Request, db: Session = Depends(get_db), me: Pri
         percent_bp = int(round(float(str(form.get("percent", "0") or "0").replace(",", ".")) * 100))
     except ValueError:
         raise ValidationFailed({"percent": "error.number"})
-    t = Tariff(name=str(form.get("name", "")).strip() or "Тариф", model=model, fixed_minor=money("fixed"),
-               percent_bp=percent_bp, min_minor=money("min"), max_minor=money("max"),
-               company_id=parse_uuid(form["company_id"]) if form.get("company_id") else None,
-               deal_type=str(form.get("deal_type", "any")), valid_from=_d(str(form.get("valid_from", "")), date.today()),
-               valid_to=_d(str(form.get("valid_to", "")), None) if form.get("valid_to") else None,
-               created_by=me.user.id)
-    db.add(t)
-    audit(db, "staff.tariff_created", object_type="tariff", object_id=t.id)
+    deal_type = str(form.get("deal_type", "any"))
+    if deal_type not in ("any", "domestic", "international"):
+        raise ValidationFailed({"deal_type": "error.invalid_choice"})
+    company_id = parse_uuid(form["company_id"]) if form.get("company_id") else None
+    valid_to = _d(str(form.get("valid_to", "")), None) if form.get("valid_to") else None
+    payload = {"name": str(form.get("name", "")).strip()[:200] or "Тариф", "model": model, "fixed_minor": money("fixed"),
+               "percent_bp": percent_bp, "min_minor": money("min"), "max_minor": money("max"),
+               "company_id": str(company_id) if company_id else "", "deal_type": deal_type,
+               "valid_from": _d(str(form.get("valid_from", "")), date.today()).isoformat(),
+               "valid_to": valid_to.isoformat() if valid_to else ""}
+    from app.modules.platform import approvals
+
+    approvals.request(db, "tariff_change", staff=db.get(User, me.user.id), payload=payload,
+                      summary=f"{payload['name']} · {model}", reason=str(form.get("reason", "")) or payload["name"])
     db.commit()
-    return redirect("/admin/finance", flash=("success", "msg.saved"))
+    return redirect("/admin/finance", flash=("success", "approval.sent"))
 
 
 @router.get("/reports/pvd")
@@ -669,6 +687,8 @@ async def setting_save(sid: str, request: Request, db: Session = Depends(get_db)
     before = s.value
     s.value = raw
     audit(db, "staff.setting_changed", object_type="setting", object_id=s.key, details={"before": before[:200]})
+    if s.key == "ratelimit.limits":
+        ratelimit.configure(json.loads(raw) if isinstance(json.loads(raw), dict) else {})
     db.commit()
     return redirect("/admin/settings", flash=("success", "msg.saved"))
 

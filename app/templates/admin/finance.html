@@ -18,6 +18,7 @@
   <div class="field"><label for="f-tc">{{ _("pool.company") }}</label><select id="f-tc" name="company_id"><option value="">{{ _("fin.default_tariff") }}</option>{% for c in clients %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
   {{ ui.select("deal_type", _("fin.deal_type"), [("any", _("common.any")), ("domestic", _("fin.domestic")), ("international", _("fin.international"))], "any") }}
   {{ ui.field("valid_from", _("fin.valid_from"), "", type="date", required=true) }}{{ ui.field("valid_to", _("fin.valid_to"), "", type="date") }}
+  {{ ui.field("reason", _("admin.reason"), "", required=true, id="tariff-reason", hint=_("approval.hint")) }}
 </div><button class="btn primary">{{ _("action.add") }}</button></form></details>
 </section>
 <section class="card"><h2>{{ _("fin.statement") }}</h2><p class="muted">{{ _("fin.statement_hint") }}</p>
