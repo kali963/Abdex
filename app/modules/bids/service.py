@@ -39,6 +39,10 @@ def place_bid(db: Session, order_id, carrier: Company, form: dict) -> Bid:
         raise Forbidden("verification_required")
     if carrier.is_blocked:
         raise Forbidden("company_blocked")
+    from app.modules.platform.service import has_restriction
+
+    if has_restriction(db, carrier.id, ("block", "no_bids")):
+        raise Forbidden("company_restricted_bids")  # FR-BID-08 / FR-RAT-04
     errors = {}
     try:
         price = to_minor(form.get("price", ""), order.currency)
@@ -59,6 +63,11 @@ def place_bid(db: Session, order_id, carrier: Company, form: dict) -> Bid:
         errors["driver_id"] = "error.invalid_choice"
     if order.adr_class and ((vehicle and not vehicle.adr_allowed) or (driver and not driver.adr_permit)):
         errors["vehicle_id"] = "error.adr_required"
+    if not errors and (vehicle or driver):
+        from app.modules.fleet.schedule import conflicts
+
+        errors.update({k: "error.executor_busy" for k in conflicts(
+            db, order, vehicle_id=vehicle.id if vehicle else None, driver_id=driver.id if driver else None)})
     if errors:
         raise ValidationFailed(errors)
     comment, leaked = mask_contacts(form.get("comment", ""))
@@ -200,6 +209,11 @@ def accept(db: Session, bid_id, client: Company, *, idempotency_key: str | None 
     if bid.valid_until and bid.valid_until < utcnow():
         bid.status = "expired"
         raise Conflict("bid_expired")
+    if bid.vehicle_id or bid.driver_id:
+        from app.modules.fleet.schedule import conflicts
+
+        if conflicts(db, order, vehicle_id=bid.vehicle_id, driver_id=bid.driver_id):
+            raise Conflict("executor_busy")  # the carrier booked the same vehicle/driver elsewhere meanwhile
     try:
         with db.begin_nested():
             deal = create_deal_from_bid(db, order, bid)

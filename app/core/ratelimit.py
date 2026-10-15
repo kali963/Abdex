@@ -27,6 +27,9 @@ LIMITS = {
     "api": (600, 60),
     "upload": (60, 600),
     "chat": (120, 600),
+    "invite": (50, 3600),
+    "impersonate": (10, 3600),
+    "webhook_test": (10, 600),
 }
 
 

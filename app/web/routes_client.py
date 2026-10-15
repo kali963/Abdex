@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import NotFound, ValidationFailed
-from app.db import get_db
+from app.db import get_db, utcnow
 from app.modules.accounts.models import Company
 from app.modules.bids import service as bids
 from app.modules.bids.models import Bid
@@ -137,10 +137,17 @@ def order_view(oid: str, request: Request, db: Session = Depends(get_db), me: Pr
     deal = db.execute(select(Deal).where(Deal.order_id == order.id)).scalar_one_or_none()
     versions = list(db.execute(select(OrderVersion).where(OrderVersion.order_id == order.id)
                                .order_by(OrderVersion.version)).scalars())
+    from app.modules.bids import matching
     from app.modules.deals.service import history
 
+    open_for_bids = order.status in flow.OPEN_FOR_BIDS
+    matches = matching.rank(db, order, limit=8) if open_for_bids else []
+    bidders = {row["carrier"].id for row in bid_rows}
     return render(request, "client/order_view.html", {
         "order": order, "bids": bid_rows, "deal": deal, "versions": versions, "history": history(db, order.id),
+        "matches": [m for m in matches if m.company.id not in bidders],
+        "invited": matching.invited_ids(db, order.id) if open_for_bids else set(),
+        "today": utcnow().date(),
         "can_edit": order.status in (flow.DRAFT, flow.PUBLISHED, flow.BIDDING),
         "can_cancel": flow.can(order.status, flow.CANCELLED, flow.CLIENT),
         "can_submit": order.status == flow.DRAFT, "role_text": localized_setting(db, "platform.role_explanation"),

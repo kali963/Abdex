@@ -24,8 +24,6 @@ from app.core.security import (
 )
 from app.db import utcnow
 from app.modules.accounts.models import (
-    CARRIER_ROLES,
-    CLIENT_ROLES,
     COMPANY_CARRIER,
     COMPANY_CLIENT,
     OWNER_ROLES,
@@ -417,7 +415,9 @@ def role_in(db: Session, user_id, company_id) -> str | None:
 
 
 def create_invitation(db: Session, company: Company, role: str, note: str = "") -> str:
-    valid_roles = CLIENT_ROLES if company.kind == COMPANY_CLIENT else CARRIER_ROLES
+    from app.modules.accounts.permissions import roles_in_scope
+
+    valid_roles = roles_in_scope("client" if company.kind == COMPANY_CLIENT else "carrier")  # FR-ACL-06
     if role not in valid_roles:
         raise ValidationFailed({"role": "error.invalid_role"})
     raw = token(18)

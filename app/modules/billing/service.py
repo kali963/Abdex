@@ -25,6 +25,8 @@ from app.modules.billing.models import (
     Accrual,
     Invoice,
     Payment,
+    PromoCode,
+    PromoRedemption,
     Tariff,
 )
 from app.modules.deals.models import Deal
@@ -87,6 +89,7 @@ def accrue_for_deal(db: Session, deal: Deal) -> Accrual | None:
     on = (order.assigned_at or utcnow()).date()
     tariff = tariff_for(db, deal.client_company_id, on, "international" if order.is_international else "domestic")
     amount, income, calc = compute_fee(tariff, deal.price_minor if deal.currency == tariff.currency else 0)
+    amount, calc = apply_promo(db, deal.client_company_id, on, amount, calc)
     client = db.get(Company, deal.client_company_id)
     invoice = Invoice(number=next_number(db, "fee_invoice", "СЧ"), company_id=client.id, deal_id=deal.id,
                       amount_minor=amount, currency=tariff.currency,
@@ -102,6 +105,8 @@ def accrue_for_deal(db: Session, deal: Deal) -> Accrual | None:
             db.flush()
     except IntegrityError:
         return db.execute(select(Accrual).where(Accrual.event == event)).scalar_one()
+    if amount == 0:  # fully covered by a promo code / grace period: nothing to pay
+        invoice.status, invoice.paid_at = "paid", utcnow()
     _issue_documents(db, invoice, deal, client)
     audit(db, "billing.accrued", object_type="deal", object_id=deal.id, details={"amount": amount, "income": income},
           role="system")
@@ -285,8 +290,11 @@ def pvd_report(db: Session, date_from: date, date_to: date) -> dict:
                       .order_by(Accrual.created_at)).scalars().all()
     by_type = {t: 0 for t in INCOME_TYPES}
     docs = []
+    discounts = 0
     for a in rows:
         by_type[a.income_type] = by_type.get(a.income_type, 0) + a.amount_minor
+        calc = json.loads(a.calculation or "{}")
+        discounts += int(calc.get("discount_minor", 0)) * (-1 if a.storno_of_id else 1)
         inv = db.get(Invoice, a.invoice_id) if a.invoice_id else None
         deal = db.get(Deal, a.deal_id) if a.deal_id else None
         docs.append({"date": a.created_at, "invoice": inv.number if inv else "", "deal": deal.number if deal else "",
@@ -295,7 +303,7 @@ def pvd_report(db: Session, date_from: date, date_to: date) -> dict:
     priority = sum(v for k, v in by_type.items() if k in PRIORITY_INCOME_TYPES)
     share = round(priority * 100 / total, 2) if total else 0.0
     return {"from": date_from, "to": date_to, "by_type": by_type, "total": total, "priority": priority,
-            "priority_share": share, "documents": docs}
+            "priority_share": share, "documents": docs, "discounts": discounts}
 
 
 def pvd_report_xlsx(report: dict, labels: dict[str, str]) -> bytes:
@@ -314,6 +322,7 @@ def pvd_report_xlsx(report: dict, labels: dict[str, str]) -> bytes:
     ws.append(["Итого", report["total"] / 100])
     ws.append(["Приоритетные доходы", report["priority"] / 100])
     ws.append(["Доля приоритетных доходов, %", report["priority_share"]])
+    ws.append(["Скидки по промокодам и льготным периодам (справочно)", report.get("discounts", 0) / 100])
     ws2 = wb.create_sheet("Документы-основания")
     ws2.append(["Дата (UTC)", "Счет", "Сделка", "Тип дохода", "Сумма, ₸", "Сторно"])
     for d in report["documents"]:
@@ -331,7 +340,8 @@ def pvd_report_pdf(report: dict, labels: dict[str, str]) -> bytes:
     for t, v in report["by_type"].items():
         lines.append(f"{labels.get(t, t)}: {format_money(v)}")
     lines += ["", f"Итого: {format_money(report['total'])}",
-              f"Приоритетные доходы: {format_money(report['priority'])} ({report['priority_share']} %)", "",
+              f"Приоритетные доходы: {format_money(report['priority'])} ({report['priority_share']} %)",
+              f"Скидки по промокодам и льготным периодам (справочно): {format_money(report.get('discounts', 0))}", "",
               "## Документы-основания"]
     for d in report["documents"]:
         lines.append(f"{d['date']:%d.%m.%Y} · счет {d['invoice']} · сделка {d['deal']} · "
@@ -345,3 +355,105 @@ def get_invoice(db: Session, invoice_id) -> Invoice:
     if inv is None:
         raise NotFound()
     return inv
+
+
+# ---------------------------------------------------------------- promo codes (FR-BIL-09)
+
+PROMO_KINDS = ("percent", "fixed", "free_days")
+
+
+def create_promo(db: Session, form) -> PromoCode:
+    errors = {}
+    code = str(form.get("code") or "").strip().upper()
+    if not (3 <= len(code) <= 40) or not code.replace("-", "").replace("_", "").isalnum():
+        errors["code"] = "error.promo_code"
+    elif db.execute(select(PromoCode.id).where(PromoCode.code == code)).first():
+        errors["code"] = "error.promo_exists"
+    kind = str(form.get("kind") or "")
+    if kind not in PROMO_KINDS:
+        errors["kind"] = "error.invalid_choice"
+    try:
+        raw = str(form.get("value") or "").strip()
+        value = to_minor(raw) if kind == "fixed" else int(raw)
+        if value <= 0 or (kind == "percent" and value > 100) or (kind == "free_days" and value > 366):
+            raise ValueError
+    except ValueError:
+        errors["value"] = "error.number"
+        value = 0
+    try:
+        valid_from = date.fromisoformat(str(form.get("valid_from") or "")) if form.get("valid_from") else utcnow().date()
+        valid_to = date.fromisoformat(str(form.get("valid_to"))) if form.get("valid_to") else None
+        if valid_to and valid_to < valid_from:
+            raise ValueError
+    except ValueError:
+        errors["valid_to"] = "error.date"
+        valid_from, valid_to = utcnow().date(), None
+    try:
+        max_uses = int(form.get("max_uses") or 0)
+        per_company = int(form.get("deals_per_company") or 1)
+        if max_uses < 0 or not 1 <= per_company <= 100:
+            raise ValueError
+    except ValueError:
+        errors["max_uses"] = "error.number"
+        max_uses, per_company = 0, 1
+    if errors:
+        raise ValidationFailed(errors)
+    promo = PromoCode(code=code, kind=kind, value=value, valid_from=valid_from, valid_to=valid_to, max_uses=max_uses,
+                      deals_per_company=per_company, description=str(form.get("description") or "")[:300],
+                      created_by=get_ctx().user_id)
+    db.add(promo)
+    db.flush()
+    audit(db, "billing.promo_created", object_type="promo", object_id=promo.id, details={"code": code, "kind": kind})
+    return promo
+
+
+def redeem_promo(db: Session, company: Company, raw_code: str) -> PromoRedemption:
+    """A client company applies a code once; usage counter is checked under a row lock."""
+    code = (raw_code or "").strip().upper()
+    if company.kind != "client":
+        raise ValidationFailed({"code": "error.promo_invalid"})
+    promo = db.execute(select(PromoCode).where(PromoCode.code == code).with_for_update()).scalar_one_or_none()
+    today = utcnow().date()
+    if (promo is None or not promo.active or promo.is_deleted or promo.valid_from > today
+            or (promo.valid_to and promo.valid_to < today) or (promo.max_uses and promo.uses >= promo.max_uses)):
+        raise ValidationFailed({"code": "error.promo_invalid"})
+    if db.execute(select(PromoRedemption.id).where(PromoRedemption.promo_id == promo.id,
+                                                   PromoRedemption.company_id == company.id)).first():
+        raise ValidationFailed({"code": "error.promo_used"})
+    red = PromoRedemption(promo_id=promo.id, company_id=company.id, created_by=get_ctx().user_id,
+                          free_until=today + timedelta(days=promo.value) if promo.kind == "free_days" else None)
+    promo.uses += 1
+    db.add(red)
+    db.flush()
+    audit(db, "billing.promo_redeemed", object_type="promo", object_id=promo.id, company_id=company.id)
+    return red
+
+
+def company_promos(db: Session, company_id) -> list[tuple[PromoRedemption, PromoCode]]:
+    return list(db.execute(select(PromoRedemption, PromoCode).join(PromoCode, PromoCode.id == PromoRedemption.promo_id)
+                           .where(PromoRedemption.company_id == company_id)
+                           .order_by(PromoRedemption.created_at.desc())).all())
+
+
+def apply_promo(db: Session, company_id, on: date, amount: int, calc: dict) -> tuple[int, dict]:
+    """Best single discount for this accrual; the calculation keeps gross, discount and the code."""
+    best = None
+    for red, promo in company_promos(db, company_id):
+        if promo.kind == "free_days":
+            if red.free_until and on <= red.free_until:
+                discount = amount
+            else:
+                continue
+        elif red.deals_used < promo.deals_per_company:
+            discount = percent_of(amount, promo.value * 100) if promo.kind == "percent" else min(amount, promo.value)
+        else:
+            continue
+        if best is None or discount > best[0]:
+            best = (discount, red, promo)
+    if best is None or best[0] <= 0:
+        return amount, calc
+    discount, red, promo = best
+    if promo.kind != "free_days":
+        red.deals_used += 1
+    return amount - discount, {**calc, "gross_minor": amount, "discount_minor": discount, "promo": promo.code,
+                               "result_minor": amount - discount}

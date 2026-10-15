@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import timedelta
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -19,8 +20,6 @@ from sqlalchemy.orm import Session
 from app.core.i18n import translate
 from app.db import utcnow
 from app.modules.accounts.models import (
-    CARRIER_ROLES,
-    CLIENT_ROLES,
     OWNER_ROLES,
     ROLE_DRIVER,
     STAFF_MANAGER,
@@ -29,7 +28,7 @@ from app.modules.accounts.models import (
 )
 from app.modules.integrations.adapters import CHANNELS
 from app.modules.integrations.base import IntegrationUnavailable
-from app.modules.notifications.models import ChannelLink, Notification, OutboxMessage
+from app.modules.notifications.models import ChannelLink, Notification, NotificationPrefs, OutboxMessage
 
 log = logging.getLogger("abdex.notifications")
 
@@ -49,6 +48,46 @@ DEFAULT_MATRIX: dict[str, dict[str, list[str]]] = {
     "order.status": {"client": ["web"], "carrier": ["web"], "driver": ["web"]},
     "chat.message": {"client": ["web"], "carrier": ["web"], "driver": ["web", "push"]},
 }
+
+
+# FR-NTF-04: categories a user can switch per channel. Security events are not listed: they cannot be disabled.
+USER_CATEGORIES = ("order.matching", "order.invited", "bid.received", "bid.accepted", "order.status",
+                   "trip.checkpoint", "chat.message", "document.uploaded", "deal.terms_changed", "fee.invoiced")
+USER_CHANNELS = ("telegram", "email", "sms", "push")
+
+
+def prefs_for(db: Session, user_id) -> NotificationPrefs:
+    p = db.execute(select(NotificationPrefs).where(NotificationPrefs.user_id == user_id)).scalar_one_or_none()
+    return p or NotificationPrefs(user_id=user_id, quiet_enabled=False, quiet_from="22:00", quiet_to="08:00",
+                                  digest="off", digest_hour=9)
+
+
+def _hm(value: str, default: time) -> time:
+    try:
+        h, m = (int(x) for x in value.split(":"))
+        return time(h, m)
+    except (ValueError, AttributeError):
+        return default
+
+
+def quiet_until(prefs: NotificationPrefs, tz_name: str, now: datetime | None = None) -> datetime | None:
+    """End of the current quiet window in UTC, or None when outside it. Windows may cross midnight."""
+    if not prefs.quiet_enabled:
+        return None
+    now = now or utcnow()
+    tz = ZoneInfo(tz_name or "Asia/Almaty")
+    local = now.astimezone(tz)
+    start, end = _hm(prefs.quiet_from, time(22)), _hm(prefs.quiet_to, time(8))
+    t = local.time()
+    if start == end:
+        return None
+    inside = (start <= t < end) if start < end else (t >= start or t < end)
+    if not inside:
+        return None
+    end_dt = datetime.combine(local.date(), end, tzinfo=tz)
+    if end_dt <= local:
+        end_dt += timedelta(days=1)
+    return end_dt.astimezone(ZoneInfo("UTC"))
 
 
 def _matrix(db: Session) -> dict:
@@ -77,6 +116,9 @@ def notify_user(db: Session, user_id, event: str, params: dict | None = None, *,
                             link=link))
     body = _render(user, event, params) + (f"\n{link}" if link else "")
     base_key = dedup or f"{event}:{link}:{utcnow().strftime('%Y%m%d%H%M%S%f')}"
+    prefs = prefs_for(db, user.id)
+    deliver_at = None if critical else quiet_until(prefs, user.timezone)
+    to_digest = not critical and prefs.digest in ("hourly", "daily")
     for ch in channels:
         if ch == "web":
             continue
@@ -87,7 +129,8 @@ def notify_user(db: Session, user_id, event: str, params: dict | None = None, *,
         if not recipient:
             continue
         msg = OutboxMessage(channel=ch, user_id=user.id, recipient=recipient, event=event, body=body,
-                            dedup_key=f"{base_key}:{ch}:{user.id}"[:200], next_attempt_at=utcnow())
+                            dedup_key=f"{base_key}:{ch}:{user.id}"[:200], next_attempt_at=deliver_at or utcnow(),
+                            status="digest" if to_digest else "queued")
         try:
             with db.begin_nested():
                 db.add(msg)
@@ -123,10 +166,12 @@ def notify_event(db: Session, event: str, *, params: dict | None = None, link: s
     """Route by the event × role × channel matrix."""
     matrix = _matrix(db).get(event, {})
     targets: list[tuple[object, list[str]]] = []
+    from app.modules.accounts.permissions import roles_in_scope
+
     if client_company_id and matrix.get("client"):
-        targets += [(u, matrix["client"]) for u in _company_users(db, client_company_id, CLIENT_ROLES)]
+        targets += [(u, matrix["client"]) for u in _company_users(db, client_company_id, roles_in_scope("client"))]
     if carrier_company_id and matrix.get("carrier"):
-        roles = tuple(r for r in CARRIER_ROLES if r != ROLE_DRIVER)
+        roles = tuple(r for r in roles_in_scope("carrier") if r != ROLE_DRIVER)
         targets += [(u, matrix["carrier"]) for u in _company_users(db, carrier_company_id, roles)]
     if driver_user_id and matrix.get("driver"):
         targets.append((driver_user_id, matrix["driver"]))
@@ -172,3 +217,49 @@ def process_outbox(db: Session, limit: int = 100) -> int:
                 msg.next_attempt_at = utcnow() + timedelta(seconds=30 * 2 ** msg.attempts)
     db.commit()
     return len(rows)
+
+
+def process_digests(db: Session, now: datetime | None = None) -> int:
+    """FR-NTF-04: one summary per user and channel instead of a stream; respects quiet hours."""
+    now = now or utcnow()
+    rows = db.execute(select(OutboxMessage).where(OutboxMessage.status == "digest")
+                      .order_by(OutboxMessage.created_at)).scalars().all()
+    by_user: dict = {}
+    for m in rows:
+        by_user.setdefault(m.user_id, []).append(m)
+    sent = 0
+    for user_id, msgs in by_user.items():
+        user = db.get(User, user_id)
+        if user is None:
+            continue
+        prefs = db.execute(select(NotificationPrefs).where(NotificationPrefs.user_id == user_id)).scalar_one_or_none()
+        if prefs is None or prefs.digest == "off":
+            for m in msgs:  # digest switched off meanwhile: deliver as usual
+                m.status, m.next_attempt_at = "queued", now
+            continue
+        last = prefs.digest_sent_at
+        if prefs.digest == "hourly":
+            due = last is None or now - last >= timedelta(hours=1)
+        else:
+            local = now.astimezone(ZoneInfo(user.timezone or "Asia/Almaty"))
+            due = local.hour >= prefs.digest_hour and (
+                last is None or last.astimezone(local.tzinfo).date() < local.date())
+        if not due:
+            continue
+        by_channel: dict = {}
+        for m in msgs:
+            by_channel.setdefault((m.channel, m.recipient), []).append(m)
+        for (channel, recipient), items in by_channel.items():
+            lines = [translate("ntf.digest_head", user.locale, count=len(items))]
+            lines += ["• " + i.body.splitlines()[0] for i in items[:20]]
+            if len(items) > 20:
+                lines.append(translate("ntf.digest_more", user.locale, count=len(items) - 20))
+            db.add(OutboxMessage(channel=channel, user_id=user_id, recipient=recipient, event="digest",
+                                 body="\n".join(lines), dedup_key=f"digest:{user_id}:{channel}:{now.isoformat()}"[:200],
+                                 next_attempt_at=quiet_until(prefs, user.timezone, now) or now))
+            for i in items:
+                i.status = "digested"
+            sent += 1
+        prefs.digest_sent_at = now
+    db.commit()
+    return sent

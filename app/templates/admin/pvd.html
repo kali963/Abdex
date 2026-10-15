@@ -10,6 +10,7 @@
   <div class="card stat"><b>{{ money(r.priority) }}</b><span>{{ _("pvd.priority") }}</span></div>
   <div class="card stat"><b>{{ r.priority_share }}%</b><span>{{ _("pvd.share") }}</span></div>
 </div>
+{% if r.discounts %}<p class="muted">{{ _("pvd.discounts") }}: <b>{{ money(r.discounts) }}</b></p>{% endif %}
 <div class="table-wrap"><table><thead><tr><th>{{ _("fin.income_type") }}</th><th class="num">{{ _("fin.amount") }}</th></tr></thead><tbody>{% for t, v in r.by_type.items() %}<tr><td>{{ labels.get(t, t) }}</td><td class="num">{{ money(v) }}</td></tr>{% endfor %}</tbody></table></div>
 <h2>{{ _("pvd.documents") }}</h2>
 <div class="table-wrap"><table><thead><tr><th>{{ _("common.date") }}</th><th>{{ _("fin.invoice") }}</th><th>{{ _("deal.number") }}</th><th>{{ _("fin.income_type") }}</th><th class="num">{{ _("fin.amount") }}</th></tr></thead>

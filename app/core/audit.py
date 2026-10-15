@@ -26,6 +26,8 @@ def mask(value):
 def audit(db: Session, action: str, *, object_type: str = "", object_id=None, result: str = "ok",
           reason: str = "", details: dict | None = None, user_id=None, company_id=None, role: str | None = None) -> None:
     ctx = get_ctx()
+    if ctx.extra.get("impersonator"):  # FR-ADM-05: actions in a support session name the staff member
+        details = {**(details or {}), "impersonator": ctx.extra["impersonator"]}
     entry = AuditLog(
         user_id=user_id if user_id is not None else ctx.user_id,
         company_id=company_id if company_id is not None else ctx.company_id,

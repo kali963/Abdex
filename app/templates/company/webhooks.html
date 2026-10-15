@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("company.webhooks") }}{% endblock %}
+{% block content %}
+<h1>{{ _("company.webhooks") }}</h1>
+{% include "company/_tabs.html" %}
+<p class="muted">{{ _("webhook.text") }}</p>
+{% if new_secret %}<div class="alert success">{{ _("webhook.secret_once") }}<div class="secret">{{ new_secret }}</div></div>{% endif %}
+<div class="grid side">
+<div class="stack">
+{% for ep in endpoints %}
+<section class="card">
+  <div class="page-head"><div><h3 class="break">{{ ep.url }}</h3><small class="muted">{{ ep.events.replace(",", ", ") }}</small></div>
+    <span class="badge {{ 'ok' if ep.active else 'err' }}">{{ _("webhook.active") if ep.active else _("webhook.disabled") }}</span></div>
+  <div class="row">
+    <form method="post" action="/company/webhooks/{{ ep.id }}/test">{{ ui.csrf() }}<button class="btn small">{{ _("webhook.test") }}</button></form>
+    {% if not ep.active %}<form method="post" action="/company/webhooks/{{ ep.id }}/enable">{{ ui.csrf() }}<button class="btn small ok">{{ _("webhook.enable") }}</button></form>{% endif %}
+    <form method="post" action="/company/webhooks/{{ ep.id }}/delete" data-confirm="{{ _('common.confirm_delete') }}">{{ ui.csrf() }}<button class="btn small link">{{ _("action.remove") }}</button></form>
+  </div>
+  <h4>{{ _("webhook.log") }}</h4>
+  <div class="table-wrap"><table><thead><tr><th>{{ _("common.date") }}</th><th>{{ _("webhook.event") }}</th><th>{{ _("common.status") }}</th><th class="num">{{ _("webhook.attempts") }}</th><th>{{ _("webhook.response") }}</th></tr></thead><tbody>
+  {% for d in log.get(ep.id, []) %}<tr><td>{{ fmt_dt(d.created_at) }}</td><td><code>{{ d.event }}</code></td><td>{{ ui.status(d.status) }}{% if d.next_attempt_at and d.status == "pending" %}<br><small class="muted">{{ _("webhook.next") }} {{ fmt_dt(d.next_attempt_at) }}</small>{% endif %}</td><td class="num">{{ d.attempts }}</td><td>{{ d.last_status_code or "" }} {{ d.last_error }}</td></tr>
+  {% else %}<tr><td colspan="5" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% else %}{{ ui.empty(_("webhook.none")) }}{% endfor %}
+</div>
+<aside class="stack">
+<form method="post" action="/company/webhooks" class="card stack">{{ ui.csrf() }}
+  <h3>{{ _("webhook.add") }}</h3>
+  {{ ui.field("url", _("webhook.url"), "", type="url", required=true, hint=_("webhook.url_hint"), attrs='placeholder="https://"') }}
+  <fieldset class="plain"><legend>{{ _("webhook.events") }}</legend>{% for e in events %}<label class="check"><input type="checkbox" name="events" value="{{ e }}" checked> <code>{{ e }}</code></label>{% endfor %}</fieldset>
+  <button class="btn primary">{{ _("webhook.create") }}</button>
+</form>
+<section class="card"><h3>{{ _("webhook.verify_title") }}</h3><p class="muted"><small>{{ _("webhook.verify_text") }}</small></p>
+<pre class="code">sig = request.headers["X-AbdEX-Signature"]   # t=…,v1=…
+t, v1 = dict(p.split("=") for p in sig.split(",")).values()
+expected = hmac_sha256(secret, f"{t}.{raw_body}")
+assert compare_digest(expected, v1) and abs(now - t) &lt; 300</pre></section>
+</aside>
+</div>
+{% endblock %}

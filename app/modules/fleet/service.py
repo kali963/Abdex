@@ -240,7 +240,7 @@ def check_document_expiry(db: Session) -> int:
 
 def company_stats(db: Session, company_id) -> dict:
     """FR-KYC-10: public card — no personal data or documents."""
-    from app.modules.deals.models import Deal, Rating
+    from app.modules.deals.models import Deal
     from app.modules.orders.models import Order
 
     company = db.get(Company, company_id)
@@ -249,7 +249,10 @@ def company_stats(db: Session, company_id) -> dict:
         .where(or_(Deal.carrier_company_id == company_id, Deal.client_company_id == company_id),
                Order.status == "completed")
     ).scalar_one()
-    avg = db.execute(select(func.avg(Rating.score)).where(Rating.to_company_id == company_id)).scalar_one()
+    from app.modules.rating.service import compute
+
+    r = compute(db, company_id)
     days = (utcnow() - company.created_at).days if company else 0
-    return {"completed": completed, "rating": round(float(avg), 2) if avg else None, "days_on_platform": days,
+    return {"completed": completed, "rating": r["value"], "reviews_n": r["reviews_n"],
+            "breakdowns": r["counts"]["breakdown"], "days_on_platform": days,
             "level": company.verification_level if company else 0}

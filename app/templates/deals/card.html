@@ -48,6 +48,29 @@
 </section>
 {% endif %}
 
+{# ---------------- trip map (FR-TRK-04) ---------------- #}
+{% if trip_map and order.status in ("docs_signed", "loading", "in_transit", "unloaded", "closed_docs", "fee_invoiced", "completed") %}
+{% set m = trip_map %}
+<section class="card" id="map">
+  <div class="page-head"><h2>{{ _("map.title") }}</h2>
+    {% if m.eta %}<span class="badge {{ 'err' if m.late else 'ok' }}">{{ _("map.eta") }}: {{ fmt_dt(m.eta) }}{% if m.remaining_km %} · {{ m.remaining_km }} {{ _("unit.km") }}{% endif %}</span>{% endif %}</div>
+  <figure class="trip-map">
+    <svg viewBox="0 0 {{ m.w }} {{ m.h }}" role="img" aria-label="{{ _('map.aria') }}">
+      <defs><pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" class="grid-line"/></pattern></defs>
+      <rect width="{{ m.w }}" height="{{ m.h }}" rx="14" class="map-bg"/><rect width="{{ m.w }}" height="{{ m.h }}" rx="14" fill="url(#grid)"/>
+      {% if m.planned %}<polyline points="{{ m.planned }}" class="route-planned"/>{% endif %}
+      {% if m.track %}<polyline points="{{ m.track }}" class="route-track"/>{% endif %}
+      {% for s in m.stops %}<g class="stop {{ 'from' if s.first else ('to' if s.last else '') }}"><circle cx="{{ s.xy[0] }}" cy="{{ s.xy[1] }}" r="7"/><text x="{{ s.xy[0] }}" y="{{ s.xy[1] - 13 }}" text-anchor="middle">{{ s.name }}</text></g>{% endfor %}
+      {% for p in m.points %}<circle cx="{{ p.xy[0] }}" cy="{{ p.xy[1] }}" r="3.5" class="cp-dot"><title>{{ _("cp." ~ p.kind) }} · {{ fmt_dt(p.at) }}</title></circle>{% endfor %}
+      {% if m.current %}<g class="truck"><circle cx="{{ m.current[0] }}" cy="{{ m.current[1] }}" r="16" class="pulse"/><circle cx="{{ m.current[0] }}" cy="{{ m.current[1] }}" r="8" class="here"/></g>{% endif %}
+    </svg>
+    <figcaption class="row muted"><small><span class="lg planned"></span>{{ _("map.planned") }}</small><small><span class="lg track"></span>{{ _("map.track") }}</small>
+      {% if m.current_at %}<small><span class="lg here"></span>{{ _("map.current") }} {{ fmt_dt(m.current_at) }}{% if m.stale %} · {{ _("map.stale") }}{% endif %}</small>{% else %}<small>{{ _("map.no_position") }}</small>{% endif %}</figcaption>
+  </figure>
+  {% if m.late %}<p class="alert warn">{{ _("map.late") }}</p>{% endif %}
+</section>
+{% endif %}
+
 {% if side == "client" and order.status == "in_transit" %}
 <div class="card note row"><span>{{ _("deal.confirm_unloaded_text") }}</span><form method="post" action="/deals/{{ deal.id }}/unloaded">{{ ui.csrf() }}<button class="btn ok">{{ _("deal.confirm_unloaded") }}</button></form></div>
 {% endif %}

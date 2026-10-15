@@ -46,7 +46,7 @@
 <section class="card">
   <h2>{{ _("company.members") }}</h2>
   <div class="table-wrap"><table><thead><tr><th>{{ _("auth.full_name") }}</th><th>{{ _("auth.phone") }}</th><th>{{ _("company.role") }}</th><th>{{ _("common.status") }}</th><th></th></tr></thead><tbody>
-  {% for m, u in members %}<tr><td>{{ u.full_name }}</td><td>{{ u.phone }}</td><td>{{ _("role." ~ m.role) }}</td>
+  {% for m, u in members %}<tr><td>{{ u.full_name }}</td><td>{{ u.phone }}</td><td>{{ role_label(m.role) }}</td>
     <td>{% if m.is_active %}<span class="badge ok">{{ _("company.active") }}</span>{% else %}<span class="badge">{{ _("company.disabled") }}</span>{% endif %}</td>
     <td>{% if can_manage and m.is_active and u.id != me.user.id %}<form method="post" action="/company/members/{{ m.id }}/disable" data-confirm="{{ _('company.disable_confirm') }}">{{ ui.csrf() }}<button class="btn small danger">{{ _("company.disable") }}</button></form>{% endif %}</td></tr>{% endfor %}
   </tbody></table></div>
@@ -54,11 +54,11 @@
   <h3>{{ _("company.invite") }}</h3>
   {% if new_invite %}<div class="alert success">{{ _("company.invite_link") }}<div class="secret">{{ request.base_url }}invite/{{ new_invite }}</div></div>{% endif %}
   <form method="post" action="/company/invite" class="form-grid">{{ ui.csrf() }}
-    <div class="field"><label for="f-role">{{ _("company.role") }}</label><select id="f-role" name="role">{% for r in roles %}<option value="{{ r }}">{{ _("role." ~ r) }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="f-role">{{ _("company.role") }}</label><select id="f-role" name="role">{% for r in roles %}<option value="{{ r }}">{{ role_label(r) }}</option>{% endfor %}</select></div>
     {{ ui.field("note", _("company.invite_note"), "") }}
     <div class="field"><label>&nbsp;</label><button class="btn primary">{{ _("company.invite_create") }}</button></div>
   </form>
-  {% if invites %}<p class="muted">{{ _("company.invites_active") }}:</p><ul>{% for i in invites %}<li>{{ _("role." ~ i.role) }} · {{ i.note }} · {{ _("company.until") }} {{ fmt_dt(i.expires_at) }}
+  {% if invites %}<p class="muted">{{ _("company.invites_active") }}:</p><ul>{% for i in invites %}<li>{{ role_label(i.role) }} · {{ i.note }} · {{ _("company.until") }} {{ fmt_dt(i.expires_at) }}
     <form class="inline" method="post" action="/company/invite/{{ i.id }}/revoke">{{ ui.csrf() }}<button class="btn link">{{ _("company.revoke") }}</button></form></li>{% endfor %}</ul>{% endif %}
   {% endif %}
 </section>

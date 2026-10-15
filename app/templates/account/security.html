@@ -36,6 +36,22 @@
       <button class="btn primary">{{ _("account.2fa_enable") }}</button></form>
   {% endif %}
 </section>
+<section class="card panel-3d" id="support">
+  <h2>🛟 {{ _("support.access_title") }}</h2>
+  <p class="muted">{{ _("support.access_text") }}</p>
+  {% if support_grant %}
+    <p><span class="badge warn">{{ _("support.access_on", until=fmt_dt(support_grant.valid_until)) }}</span></p>
+    <form method="post" action="/account/support-access/revoke">{{ ui.csrf() }}<button class="btn danger">{{ _("support.access_revoke") }}</button></form>
+  {% else %}
+    <form method="post" action="/account/support-access" class="stack">{{ ui.csrf() }}
+      <div class="form-grid">
+        {{ ui.select("hours", _("support.access_hours"), [(1, "1"), (4, "4"), (24, "24"), (max_grant_hours, max_grant_hours|string)], 24) }}
+        {{ ui.field("ticket", _("support.access_ticket"), "", hint=_("support.access_ticket_hint")) }}
+      </div>
+      <button class="btn">{{ _("support.access_grant") }}</button>
+    </form>
+  {% endif %}
+</section>
 <section class="card panel-3d">
   <h2>🔒 {{ _("account.password") }}</h2>
   <form method="post" action="/account/password" class="stack">{{ ui.csrf() }}

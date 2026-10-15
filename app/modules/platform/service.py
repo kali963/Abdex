@@ -162,3 +162,15 @@ def idempotent_store(db: Session, user_id, key: str | None, scope: str, result_r
     if not key:
         return
     db.add(IdempotencyKey(user_id=user_id, key=key[:80], scope=scope, result_ref=result_ref))
+
+
+# ---------------------------------------------------------------- restrictions (FR-RAT-04, FR-BID-08)
+
+
+def has_restriction(db: Session, company_id, kinds: tuple[str, ...]) -> bool:
+    from app.modules.platform.models import Restriction
+
+    active = db.execute(select(Restriction).where(Restriction.company_id == company_id, Restriction.kind.in_(kinds),
+                                                  Restriction.lifted_at.is_(None))).scalars().all()
+    today = utcnow().date()
+    return any(r.until is None or r.until >= today for r in active)

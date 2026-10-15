@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.permissions") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.permissions") }}</h1>
+<p class="muted">{{ _("acl.text") }}</p>
+<nav class="tabs">{% for s in ("client", "carrier", "staff") %}<a href="/admin/permissions?scope={{ s }}" class="{{ 'active' if scope == s }}">{{ _("acl.scope." ~ s) }}</a>{% endfor %}</nav>
+<form method="post" action="/admin/permissions" class="stack" data-confirm="{{ _('acl.confirm') }}">{{ ui.csrf() }}<input type="hidden" name="scope" value="{{ scope }}">
+<div class="table-wrap"><table class="matrix">
+  <thead><tr><th>{{ _("acl.permission") }}</th>{% for r in roles %}<th class="center">{{ role_label(r.code) if scope != "staff" else (_("staff." ~ r.code) if r.builtin else r.name_ru) }}{% if not r.builtin %} <span class="badge info">{{ _("acl.custom") }}</span>{% endif %}</th>{% endfor %}</tr></thead>
+  <tbody>{% for p in perms %}<tr><td><code>{{ p }}</code><br><small class="muted">{{ _("perm." ~ p) }}</small></td>
+    {% for r in roles %}{% set locked = (r.code, p) in locked %}{% set never = (r.code, p) in never %}
+    <td class="center"><label class="check"><input type="checkbox" name="g:{{ r.code }}:{{ p }}" value="on" {{ 'checked' if (r.code, p) in grants or locked }} {{ 'disabled' if locked or never }} aria-label="{{ p }} — {{ r.code }}">{% if locked %}<input type="hidden" name="g:{{ r.code }}:{{ p }}" value="on">{% endif %}</label></td>{% endfor %}</tr>{% endfor %}</tbody>
+</table></div>
+<p class="muted"><small>{{ _("acl.locked_hint") }}</small></p>
+<div><button class="btn primary">{{ _("action.save") }}</button></div>
+</form>
+<form method="post" action="/admin/permissions/roles" class="card stack">{{ ui.csrf() }}
+  <h2>{{ _("acl.add_role") }}</h2>
+  <div class="form-grid">
+    {{ ui.field("code", _("acl.code"), "", required=true, hint=_("acl.code_hint")) }}
+    {{ ui.select("scope", _("acl.scope"), [("client", _("acl.scope.client")), ("carrier", _("acl.scope.carrier")), ("staff", _("acl.scope.staff"))], scope) }}
+    {{ ui.field("name_ru", _("acl.name_ru"), "", required=true) }}
+    {{ ui.field("name_kk", _("acl.name_kk"), "") }}
+  </div>
+  <div><button class="btn">{{ _("acl.add_role") }}</button></div>
+</form>
+{% endblock %}

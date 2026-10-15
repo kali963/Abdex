@@ -137,3 +137,4 @@ class Dispute(Model):
     resolution: Mapped[str] = mapped_column(Text, default="")
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     resolved_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+    fault: Mapped[str] = mapped_column(String(10), default="")  # none / carrier / client — feeds the rating

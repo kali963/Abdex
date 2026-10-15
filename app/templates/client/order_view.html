@@ -38,6 +38,19 @@
     {% else %}{{ ui.empty(_("bids.none"), _("bids.none_hint")) }}{% endif %}
   </section>
   {% endif %}
+  {% if matches %}
+  <section class="card">
+    <div class="page-head"><h2>{{ _("match.title") }}</h2><a class="muted" href="/rating#matching"><small>{{ _("match.how") }}</small></a></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>{{ _("bids.carrier") }}</th><th class="num">{{ _("match.score") }}</th><th>{{ _("match.parts") }}</th><th></th></tr></thead>
+      <tbody>{% for m in matches %}<tr>
+        <td><a href="/company/card/{{ m.company.id }}">{{ m.company.name }}</a><br>{{ ui.level(m.company.verification_level) }}</td>
+        <td class="num"><span class="score {{ 'hi' if m.score >= 70 else 'mid' if m.score >= 45 else 'lo' }}">{{ m.score }}</span></td>
+        <td><div class="meters">{% for k, v in m.parts.items() %}<span class="meter" title="{{ _('match.part.' ~ k) }}: {{ v }}%"><i data-w="{{ (v // 10) * 10 }}"></i><small>{{ _("match.part." ~ k) }}</small></span>{% endfor %}</div></td>
+        <td>{% if m.company.id in invited %}<span class="badge ok">{{ _("match.invited") }}</span>{% elif me.can("order.create") %}<form method="post" action="/orders/{{ order.id }}/invite/{{ m.company.id }}">{{ ui.csrf() }}<button class="btn small">{{ _("match.invite") }}</button></form>{% endif %}</td>
+      </tr>{% endfor %}</tbody></table></div>
+  </section>
+  {% endif %}
   <section class="card"><h2>{{ _("order.details") }}</h2>{% set show_address = true %}{% include "client/_order_details.html" %}</section>
 </div>
 <aside class="stack">
@@ -46,6 +59,21 @@
   {% if versions|length > 1 %}<section class="card"><h3>{{ _("order.versions") }}</h3><ul>{% for v in versions %}<li>v{{ v.version }} · {{ fmt_dt(v.created_at) }} {{ v.change_note }}</li>{% endfor %}</ul></section>{% endif %}
   {% if me.can("order.create") %}
   <section class="card"><h3>{{ _("orders.template") }}</h3><form method="post" action="/orders/{{ order.id }}/template" class="stack">{{ ui.csrf() }}{{ ui.field("name", _("orders.template_name"), order.cargo_name) }}<button class="btn small">{{ _("orders.save_template") }}</button></form></section>
+  {% if order.load_from and order.points %}
+  <section class="card"><details><summary><h3 class="inline">{{ _("series.make") }}</h3></summary>
+    <form method="post" action="/orders/{{ order.id }}/series" class="stack">{{ ui.csrf() }}
+      <p class="muted"><small>{{ _("series.hint") }}</small></p>
+      {{ ui.field("name", _("series.name"), order.cargo_name, id="s-name") }}
+      <fieldset class="plain"><legend>{{ _("series.weekdays") }}</legend><div class="weekdays">{% for d in range(1, 8) %}<label class="chip"><input type="checkbox" name="weekdays" value="{{ d }}"><span>{{ _("wd." ~ d) }}</span></label>{% endfor %}</div></fieldset>
+      <div class="form-grid">
+        {{ ui.field("start_date", _("series.start"), (today + timedelta_days(1)).isoformat(), type="date", required=true) }}
+        {{ ui.field("end_date", _("series.end"), "", type="date") }}
+        {{ ui.field("lead_days", _("series.lead_days"), "3", attrs='inputmode="numeric"', hint=_("series.lead_hint")) }}
+      </div>
+      {{ ui.checkbox("auto_submit", _("series.auto_submit")) }}
+      <button class="btn small primary">{{ _("series.create") }}</button>
+    </form></details></section>
+  {% endif %}
   {% if can_cancel %}<section class="card"><form method="post" action="/orders/{{ order.id }}/cancel" class="stack" data-confirm="{{ _('orders.cancel_confirm') }}">{{ ui.csrf() }}{{ ui.field("reason", _("orders.cancel_reason"), "") }}<button class="btn danger">{{ _("orders.cancel") }}</button></form></section>{% endif %}
   {% endif %}
 </aside>

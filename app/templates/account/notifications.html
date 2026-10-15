@@ -13,14 +13,32 @@
   <form method="post" action="/account/notifications/telegram" class="actions">{{ ui.csrf() }}<button class="btn">{{ _("ntf.tg_link") }}</button></form>
 </section>
 <section class="card">
-  <h2>{{ _("ntf.categories") }}</h2>
-  <form method="post" action="/account/notifications/prefs" class="stack">{{ ui.csrf() }}
-    {% for e in ("order.matching", "bid.received", "trip.checkpoint", "chat.message") %}
-      {{ ui.checkbox("on_" ~ e, _("ntf.cat." ~ e), true) }}
-    {% endfor %}
-    <p class="muted">{{ _("ntf.security_always") }}</p>
+  <h2>{{ _("ntf.schedule") }}</h2>
+  <form method="post" action="/account/notifications/schedule" class="stack">{{ ui.csrf() }}
+    {{ ui.checkbox("quiet_enabled", _("ntf.quiet_enabled"), prefs.quiet_enabled) }}
+    <div class="form-grid">
+      {{ ui.field("quiet_from", _("ntf.quiet_from"), prefs.quiet_from, type="time") }}
+      {{ ui.field("quiet_to", _("ntf.quiet_to"), prefs.quiet_to, type="time") }}
+    </div>
+    <div class="form-grid">
+      {{ ui.select("digest", _("ntf.digest"), [("off", _("ntf.digest_off")), ("hourly", _("ntf.digest_hourly")), ("daily", _("ntf.digest_daily"))], prefs.digest) }}
+      {{ ui.select("digest_hour", _("ntf.digest_hour"), hours, prefs.digest_hour) }}
+    </div>
+    <p class="muted"><small>{{ _("ntf.schedule_hint") }}</small></p>
     <button class="btn primary">{{ _("action.save") }}</button>
   </form>
 </section>
 </div>
+<section class="card">
+  <h2>{{ _("ntf.categories") }}</h2>
+  <p class="muted">{{ _("ntf.matrix_text") }}</p>
+  <form method="post" action="/account/notifications/prefs" class="stack">{{ ui.csrf() }}
+    <div class="table-wrap"><table class="matrix">
+      <thead><tr><th>{{ _("ntf.category") }}</th>{% for ch in channels %}<th class="center">{{ _("ntf.channel." ~ ch) }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for e in categories %}<tr><td>{{ _("ntf.cat." ~ e) }}</td>{% for ch in channels %}<td class="center"><label class="check"><input type="checkbox" name="on:{{ ch }}:{{ e }}" value="on" {{ 'checked' if (ch, e) not in disabled }} aria-label="{{ _('ntf.cat.' ~ e) }} — {{ _('ntf.channel.' ~ ch) }}"></label></td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table></div>
+    <p class="muted">{{ _("ntf.security_always") }}</p>
+    <div><button class="btn primary">{{ _("action.save") }}</button></div>
+  </form>
+</section>
 {% endblock %}

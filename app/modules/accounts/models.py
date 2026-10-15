@@ -126,6 +126,9 @@ class UserSession(Model):
     ip: Mapped[str] = mapped_column(String(64), default="")
     user_agent: Mapped[str] = mapped_column(String(300), default="")
     device_id: Mapped[str] = mapped_column(String(64), default="")
+    # FR-ADM-05: support works "as the user" only in a separate short session that names the staff member.
+    impersonator_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id"))
+    impersonation_reason: Mapped[str] = mapped_column(String(300), default="")
 
 
 class OtpCode(Model):
@@ -186,3 +189,36 @@ class AuditLog(AppendOnly, Model):
     request_id: Mapped[str] = mapped_column(String(40), default="")
     reason: Mapped[str] = mapped_column(String(300), default="")
     details: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class SupportAccessGrant(Model):
+    """FR-ADM-05: the user's consent for support to work in their account for a limited time."""
+
+    __tablename__ = "support_access_grants"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), index=True)
+    valid_until: Mapped[datetime] = mapped_column(AwareDateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+    ticket_number: Mapped[str] = mapped_column(String(30), default="")
+
+
+class RoleDefinition(Model):
+    """FR-ACL-06: roles are data. Built-in roles are seeded; an administrator can add more without a release."""
+
+    __tablename__ = "role_definitions"
+
+    code: Mapped[str] = mapped_column(String(20), unique=True)
+    scope: Mapped[str] = mapped_column(String(10))  # client / carrier / staff
+    name_ru: Mapped[str] = mapped_column(String(100))
+    name_kk: Mapped[str] = mapped_column(String(100), default="")
+    builtin: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class RolePermission(Model):
+    """FR-ACL-06: the permission matrix stored in the database and edited by an administrator."""
+
+    __tablename__ = "role_permissions"
+    __table_args__ = (UniqueConstraint("role", "permission", name="uq_role_permission"),)
+
+    role: Mapped[str] = mapped_column(String(20), index=True)
+    permission: Mapped[str] = mapped_column(String(40))

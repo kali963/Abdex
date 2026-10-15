@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, ForeignKey, Integer, String, Text, Uuid
+from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import AppendOnly, AwareDateTime, Model
@@ -81,3 +81,30 @@ class Payment(AppendOnly, Model):
     currency: Mapped[str] = mapped_column(String(3), default="KZT")
     source: Mapped[str] = mapped_column(String(20), default="manual")  # manual / bank_statement / provider
     reference: Mapped[str] = mapped_column(String(100), default="")
+
+
+class PromoCode(Model):
+    """FR-BIL-09: discounts and grace periods limited by term and number of uses."""
+
+    __tablename__ = "promo_codes"
+
+    code: Mapped[str] = mapped_column(String(40), unique=True)
+    kind: Mapped[str] = mapped_column(String(10))  # percent / fixed / free_days
+    value: Mapped[int] = mapped_column(Integer)  # percent (1..100), minor units, or number of days
+    valid_from: Mapped[date] = mapped_column(Date)
+    valid_to: Mapped[date | None] = mapped_column(Date)
+    max_uses: Mapped[int] = mapped_column(Integer, default=0)  # 0 = unlimited
+    uses: Mapped[int] = mapped_column(Integer, default=0)
+    deals_per_company: Mapped[int] = mapped_column(Integer, default=1)  # how many accruals a redemption discounts
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    description: Mapped[str] = mapped_column(String(300), default="")
+
+
+class PromoRedemption(Model):
+    __tablename__ = "promo_redemptions"
+    __table_args__ = (UniqueConstraint("promo_id", "company_id", name="uq_promo_company"),)
+
+    promo_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("promo_codes.id"), index=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
+    free_until: Mapped[date | None] = mapped_column(Date)
+    deals_used: Mapped[int] = mapped_column(Integer, default=0)

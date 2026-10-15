@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-head">
   <div><h1>{{ me.company.name }}</h1>
-  <div class="row">{{ ui.level(me.company.verification_level) }} <span class="badge">{{ _("role." ~ me.role) }}</span>
+  <div class="row">{{ ui.level(me.company.verification_level) }} <span class="badge">{{ role_label(me.role) }}</span>
     {% if me.company.is_blocked %}<span class="badge err">{{ _("company.blocked") }}</span>{% endif %}</div></div>
   <div class="row">
     {% if me.can("order.create") %}<a class="btn primary" href="/orders/new">+ {{ _("orders.new") }}</a>{% endif %}

@@ -15,6 +15,7 @@ from app.db import SessionLocal
 log = logging.getLogger("abdex.worker")
 
 _last_daily = 0.0
+_last_hourly = 0.0
 
 
 def _run(name: str, job, stats: dict) -> None:
@@ -31,17 +32,24 @@ def _run(name: str, job, stats: dict) -> None:
 
 
 def tick() -> dict:
-    global _last_daily
+    global _last_daily, _last_hourly
     from app.modules.billing.service import enforce_debt_limits
     from app.modules.fleet.service import check_document_expiry
     from app.modules.integrations.base import flush_journal
-    from app.modules.notifications.service import process_outbox
+    from app.modules.notifications.service import process_digests, process_outbox
+    from app.modules.orders.series import generate_due
     from app.modules.orders.service import expire_bidding
     from app.modules.support.service import escalate_overdue
+    from app.modules.webhooks.service import process as process_webhooks
 
     stats = {"journal": flush_journal()}
-    for name, job in (("outbox", process_outbox), ("bidding", expire_bidding), ("sla", escalate_overdue)):
+    for name, job in (("outbox", process_outbox), ("bidding", expire_bidding), ("sla", escalate_overdue),
+                      ("webhooks", process_webhooks)):
         _run(name, job, stats)
+    if time.time() - _last_hourly > 600:
+        _last_hourly = time.time()
+        for name, job in (("digests", process_digests), ("series", generate_due)):
+            _run(name, job, stats)
     if time.time() - _last_daily > 6 * 3600:
         _last_daily = time.time()
         for name, job in (("doc_expiry", check_document_expiry), ("debt", enforce_debt_limits)):

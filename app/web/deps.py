@@ -83,6 +83,8 @@ def get_principal_optional(request: Request, db: Session = Depends(get_db)) -> P
             ctx.role = user.staff_role if sess.is_admin else (role or "")
             ctx.locale = request.cookies.get(LANG_COOKIE) or user.locale or ctx.locale
             ctx.timezone = user.timezone or ctx.timezone
+            if sess.impersonator_id:
+                ctx.extra["impersonator"] = str(sess.impersonator_id)
     request.state.principal = principal
     return principal
 
@@ -92,7 +94,29 @@ def get_principal(request: Request, principal: Principal | None = Depends(get_pr
         raise LoginRequired()
     if not principal.session.mfa_passed and request.url.path not in ("/login/2fa", "/logout"):
         raise MfaRequired()
+    if principal.session.impersonator_id and not getattr(request.state, "impersonation_logged", False):
+        _impersonation_guard(request, principal)
     return principal
+
+
+def _impersonation_guard(request: Request, principal: Principal) -> None:
+    """FR-ADM-05: every request of a support session is journaled; sensitive actions are refused."""
+    from app.core.audit import audit
+    from app.db import SessionLocal
+    from app.modules.accounts.support_access import is_forbidden
+
+    request.state.impersonation_logged = True
+    forbidden = is_forbidden(request.url.path, request.method)
+    db = SessionLocal()
+    try:
+        audit(db, "impersonation.request", object_type="user", object_id=principal.user.id,
+              user_id=principal.session.impersonator_id, result="denied" if forbidden else "ok",
+              details={"method": request.method, "path": request.url.path[:200], "session": str(principal.session.id)})
+        db.commit()
+    finally:
+        db.close()
+    if forbidden:
+        raise Forbidden("impersonation_forbidden")
 
 
 def require(perm: str):
@@ -210,6 +234,9 @@ def render(request: Request, name: str, ctx: dict[str, Any] | None = None, *, st
         try:
             data["unread"] = unread_count(db, principal.user.id)
             data["my_companies"] = memberships(db, principal.user.id)
+            if principal.session.impersonator_id:
+                staff = db.get(User, principal.session.impersonator_id)
+                data["impersonator"] = staff.full_name if staff else "—"
         finally:
             db.close()
     resp = templates.TemplateResponse(request, name, data, status_code=status_code)
@@ -220,6 +247,18 @@ def render(request: Request, name: str, ctx: dict[str, Any] | None = None, *, st
 
 def _t(key: str, **params) -> str:
     return translate(key, **params)
+
+
+def _role_label(code: str | None) -> str:
+    """Built-in roles have translations; roles added by an administrator carry their own names (FR-ACL-06)."""
+    if not code:
+        return ""
+    from app.modules.accounts.permissions import role_name
+
+    text = translate(f"role.{code}")
+    if text != f"role.{code}":
+        return text
+    return role_name(code, get_ctx().locale) or code
 
 
 def _status_label(status: str) -> str:
@@ -244,6 +283,8 @@ templates.env.globals.update(
     from_minor=from_minor,
     to_local_input=to_local_input,
     status_label=_status_label,
+    role_label=_role_label,
+    timedelta_days=lambda n: __import__("datetime").timedelta(days=n),
     sysmsg=_sysmsg,
     file_url=file_url,
     settings=settings,

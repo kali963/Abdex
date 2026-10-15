@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import AppendOnly, AwareDateTime, Model
@@ -158,3 +158,31 @@ class PoolMember(Model):
     owner_company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
     other_company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"))
     kind: Mapped[str] = mapped_column(String(10), default="trusted")  # trusted / blocked
+
+
+class OrderSeries(Model):
+    """FR-ORD-05: a regular route — orders are created from a source order on a schedule."""
+
+    __tablename__ = "order_series"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
+    source_order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("orders.id"))
+    name: Mapped[str] = mapped_column(String(200))
+    weekdays: Mapped[str] = mapped_column(String(20))  # ISO weekdays "1,3,5"
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date | None] = mapped_column(Date)
+    lead_days: Mapped[int] = mapped_column(Integer, default=3)  # create the order this many days before loading
+    auto_submit: Mapped[bool] = mapped_column(Boolean, default=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_load_date: Mapped[date | None] = mapped_column(Date)  # last date an order was generated for (idempotency)
+    created_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class OrderInvite(Model):
+    """FR-BID-04: the client invites a recommended carrier to bid; one invitation per carrier and order."""
+
+    __tablename__ = "order_invites"
+    __table_args__ = (UniqueConstraint("order_id", "carrier_company_id", name="uq_order_invite"),)
+
+    order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("orders.id"), index=True)
+    carrier_company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"))

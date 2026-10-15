@@ -10,14 +10,33 @@
 <dt>{{ _("kyc.limit") }}</dt><dd>{{ money(c.deal_limit_minor) if c.deal_limit_minor else "—" }}</dd>
 <dt>{{ _("company.contacts") }}</dt><dd>{% if revealed %}{{ c.contact_phone }} · {{ c.contact_email }}{% else %}
 <form method="get" class="row"><input type="text" name="reveal" placeholder="{{ _('admin.reveal_reason') }}" aria-label="{{ _('admin.reveal_reason') }}" required><button class="btn small">{{ _("admin.reveal") }}</button></form>{% endif %}</dd></dl>
-<h3>{{ _("company.members") }}</h3><ul>{% for m, u in members %}<li>{{ u.full_name }} · {{ _("role." ~ m.role) }}{% if not m.is_active %} ({{ _("company.disabled") }}){% endif %}</li>{% endfor %}</ul>
+<h3>{{ _("company.members") }}</h3><ul class="plain-list">{% for m, u in members %}<li>{{ u.full_name }} · {{ role_label(m.role) }}{% if not m.is_active %} ({{ _("company.disabled") }}){% endif %}
+  {% if me.can("admin.impersonate") and not u.staff_role and not u.anonymized_at %}
+  <details class="inline-details"><summary class="btn small link">{{ _("imp.start") }}{% if grants.get(u.id) %} <span class="badge ok">{{ _("imp.consent") }}</span>{% endif %}</summary>
+    <form method="post" action="/admin/users/{{ u.id }}/impersonate" class="stack" data-confirm="{{ _('imp.confirm') }}">{{ ui.csrf() }}
+      {{ ui.field("reason", _("admin.reason"), "", required=true, id="imp-" ~ u.id, hint=_("imp.reason_hint")) }}
+      {% if not grants.get(u.id) %}{{ ui.checkbox("regulation", _("imp.regulation")) }}{% endif %}
+      <button class="btn small danger">{{ _("imp.start") }}</button></form></details>{% endif %}</li>{% endfor %}</ul>
 </section>
 <section class="card"><h2>{{ _("admin.restrictions") }}</h2>
 <ul>{% for r in restrictions %}<li>{{ _("restr." ~ r.kind) }} · {{ r.reason }} · {{ fmt_dt(r.created_at) }}{% if r.until %} · {{ _("company.until") }} {{ fmt_date(r.until) }}{% endif %}
   {% if r.lifted_at %}<span class="badge">{{ _("admin.lifted") }}</span>{% else %}<form class="inline" method="post" action="/admin/restrictions/{{ r.id }}/lift">{{ ui.csrf() }}<button class="btn small">{{ _("admin.lift") }}</button></form>{% endif %}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
 <form method="post" action="/admin/companies/{{ c.id }}/restrict" class="stack" data-confirm="{{ _('admin.restrict_confirm') }}">{{ ui.csrf() }}
-  {{ ui.select("kind", _("admin.restriction_kind"), [("block", _("restr.block")), ("limit", _("restr.limit")), ("no_new_orders", _("restr.no_new_orders"))], "block") }}
+  {{ ui.select("kind", _("admin.restriction_kind"), [("block", _("restr.block")), ("limit", _("restr.limit")), ("no_new_orders", _("restr.no_new_orders")), ("no_bids", _("restr.no_bids"))], "block") }}
   <div class="form-grid">{{ ui.field("limit", _("kyc.limit"), "") }}{{ ui.field("until", _("company.until"), "", type="date") }}</div>
   {{ ui.field("reason", _("admin.reason"), "", required=true) }}<button class="btn danger">{{ _("admin.restrict") }}</button></form>
 </section></div>
+<section class="card" id="rating">
+  <div class="page-head"><h2>{{ _("rating.title") }}: {{ r.value if r.value is not none else "—" }}</h2><a class="muted" href="/rating"><small>{{ _("rating.how") }}</small></a></div>
+  <dl class="kv"><dt>{{ _("rating.reviews") }}</dt><dd>{{ r.reviews_avg }} ({{ r.reviews_n }})</dd><dt>{{ _("rating.reliability") }}</dt><dd>{{ r.reliability }}%</dd>
+  <dt>{{ _("rating.kind.deal_completed") }}</dt><dd>{{ r.completed }}</dd>{% for k, v in r.counts.items() %}<dt>{{ _("rating.kind." ~ k) }}</dt><dd>{{ v }}</dd>{% endfor %}
+  <dt>{{ _("rating.corrections") }}</dt><dd>{{ r.corrections }}</dd></dl>
+  {% if rating_events %}<details><summary class="muted">{{ _("rating.history") }}</summary><ul class="timeline">{% for e in rating_events %}<li>{{ fmt_dt(e.created_at) }} · {{ _("rating.kind." ~ e.kind) }}{% if e.kind == "correction" %} {{ "%+.2f"|format(e.delta / 100) }}{% endif %}{% if e.reason %} · {{ e.reason }}{% endif %}</li>{% endfor %}</ul></details>{% endif %}
+  {% if me.can("admin.rating") %}
+  <form method="post" action="/admin/companies/{{ c.id }}/rating" class="stack">{{ ui.csrf() }}
+    <p class="muted"><small>{{ _("rating.correction_hint") }}</small></p>
+    <div class="form-grid">{{ ui.field("delta", _("rating.delta"), "", required=true, attrs='inputmode="decimal" placeholder="-0.3"') }}{{ ui.field("reason", _("admin.reason"), "", required=true, id="rating-reason") }}</div>
+    <div><button class="btn">{{ _("rating.correct") }}</button></div></form>
+  {% endif %}
+</section>
 {% endblock %}

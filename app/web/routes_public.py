@@ -285,7 +285,7 @@ def dev_outbox(request: Request, me: Principal | None = Depends(get_principal_op
     from app.modules.integrations.adapters import _OutboundAdapter
 
     mine: list = []
-    if me is not None:
+    if me is not None and not me.session.impersonator_id:  # support never sees the user's codes
         targets = {me.user.phone, me.user.email or "", str(me.user.id)} - {""}
         mine = [m for m in reversed(_OutboundAdapter.sent) if m["to"] in targets]
     return render(request, "public/dev_outbox.html", {"messages": mine, "anonymous": me is None})

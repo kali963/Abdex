@@ -9,3 +9,5 @@ from app.modules.platform import models as platform  # noqa: F401
 from app.modules.chat import models as chat  # noqa: F401
 from app.modules.notifications import models as notifications  # noqa: F401
 from app.modules.billing import models as billing  # noqa: F401
+from app.modules.rating import models as rating  # noqa: F401
+from app.modules.webhooks import models as webhooks  # noqa: F401

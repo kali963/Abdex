@@ -14,8 +14,6 @@ from app.core.storage import save_upload
 from app.db import get_db, utcnow
 from app.modules.accounts import service as accounts
 from app.modules.accounts.models import (
-    CARRIER_ROLES,
-    CLIENT_ROLES,
     Company,
     Consent,
     Invitation,
@@ -23,6 +21,7 @@ from app.modules.accounts.models import (
     User,
     UserSession,
 )
+from app.modules.accounts.permissions import roles_in_scope
 from app.modules.fleet import service as fleet
 from app.modules.fleet.models import RegistryCheck, VerificationDocument, VerificationRequest
 from app.modules.notifications.models import ChannelLink, Notification
@@ -130,7 +129,12 @@ async def delete_account(request: Request, db: Session = Depends(get_db), me: Pr
 def security(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal), enroll: int = 0):
     ctx = {"enroll": enroll, "must": accounts.must_enroll_2fa(db, me.user),
            "sms_action": request.query_params.get("sms", ""), "phone_masked": mask_phone(me.user.phone)}
-    if not me.user.totp_enabled:
+    from app.modules.accounts.support_access import MAX_GRANT_HOURS, active_grant
+
+    ctx["support_grant"] = active_grant(db, me.user.id)
+    ctx["max_grant_hours"] = MAX_GRANT_HOURS
+    # a support session never sees the authenticator secret of the user (FR-ADM-05)
+    if not me.user.totp_enabled and not me.session.impersonator_id:
         user = db.get(User, me.user.id)
         if not user.totp_secret:
             user.totp_secret = new_totp_secret()
@@ -277,9 +281,13 @@ async def consent_toggle(purpose: str, request: Request, db: Session = Depends(g
 
 @router.get("/account/notifications")
 def notif_settings(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
-    tg = db.execute(select(ChannelLink).where(ChannelLink.user_id == me.user.id, ChannelLink.channel == "telegram")
-                    ).scalar_one_or_none()
-    return render(request, "account/notifications.html", {"tg": tg})
+    from app.modules.notifications.service import USER_CATEGORIES, USER_CHANNELS, prefs_for
+
+    links = {cl.channel: cl for cl in db.execute(select(ChannelLink).where(ChannelLink.user_id == me.user.id)).scalars()}
+    disabled = {(ch, e) for ch, cl in links.items() for e in cl.disabled_events.split(",") if e}
+    return render(request, "account/notifications.html", {
+        "tg": links.get("telegram"), "categories": USER_CATEGORIES, "channels": USER_CHANNELS,
+        "disabled": disabled, "prefs": prefs_for(db, me.user.id), "hours": [(h, f"{h:02d}:00") for h in range(24)]})
 
 
 @router.post("/account/notifications/telegram")
@@ -297,16 +305,55 @@ def telegram_link(request: Request, db: Session = Depends(get_db), me: Principal
 
 @router.post("/account/notifications/prefs")
 async def notif_prefs(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    """FR-NTF-04: channels on/off per event category; security events are not listed and always delivered."""
+    from app.modules.notifications.service import USER_CATEGORIES, USER_CHANNELS
+
     form = await request.form()
-    disabled = ",".join(e for e in ("order.matching", "bid.received", "trip.checkpoint", "chat.message")
-                        if not form.get(f"on_{e}"))
-    for ch in ("telegram", "email", "push"):
+    for ch in USER_CHANNELS:
+        disabled = ",".join(e for e in USER_CATEGORIES if not form.get(f"on:{ch}:{e}"))
         link = db.execute(select(ChannelLink).where(ChannelLink.user_id == me.user.id, ChannelLink.channel == ch)
                           ).scalar_one_or_none()
         if link is None:
             link = ChannelLink(user_id=me.user.id, channel=ch, address="")
             db.add(link)
         link.disabled_events = disabled
+    db.commit()
+    return redirect("/account/notifications", flash=("success", "msg.saved"))
+
+
+@router.post("/account/notifications/schedule")
+async def notif_schedule(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    """FR-NTF-04: quiet hours and digest instead of a stream."""
+    import re
+
+    from app.modules.notifications.models import NotificationPrefs
+
+    form = await request.form()
+    hm = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+    quiet_from, quiet_to = str(form.get("quiet_from", "")), str(form.get("quiet_to", ""))
+    digest = str(form.get("digest", "off"))
+    errors = {}
+    if not hm.match(quiet_from):
+        errors["quiet_from"] = "error.time"
+    if not hm.match(quiet_to):
+        errors["quiet_to"] = "error.time"
+    if digest not in ("off", "hourly", "daily"):
+        errors["digest"] = "error.invalid_choice"
+    try:
+        hour = int(form.get("digest_hour") or 9)
+        if not 0 <= hour <= 23:
+            raise ValueError
+    except ValueError:
+        errors["digest_hour"] = "error.number"
+        hour = 9
+    if errors:
+        raise ValidationFailed(errors)
+    prefs = db.execute(select(NotificationPrefs).where(NotificationPrefs.user_id == me.user.id)).scalar_one_or_none()
+    if prefs is None:
+        prefs = NotificationPrefs(user_id=me.user.id)
+        db.add(prefs)
+    prefs.quiet_enabled = bool(form.get("quiet_enabled"))
+    prefs.quiet_from, prefs.quiet_to, prefs.digest, prefs.digest_hour = quiet_from, quiet_to, digest, hour
     db.commit()
     return redirect("/account/notifications", flash=("success", "msg.saved"))
 
@@ -325,7 +372,7 @@ def company(request: Request, db: Session = Depends(get_db), me: Principal = Dep
 
     banks = list(db.execute(select(BankAccount).where(BankAccount.company_id == me.company.id)
                             .order_by(BankAccount.created_at.desc())).scalars())
-    roles = CLIENT_ROLES if me.company.kind == "client" else CARRIER_ROLES
+    roles = roles_in_scope("client" if me.company.kind == "client" else "carrier")
     return render(request, "company/company.html", {"members": members, "invites": invites, "banks": banks,
                                                      "roles": roles, "now": utcnow(),
                                                      "new_invite": request.query_params.get("invite")})
