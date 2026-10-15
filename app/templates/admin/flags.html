@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.flags") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.flags") }}</h1>
+<div class="table-wrap"><table><thead><tr><th>{{ _("flags.key") }}</th><th>{{ _("flags.on") }}</th><th>{{ _("flags.companies") }}</th><th>%</th><th></th></tr></thead><tbody>
+{% for f in items %}{% set fid = "f-" ~ f.id %}<tr><td><code>{{ f.key }}</code><br><small class="muted">{{ f.description }}</small></td>
+<td><input form="{{ fid }}" type="checkbox" name="enabled" value="1" {{ 'checked' if f.enabled }} aria-label="{{ _('flags.on') }}"></td><td><input form="{{ fid }}" type="text" name="company_ids" value="{{ f.company_ids }}" aria-label="{{ _('flags.companies') }}"></td>
+<td><input form="{{ fid }}" type="number" name="percent" value="{{ f.percent }}" min="0" max="100" aria-label="%"></td><td><form id="{{ fid }}" method="post" action="/admin/flags/{{ f.id }}">{{ ui.csrf() }}<button class="btn small">{{ _("action.save") }}</button></form></td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

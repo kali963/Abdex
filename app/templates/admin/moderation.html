@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.moderation") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.moderation") }}</h1>
+<div class="table-wrap"><table><thead><tr><th>{{ _("pool.company") }}</th><th>{{ _("kyc.level_requested") }}</th><th>{{ _("common.status") }}</th><th>SLA</th><th>{{ _("common.date") }}</th></tr></thead>
+<tbody>{% for r, c in rows %}<tr><td><a href="/admin/moderation/{{ r.id }}">{{ c.name }}</a><br><small class="muted">{{ c.bin_iin }} · {{ _("company.kind_" ~ c.kind) }}</small></td><td>L{{ r.level_requested }}</td><td>{{ ui.status(r.status) }}</td>
+<td>{% if r.status == "pending" and r.sla_due_at %}{% if r.sla_due_at < now %}<span class="badge err">{{ _("admin.sla_overdue") }}</span>{% else %}{{ fmt_dt(r.sla_due_at) }}{% endif %}{% else %}—{% endif %}</td><td>{{ fmt_dt(r.created_at) }}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

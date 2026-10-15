@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ c.name }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>{{ c.name }}</h1>
+  <p>{{ ui.level(stats.level) }} <span class="badge">{{ _("company.kind_" ~ c.kind) }}</span></p>
+  <dl class="kv">
+    <dt>{{ _("stats.days_on_platform") }}</dt><dd>{{ stats.days_on_platform }}</dd>
+    <dt>{{ _("stats.completed") }}</dt><dd>{{ stats.completed }}</dd>
+    <dt>{{ _("stats.rating") }}</dt><dd>{{ stats.rating or "—" }}</dd>
+  </dl>
+  <p class="muted"><small>{{ _("company.card_privacy") }}</small></p>
+</div>
+{% endblock %}

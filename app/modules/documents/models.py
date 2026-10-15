@@ -1,0 +1,85 @@
+"""Files, document templates, generated documents and signatures (M6)."""
+from __future__ import annotations
+
+import uuid
+from datetime import date, datetime
+
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db import AppendOnly, AwareDateTime, Model
+
+
+class StoredFile(Model):
+    """SEC-FIL-04: system-generated storage key, original name kept separately."""
+
+    __tablename__ = "stored_files"
+
+    owner_company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
+    storage_key: Mapped[str] = mapped_column(String(100), unique=True)
+    original_name: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(100))
+    size: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    scan_status: Mapped[str] = mapped_column(String(20), default="pending")  # pending / clean / infected
+    meta: Mapped[str] = mapped_column(Text, default="{}")  # evidence metadata kept outside the file (SEC-FIL-03)
+
+
+class DocumentTemplate(Model):
+    """FR-DOC-02: versioned templates with a start date."""
+
+    __tablename__ = "document_templates"
+    __table_args__ = (UniqueConstraint("doc_type", "locale", "version", name="uq_template_version"),)
+
+    doc_type: Mapped[str] = mapped_column(String(40))
+    locale: Mapped[str] = mapped_column(String(5), default="ru")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    title: Mapped[str] = mapped_column(String(300))
+    body: Mapped[str] = mapped_column(Text)
+    valid_from: Mapped[date] = mapped_column(Date)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class Document(Model):
+    __tablename__ = "documents"
+    __table_args__ = (UniqueConstraint("doc_type", "number", name="uq_document_number"),)
+
+    deal_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("deals.id"), index=True)
+    company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
+    doc_type: Mapped[str] = mapped_column(String(40))
+    number: Mapped[str] = mapped_column(String(40))
+    title: Mapped[str] = mapped_column(String(300))
+    file_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("stored_files.id"))
+    template_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("document_templates.id"))
+    # FR-DOC-05: required / uploaded / checked / signed / rejected
+    status: Mapped[str] = mapped_column(String(20), default="uploaded")
+    reject_reason: Mapped[str] = mapped_column(String(300), default="")
+    is_generated: Mapped[bool] = mapped_column(Boolean, default=False)
+    sha256: Mapped[str] = mapped_column(String(64), default="")
+    requires_signatures: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class DocumentCounter(Model):
+    """FR-DOC-03: per-type per-year numbering, row-locked on increment."""
+
+    __tablename__ = "document_counters"
+    __table_args__ = (UniqueConstraint("doc_type", "year", name="uq_counter"),)
+
+    doc_type: Mapped[str] = mapped_column(String(40))
+    year: Mapped[int] = mapped_column(Integer)
+    last_value: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Signature(AppendOnly, Model):
+    """FR-DOC-06 simple e-signature (code-confirmed); GOV-DS-07 distinguishes kinds."""
+
+    __tablename__ = "signatures"
+    __table_args__ = (UniqueConstraint("document_id", "company_id", name="uq_signature_company"),)
+
+    document_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("documents.id"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"))
+    kind: Mapped[str] = mapped_column(String(20), default="simple")  # simple / qualified
+    signed_at: Mapped[datetime] = mapped_column(AwareDateTime)
+    ip: Mapped[str] = mapped_column(String(64), default="")
+    document_hash: Mapped[str] = mapped_column(String(64))

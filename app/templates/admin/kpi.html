@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.kpi") }}{% endblock %}
+{% block content %}
+<h1>{{ _("kpi.title") }}</h1>
+<p class="muted">{{ _("kpi.note") }}</p>
+<form class="card row" method="get"><label for="df">{{ _("common.from") }}</label><input id="df" type="date" name="date_from" value="{{ date_from }}"><label for="dt">{{ _("common.to") }}</label><input id="dt" type="date" name="date_to" value="{{ date_to }}"><button class="btn">{{ _("common.show") }}</button><a class="btn" href="/admin/kpi.xlsx?date_from={{ date_from }}&date_to={{ date_to }}">XLSX</a></form>
+<div class="grid three">
+  <div class="card stat"><b>{{ k.clients }}</b><span>{{ _("kpi.clients") }}</span></div>
+  <div class="card stat"><b>{{ k.carriers }}</b><span>{{ _("kpi.carriers") }}</span></div>
+  <div class="card stat"><b>{{ k.drivers }}</b><span>{{ _("kpi.drivers") }}</span></div>
+  <div class="card stat"><b>{{ k.orders }}</b><span>{{ _("kpi.orders") }}</span></div>
+  <div class="card stat"><b>{{ k.deals }}</b><span>{{ _("kpi.deals") }}</span></div>
+  <div class="card stat"><b>{{ k.auto_documents }}</b><span>{{ _("kpi.auto_documents") }}</span></div>
+</div>
+<h2>{{ _("kpi.processing") }}</h2>
+<p class="muted"><small>{{ _("kpi.processing_def") }}</small></p>
+<div class="table-wrap"><table><thead><tr><th>{{ _("kpi.route_type") }}</th><th class="num">{{ _("kpi.count") }}</th><th class="num">{{ _("kpi.median") }}</th><th class="num">{{ _("kpi.mean") }}</th></tr></thead>
+<tbody>{% for key in ("all", "domestic", "international") %}{% set s = k.processing[key] %}<tr><td>{{ _("kpi.rt_" ~ key) }}</td><td class="num">{{ s.count }}</td><td class="num">{{ s.median if s.median is not none else "—" }}</td><td class="num">{{ s.mean if s.mean is not none else "—" }}</td></tr>{% endfor %}</tbody></table></div>
+<h2>{{ _("kpi.targets") }}</h2>
+<div class="table-wrap"><table><thead><tr><th>{{ _("kpi.month") }}</th><th class="num">{{ _("kpi.target_minutes") }}</th><th class="num">{{ _("kpi.target_docs") }}</th></tr></thead><tbody>{% for m, t in targets.items() %}<tr><td>{{ m }}</td><td class="num">{{ t.processing_minutes }}</td><td class="num">{{ t.auto_documents }}</td></tr>{% endfor %}</tbody></table></div>
+<h2>{{ _("kpi.snapshots") }}</h2>
+<form method="post" action="/admin/kpi/snapshot" class="row">{{ ui.csrf() }}<label for="rd">{{ _("kpi.report_date") }}</label><input id="rd" type="date" name="report_date" required><button class="btn">{{ _("kpi.fix") }}</button></form>
+<ul>{% for s in snaps %}{% set v = json_loads(s.values) %}<li>{{ fmt_date(s.report_date) }}: {{ _("kpi.clients") }} {{ v.clients }}, {{ _("kpi.carriers") }} {{ v.carriers }}, {{ _("kpi.orders") }} {{ v.orders }}, {{ _("kpi.deals") }} {{ v.deals }}, {{ _("kpi.auto_documents") }} {{ v.auto_documents }}</li>{% endfor %}</ul>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("auth.new_password") }}{% endblock %}
+{% block content %}
+<form class="card" method="post" action="/reset-password">
+  <h1>{{ _("auth.new_password") }}</h1>
+  {% if error %}<div class="alert error">{{ _(error) }}</div>{% endif %}
+  {{ ui.csrf() }}<input type="hidden" name="u" value="{{ u }}"><input type="hidden" name="t" value="{{ t }}">
+  {{ ui.field("password", _("auth.new_password"), "", type="password", required=true, hint=_("auth.password_hint"), attrs='autocomplete="new-password"') }}
+  <div class="actions"><button class="btn primary">{{ _("action.save") }}</button></div>
+</form>
+{% endblock %}

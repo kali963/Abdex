@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.dictionaries") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.dictionaries") }}</h1>
+<nav class="tabs">{% for n in names %}<a href="?name={{ n }}" class="{{ 'active' if n == name }}">{{ _("dict." ~ n) }}</a>{% endfor %}</nav>
+<div class="table-wrap"><table><thead><tr><th>{{ _("dict.code") }}</th><th>RU</th><th>KZ</th><th>{{ _("dict.extra") }}</th><th>{{ _("dict.sort") }}</th><th>{{ _("dict.active") }}</th><th></th></tr></thead><tbody>
+{% for i in items %}{% set fid = "d-" ~ i.id %}<tr>
+<td><code>{{ i.code }}</code></td><td><input form="{{ fid }}" type="text" name="name_ru" value="{{ i.name_ru }}" aria-label="RU"></td><td><input form="{{ fid }}" type="text" name="name_kk" value="{{ i.name_kk }}" aria-label="KZ"></td>
+<td><input form="{{ fid }}" type="text" name="extra" value="{{ i.extra }}" aria-label="{{ _('dict.extra') }}"></td><td><input form="{{ fid }}" type="number" name="sort" value="{{ i.sort }}" aria-label="{{ _('dict.sort') }}"></td>
+<td><input form="{{ fid }}" type="checkbox" name="is_active" value="1" {{ 'checked' if i.is_active }} aria-label="{{ _('dict.active') }}"></td>
+<td><form id="{{ fid }}" method="post" action="/admin/dictionaries">{{ ui.csrf() }}<input type="hidden" name="item_id" value="{{ i.id }}"><input type="hidden" name="dictionary" value="{{ name }}"><button class="btn small">{{ _("action.save") }}</button></form></td></tr>{% endfor %}
+</tbody></table></div>
+<form method="post" action="/admin/dictionaries" class="card form-grid">{{ ui.csrf() }}<input type="hidden" name="dictionary" value="{{ name }}">
+  {{ ui.field("code", _("dict.code"), "", required=true) }}{{ ui.field("name_ru", "RU", "", required=true) }}{{ ui.field("name_kk", "KZ", "") }}{{ ui.field("extra", _("dict.extra"), "{}") }}
+  <div class="field"><label>&nbsp;</label><button class="btn primary">{{ _("action.add") }}</button></div></form>
+<p class="muted"><small>{{ _("dict.history_note") }}</small></p>
+{% endblock %}

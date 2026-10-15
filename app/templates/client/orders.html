@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("nav.orders") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("nav.orders") }}</h1>{% if me.can("order.create") %}<a class="btn primary" href="/orders/new">+ {{ _("orders.new") }}</a>{% endif %}</div>
+<form class="card row" method="get" action="/orders">
+  <label class="sr-only" for="q">{{ _("common.search") }}</label>
+  <input id="q" type="search" name="q" value="{{ q }}" placeholder="{{ _('orders.search_hint') }}">
+  <label class="sr-only" for="st">{{ _("common.status") }}</label>
+  <select id="st" name="status"><option value="">{{ _("common.all_statuses") }}</option>{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s == status }}>{{ status_label(s) }}</option>{% endfor %}</select>
+  <button class="btn">{{ _("common.find") }}</button>
+</form>
+{% if items %}<div class="table-wrap"><table>
+<thead><tr><th>№</th><th>{{ _("order.route") }}</th><th>{{ _("order.cargo") }}</th><th>{{ _("order.load_date") }}</th><th class="num">{{ _("order.rate") }}</th><th>{{ _("common.status") }}</th></tr></thead>
+<tbody>{% for o in items %}<tr><td><a href="/orders/{{ o.id }}">{{ o.number }}</a>{% if o.is_preliminary %} <span class="badge warn">{{ _("orders.preliminary") }}</span>{% endif %}</td>
+<td>{{ ui.route(o) }}</td><td>{{ o.cargo_name }}{% if o.weight_kg %}<br><small class="muted">{{ o.weight_kg }} {{ _("unit.kg") }}</small>{% endif %}</td>
+<td>{{ fmt_dt(o.load_from) }}</td><td class="num">{{ money(o.desired_rate_minor, o.currency) if o.desired_rate_minor else "—" }}</td><td>{{ ui.status(o.status) }}</td></tr>{% endfor %}</tbody>
+</table></div>
+{% else %}{{ ui.empty(_("orders.empty"), _("orders.empty_hint"), "/orders/new" if me.can("order.create") else None, _("orders.new")) }}{% endif %}
+{% endblock %}

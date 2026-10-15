@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("company.verification") }}{% endblock %}
+{% block content %}
+{% set c = me.company %}
+<div class="page-head"><h1>{{ _("company.verification") }}</h1>{{ ui.level(c.verification_level) }}</div>
+{% include "company/_tabs.html" %}
+<div class="table-wrap"><table>
+  <thead><tr><th>{{ _("level.col_level") }}</th><th>{{ _("level.col_checked") }}</th><th>{{ _("level.col_opens") }}</th></tr></thead>
+  <tbody>{% for n in range(4) %}<tr{% if n == c.verification_level %} class="current"{% endif %}><td>{{ ui.level(n) }}</td><td>{{ _("level.checked" ~ n) }}</td><td>{{ _("level.opens" ~ n) }}</td></tr>{% endfor %}</tbody>
+</table></div>
+{% if c.deal_limit_minor %}<p class="muted">{{ _("kyc.limit") }}: <b>{{ money(c.deal_limit_minor) }}</b></p>{% endif %}
+<div class="grid two">
+<section class="card">
+  <h2>{{ _("kyc.upload") }}</h2>
+  {% if me.can("company.manage") %}
+  <form method="post" action="/company/verification/upload" enctype="multipart/form-data" class="stack">{{ ui.csrf() }}
+    <div class="field"><label for="f-subject">{{ _("kyc.subject") }}</label><select id="f-subject" name="subject">
+      <option value="company">{{ _("kyc.subject_company") }}</option>
+      {% for v in vehicles %}<option value="vehicle:{{ v.id }}">{{ _("kyc.subject_vehicle") }} {{ v.plate }}</option>{% endfor %}
+      {% for d in drivers %}<option value="driver:{{ d.id }}">{{ _("kyc.subject_driver") }} {{ d.full_name }}</option>{% endfor %}
+    </select></div>
+    <div class="field"><label for="f-doc_type">{{ _("kyc.doc_type") }}</label><select id="f-doc_type" name="doc_type">
+      {% for t in ("registration_certificate", "charter", "power_of_attorney", "bank_details", "license", "id_card", "driver_license", "adr_permit", "medical", "tech_passport", "insurance", "intl_permit", "other") %}<option value="{{ t }}">{{ _("doc." ~ t) }}</option>{% endfor %}
+    </select></div>
+    {{ ui.field("expires_on", _("kyc.expires"), "", type="date", hint=_("kyc.expires_hint")) }}
+    <div class="field"><label for="f-file">{{ _("kyc.file") }}</label><input id="f-file" type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp" required><span class="hint">{{ _("file.allowed") }}</span></div>
+    <p class="muted"><small>{{ _("kyc.consent_note") }}</small></p>
+    <button class="btn primary">{{ _("kyc.upload_btn") }}</button>
+  </form>
+  <hr>
+  <form method="post" action="/company/verification/submit">{{ ui.csrf() }}<button class="btn ok">{{ _("kyc.submit") }}</button></form>
+  {% else %}<p class="muted">{{ _("common.no_rights") }}</p>{% endif %}
+</section>
+<section class="card">
+  <h2>{{ _("kyc.requests") }}</h2>
+  {% for r in reqs %}<p>{{ ui.status(r.status) }} {{ fmt_dt(r.created_at) }} → L{{ r.level_requested }}{% if r.reason_code %} · {{ reasons.get(r.reason_code, r.reason_code) }}{% endif %}{% if r.comment %}<br><small>{{ r.comment }}</small>{% endif %}</p>{% else %}<p class="muted">{{ _("common.empty") }}</p>{% endfor %}
+  <h3>{{ _("kyc.registry") }}</h3>
+  {% for ch in checks %}<p>{{ ui.status("approved" if ch.status == "match" else "pending") }} {{ ch.source }} · {{ fmt_dt(ch.created_at) }}{% if ch.valid_until %} · {{ _("kyc.valid_until") }} {{ fmt_dt(ch.valid_until, false) }}{% endif %}</p>{% else %}<p class="muted">{{ _("common.empty") }}</p>{% endfor %}
+</section>
+</div>
+<h2>{{ _("kyc.documents") }}</h2>
+<div class="table-wrap"><table><thead><tr><th>{{ _("kyc.doc_type") }}</th><th>{{ _("kyc.subject") }}</th><th>{{ _("kyc.expires") }}</th><th>{{ _("common.status") }}</th><th></th></tr></thead>
+<tbody>{% for d in docs %}<tr><td>{{ _("doc." ~ d.doc_type) }}</td><td>{{ _("kyc.subject_" ~ d.subject_type) }}</td><td>{{ fmt_date(d.expires_on) }}</td><td>{{ ui.status(d.status) }}{% if d.reject_reason %}<br><small>{{ d.reject_reason }}</small>{% endif %}</td><td><a href="{{ file_url(d.file_id) }}" target="_blank" rel="noopener">{{ _("action.open") }}</a></td></tr>
+{% else %}<tr><td colspan="5" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

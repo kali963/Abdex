@@ -1,0 +1,206 @@
+"""Document generation, numbering, upload registry and simple e-signature (M6).
+
+SEC-FIL-06: templates are rendered by plain placeholder substitution ($name / ${name}) —
+no expression language, so user data can never execute anything.
+FR-PVD-03: platform financial documents may not describe the subject as transportation.
+"""
+from __future__ import annotations
+
+import io
+import re
+import string
+from datetime import date
+from pathlib import Path
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.audit import audit
+from app.core.context import get_ctx
+from app.core.errors import AppError, Conflict, NotFound, ValidationFailed
+from app.core.security import sha256_hex
+from app.core.storage import save_generated, storage
+from app.db import utcnow
+from app.modules.documents.models import Document, DocumentTemplate, Signature, StoredFile
+
+FONT_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "fonts"
+
+DOC_PREFIX = {
+    "contract_order": "ДЗ",      # договор-заявка
+    "transport_request": "ЗП",   # заявка на перевозку
+    "power_of_attorney": "ДВ",
+    "work_act": "АВР",
+    "fee_invoice": "СЧ",
+    "fee_act": "АКТ",
+    "reconciliation_act": "АС",
+    "dossier": "ДС",
+    "waybill": "ТТН",
+}
+FINANCIAL_DOC_TYPES = ("fee_invoice", "fee_act", "reconciliation_act")
+FORBIDDEN_FINANCIAL_PHRASES = ("услуги перевозки", "экспедирован", "доставка груза", "транспортные услуги",
+                               "тасымалдау қызмет")
+CLOSING_DOC_TYPES = ("waybill", "cmr", "unload_act")
+UPLOAD_DOC_TYPES = ("waybill", "cmr", "unload_act", "seal_photo", "invoice_carrier", "other")
+
+
+def validate_template_body(doc_type: str, body: str) -> None:
+    if doc_type in FINANCIAL_DOC_TYPES:
+        lowered = body.lower()
+        for phrase in FORBIDDEN_FINANCIAL_PHRASES:
+            if phrase in lowered:
+                raise ValidationFailed({"body": "error.forbidden_phrase"}, phrase=phrase)
+    if doc_type == "contract_order" and re.search(r"AbdEX[^.\n]{0,40}(перевозчик|экспедитор)", body, re.I):
+        # FR-PVD-04: the platform is never a carrier or forwarder in contracts
+        raise ValidationFailed({"body": "error.platform_as_carrier"})
+    try:
+        string.Template(body).substitute({k: "" for k in _placeholders(body)})
+    except (ValueError, KeyError):
+        raise ValidationFailed({"body": "error.template_syntax"})
+
+
+def _placeholders(body: str) -> set[str]:
+    return {m.group("named") or m.group("braced") for m in string.Template.pattern.finditer(body)
+            if m.group("named") or m.group("braced")}
+
+
+def active_template(db: Session, doc_type: str, locale: str = "ru") -> DocumentTemplate:
+    today = utcnow().date()
+    for loc in (locale, "ru"):
+        tpl = db.execute(select(DocumentTemplate).where(DocumentTemplate.doc_type == doc_type,
+                                                        DocumentTemplate.locale == loc,
+                                                        DocumentTemplate.is_active.is_(True),
+                                                        DocumentTemplate.valid_from <= today)
+                         .order_by(DocumentTemplate.version.desc())).scalars().first()
+        if tpl:
+            return tpl
+    raise AppError("template_missing", doc_type=doc_type)
+
+
+def save_template_version(db: Session, doc_type: str, locale: str, title: str, body: str, valid_from: date
+                          ) -> DocumentTemplate:
+    """FR-DOC-02: each save is a new version; documents keep a link to the version used."""
+    validate_template_body(doc_type, body)
+    last = db.execute(select(DocumentTemplate).where(DocumentTemplate.doc_type == doc_type,
+                                                     DocumentTemplate.locale == locale)
+                      .order_by(DocumentTemplate.version.desc())).scalars().first()
+    tpl = DocumentTemplate(doc_type=doc_type, locale=locale, version=(last.version + 1) if last else 1, title=title,
+                           body=body, valid_from=valid_from, created_by=get_ctx().user_id)
+    db.add(tpl)
+    db.flush()
+    audit(db, "template.saved", object_type="document_template", object_id=tpl.id,
+          details={"doc_type": doc_type, "version": tpl.version})
+    return tpl
+
+
+def render_pdf(title: str, body: str) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    from xml.sax.saxutils import escape
+
+    if "DejaVu" not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont("DejaVu", str(FONT_DIR / "DejaVuSans.ttf")))
+        pdfmetrics.registerFont(TTFont("DejaVu-Bold", str(FONT_DIR / "DejaVuSans-Bold.ttf")))
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=20 * mm, rightMargin=15 * mm, topMargin=15 * mm,
+                            bottomMargin=15 * mm, title=title, author="AbdEX")
+    h = ParagraphStyle("h", fontName="DejaVu-Bold", fontSize=13, leading=17, spaceAfter=8)
+    p = ParagraphStyle("p", fontName="DejaVu", fontSize=9.5, leading=13)
+    story = [Paragraph(escape(title), h)]
+    for line in body.split("\n"):
+        if line.strip() == "":
+            story.append(Spacer(1, 5))
+        elif line.startswith("## "):
+            story.append(Paragraph(escape(line[3:]), ParagraphStyle("h2", parent=h, fontSize=11, spaceBefore=6)))
+        else:
+            story.append(Paragraph(escape(line), p))
+    doc.build(story)
+    return buf.getvalue()
+
+
+def generate(db: Session, doc_type: str, context: dict, *, deal_id=None, company_id=None, locale: str = "ru",
+             requires_signatures: bool = False, number: str | None = None) -> Document:
+    """FR-DOC-01: generate from the active template version."""
+    from app.modules.platform.service import next_number
+
+    tpl = active_template(db, doc_type, locale)
+    number = number or next_number(db, doc_type, DOC_PREFIX.get(doc_type, "DOC"))
+    ctx = {k: ("" if v is None else str(v)) for k, v in context.items()}
+    ctx.setdefault("number", number)
+    ctx.setdefault("date", utcnow().strftime("%d.%m.%Y"))
+    body = string.Template(tpl.body).safe_substitute(ctx)
+    title = string.Template(tpl.title).safe_substitute(ctx)
+    if doc_type in FINANCIAL_DOC_TYPES:
+        validate_template_body(doc_type, body)  # guard against substituted text too
+    pdf = render_pdf(title, body)
+    f = save_generated(db, data=pdf, name=f"{doc_type}-{number}.pdf", content_type="application/pdf",
+                       company_id=company_id)
+    doc = Document(deal_id=deal_id, company_id=company_id, doc_type=doc_type, number=number, title=title,
+                   file_id=f.id, template_id=tpl.id, status="required" if requires_signatures else "checked",
+                   is_generated=True, sha256=f.sha256, requires_signatures=requires_signatures)
+    db.add(doc)
+    db.flush()
+    audit(db, "document.generated", object_type="document", object_id=doc.id, details={"type": doc_type})
+    return doc
+
+
+def register_upload(db: Session, *, deal_id, company_id, doc_type: str, file: StoredFile) -> Document:
+    if doc_type not in UPLOAD_DOC_TYPES:
+        raise ValidationFailed({"doc_type": "error.invalid_choice"})
+    from app.modules.platform.service import next_number
+
+    doc = Document(deal_id=deal_id, company_id=company_id, doc_type=doc_type,
+                   number=next_number(db, "upload", "UP"), title=file.original_name, file_id=file.id,
+                   status="uploaded", sha256=file.sha256, created_by=get_ctx().user_id)
+    db.add(doc)
+    db.flush()
+    audit(db, "document.uploaded", object_type="document", object_id=doc.id, details={"type": doc_type})
+    return doc
+
+
+def deal_documents(db: Session, deal_id) -> list[Document]:
+    return list(db.execute(select(Document).where(Document.deal_id == deal_id).order_by(Document.created_at)).scalars())
+
+
+def signatures(db: Session, document_id) -> list[Signature]:
+    return list(db.execute(select(Signature).where(Signature.document_id == document_id)).scalars())
+
+
+def sign_simple(db: Session, doc: Document, *, user, company_id, code: str) -> Signature:
+    """FR-DOC-06: confirmation by one-time code, fixing time, user, IP and document hash."""
+    from app.modules.accounts.service import check_otp
+
+    if not doc.requires_signatures:
+        raise Conflict("not_signable")
+    if any(s.company_id == company_id for s in signatures(db, doc.id)):
+        raise Conflict("already_signed")
+    if not check_otp(db, user.phone, "sign", code, context=str(doc.id)):
+        raise ValidationFailed({"code": "error.code_invalid"})
+    f = db.get(StoredFile, doc.file_id)
+    current_hash = sha256_hex(storage.get(f.storage_key))
+    if current_hash != doc.sha256:
+        raise AppError("document_integrity_failed", status_code=409)
+    sig = Signature(document_id=doc.id, user_id=user.id, company_id=company_id, kind="simple", signed_at=utcnow(),
+                    ip=get_ctx().ip, document_hash=current_hash, created_by=user.id)
+    db.add(sig)
+    db.flush()
+    audit(db, "document.signed", object_type="document", object_id=doc.id, details={"kind": "simple"})
+    return sig
+
+
+def mark_status(db: Session, doc: Document, status: str, reason: str = "") -> None:
+    if status not in ("checked", "rejected"):
+        raise ValidationFailed({"status": "error.invalid_choice"})
+    doc.status = status
+    doc.reject_reason = reason[:300]
+    audit(db, "document.status", object_type="document", object_id=doc.id, details={"status": status})
+
+
+def get_file(db: Session, file_id) -> tuple[StoredFile, bytes]:
+    f = db.get(StoredFile, file_id)
+    if f is None or f.scan_status != "clean":
+        raise NotFound()
+    return f, storage.get(f.storage_key)

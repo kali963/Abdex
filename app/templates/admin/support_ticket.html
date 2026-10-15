@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ t.number }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ t.number }} · {{ t.subject }}</h1>{{ ui.status(t.status) }}</div>
+<p class="muted">{{ cat_map.get(t.category, t.category) }} · SLA {{ fmt_dt(t.sla_due_at) }}{% if t.deal_id %} · <a href="/admin/deals/{{ t.deal_id }}">{{ _("deal.open") }}</a>{% endif %}</p>
+<div class="chat">{% for m in messages %}<div class="msg {{ 'mine' if m.kind == 'staff' }}">{{ m.body }}<span class="meta">{{ fmt_dt(m.created_at) }}</span></div>{% endfor %}</div>
+<form method="post" action="/admin/support/{{ t.id }}" class="stack">{{ ui.csrf() }}{{ ui.textarea("body", _("chat.message"), "", rows=3) }}
+{{ ui.select("status", _("common.status"), [("open", status_label("open")), ("in_progress", status_label("in_progress")), ("resolved", status_label("resolved"))], t.status) }}
+<button class="btn primary">{{ _("action.send") }}</button></form>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ order.number }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ order.number }}</h1>{{ ui.status(order.status) }} {{ ui.route(order) }} · {{ client.name }}</div>{% if deal %}<a class="btn primary" href="/admin/deals/{{ deal.id }}">{{ _("deal.open") }} {{ deal.number }}</a>{% endif %}</div>
+<div class="grid side"><div class="stack">
+<section class="card">{% set show_address = true %}{% set body_types = {} %}{% include "client/_order_details.html" %}</section>
+{% if order.status == "moderation" %}
+<section class="card warn"><h2>{{ _("admin.moderation_order") }}</h2>
+{% if problems %}<p>{{ _("admin.auto_problems") }}: {% for p in problems %}<span class="badge warn">{{ _("modprob." ~ p) }}</span> {% endfor %}</p>{% endif %}
+<form method="post" action="/admin/orders/{{ order.id }}/moderate" class="row">{{ ui.csrf() }}<button class="btn ok" name="decision" value="publish">{{ _("admin.publish") }}</button></form>
+<form method="post" action="/admin/orders/{{ order.id }}/moderate" class="stack">{{ ui.csrf() }}{{ ui.field("reason", _("admin.return_reason"), "", required=true) }}<button class="btn danger" name="decision" value="return">{{ _("admin.return") }}</button></form>
+</section>{% endif %}
+{% if me.can("admin.rollback") and history %}
+<details class="card"><summary>{{ _("admin.rollback") }}</summary>
+<form method="post" action="/admin/orders/{{ order.id }}/rollback" class="stack" data-confirm="{{ _('admin.rollback_confirm') }}">{{ ui.csrf() }}
+  <div class="field"><label for="f-to">{{ _("admin.rollback_to") }}</label><select id="f-to" name="to">{% for h in history|reverse %}{% if h.from_status != order.status %}<option value="{{ h.from_status }}">{{ status_label(h.from_status) }}</option>{% endif %}{% endfor %}</select></div>
+  {{ ui.field("reason", _("deal.reason"), "", required=true) }}<p class="muted"><small>{{ _("admin.rollback_hint") }}</small></p><button class="btn danger">{{ _("admin.rollback") }}</button></form></details>
+{% endif %}
+</div>
+<aside class="card"><h3>{{ _("order.history") }}</h3><ul class="timeline">{% for h in history %}<li>{{ fmt_dt(h.created_at) }} · {{ status_label(h.from_status) }} → <b>{{ status_label(h.to_status) }}</b><br><small>{{ _("actor." ~ h.actor_role) }} · IP {{ h.ip or "—" }}{% if h.reason %} · {{ h.reason }}{% endif %}</small>{% if h.is_rollback %} <span class="badge warn">{{ _("order.rollback") }}</span>{% endif %}</li>{% endfor %}</ul></aside>
+</div>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("auth.login_title") }}{% endblock %}
+{% block content %}
+<div class="grid two">
+<form class="card" method="post" action="/login" novalidate>
+  <h1>{{ _("auth.login_title") }}</h1>
+  {% if error %}<div class="alert error" role="alert">{{ _(error) }}</div>{% endif %}
+  {{ ui.csrf() }}
+  <input type="hidden" name="next" value="{{ next }}">
+  <div class="stack">
+    {{ ui.field("login", _("auth.login_field"), form.login, required=true, hint=_("auth.login_hint"), attrs='autocomplete="username" autofocus') }}
+    {{ ui.field("password", _("auth.password"), "", type="password", required=true, attrs='autocomplete="current-password"') }}
+  </div>
+  <div class="actions"><button class="btn primary" type="submit">{{ _("auth.login_btn") }}</button><a class="btn link" href="/forgot-password">{{ _("auth.forgot") }}</a></div>
+</form>
+<div class="card note">
+  <h2>{{ _("auth.new_here") }}</h2>
+  <p>{{ _("auth.new_here_text") }}</p>
+  <a class="btn primary" href="/register">{{ _("nav.register") }}</a>
+  {% if settings.seed_demo_data and settings.is_dev %}
+  <hr><h3>{{ _("demo.title") }}</h3>
+  <p class="muted">{{ _("demo.text") }}</p>
+  <div class="table-wrap"><table>
+    <tr><th>{{ _("demo.role") }}</th><th>{{ _("auth.login_field") }}</th></tr>
+    <tr><td>{{ _("demo.client_owner") }}</td><td><code>+77010000001</code></td></tr>
+    <tr><td>{{ _("demo.client_logist") }}</td><td><code>+77010000002</code></td></tr>
+    <tr><td>{{ _("demo.carrier_owner") }}</td><td><code>+77020000001</code></td></tr>
+    <tr><td>{{ _("demo.dispatcher") }}</td><td><code>+77020000002</code></td></tr>
+    <tr><td>{{ _("demo.driver") }}</td><td><code>+77020000003</code></td></tr>
+    <tr><td>{{ _("demo.admin") }}</td><td><code>admin@abdex.kz</code></td></tr>
+    <tr><td>{{ _("demo.manager") }}</td><td><code>manager@abdex.kz</code></td></tr>
+    <tr><td>{{ _("demo.moderator") }}</td><td><code>moderator@abdex.kz</code></td></tr>
+    <tr><td>{{ _("demo.finance") }}</td><td><code>finance@abdex.kz</code></td></tr>
+  </table></div>
+  <p>{{ _("demo.password") }}: <code>AbdexDemo2026!</code></p>
+  {% endif %}
+</div>
+</div>
+{% endblock %}

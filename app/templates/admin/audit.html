@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.audit") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.audit") }}</h1>
+<p class="muted">{{ _("audit.text") }}</p>
+<form class="card form-grid" method="get">
+  {{ ui.field("action", _("audit.action"), f.action) }}{{ ui.field("user", _("audit.user_id"), f.user) }}{{ ui.field("obj", _("audit.object"), f.obj) }}
+  {{ ui.field("date_from", _("common.from"), f.date_from, type="date") }}{{ ui.field("date_to", _("common.to"), f.date_to, type="date") }}
+  <div class="field"><label>&nbsp;</label><button class="btn">{{ _("common.find") }}</button></div></form>
+<div class="table-wrap"><table><thead><tr><th>{{ _("common.date") }} (UTC)</th><th>{{ _("audit.user") }}</th><th>{{ _("audit.action") }}</th><th>{{ _("audit.object") }}</th><th>{{ _("audit.result") }}</th><th>IP</th><th>{{ _("audit.reason") }}</th></tr></thead>
+<tbody>{% for a in items %}<tr><td><small>{{ a.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</small></td><td><small>{{ users.get(a.user_id, "system") }}<br>{{ a.role }}</small></td><td><code>{{ a.action }}</code></td><td><small>{{ a.object_type }} {{ a.object_id[:12] }}</small></td>
+<td>{{ ui.status("ok" if a.result == "ok" else "failed") if false else a.result }}</td><td><small>{{ a.ip }}</small></td><td><small>{{ a.reason }}</small></td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

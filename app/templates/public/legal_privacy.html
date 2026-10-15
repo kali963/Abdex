@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("legal.privacy_title") }}{% endblock %}
+{% block content %}
+<article class="card">
+<h1>{{ _("legal.privacy_title") }}</h1>
+{% for i in range(1, 9) %}{% set k = "legal.privacy_" ~ i %}{% if _(k) != k %}<h2>{{ _(k ~ "_h") }}</h2><p>{{ _(k) }}</p>{% endif %}{% endfor %}
+</article>
+{% if "privacy" == "terms" %}{{ ui.role_note(role_text) }}{% endif %}
+{% endblock %}

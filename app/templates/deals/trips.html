@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("nav.trips") }}{% endblock %}
+{% block content %}
+<h1>{{ _("nav.trips") }}</h1>
+{% set active = rows|selectattr("1.status", "in", ["assigned", "docs_signed", "loading", "in_transit", "unloaded", "dispute"])|list %}
+{% if active %}
+<div class="stack">
+{% for d, o in active %}
+<a class="card" href="/deals/{{ d.id }}">
+  <div class="row">{{ ui.status(o.status) }} <b>{{ d.number }}</b></div>
+  <p class="route">{{ o.origin.city if o.origin else "" }} → {{ o.destination.city if o.destination else "" }}</p>
+  <small class="muted">{{ _("order.load_from") }}: {{ fmt_dt(o.load_from) }}</small>
+</a>
+{% endfor %}
+</div>
+{% else %}{{ ui.empty(_("trips.none"), _("trips.none_hint")) }}{% endif %}
+{% set done = rows|rejectattr("1.status", "in", ["assigned", "docs_signed", "loading", "in_transit", "unloaded", "dispute"])|list %}
+{% if done %}<h2>{{ _("trips.done") }}</h2><ul>{% for d, o in done %}<li><a href="/deals/{{ d.id }}">{{ d.number }}</a> · {{ ui.route(o) }} · {{ status_label(o.status) }}</li>{% endfor %}</ul>{% endif %}
+<div class="card note"><b>{{ _("trips.sos") }}</b><p>{{ _("trips.sos_text") }}</p><a class="btn danger" href="/support">{{ _("nav.support") }}</a></div>
+{% endblock %}

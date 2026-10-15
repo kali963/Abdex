@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("orders.edit") if order is defined else _("orders.new") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ (_("orders.edit") ~ " " ~ order.number) if order is defined else _("orders.new") }}</h1>
+{% if templates %}<form method="get" action="/orders/new" class="row"><label class="sr-only" for="tpl">{{ _("orders.template") }}</label><select id="tpl" name="template" data-autosubmit><option value="">{{ _("orders.from_template") }}</option>{% for t in templates %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select><noscript><button class="btn small">OK</button></noscript></form>{% endif %}
+</div>
+{% if errors %}<div class="alert error" role="alert">{{ _("error.form_has_errors") }}</div>{% endif %}
+<button type="button" class="btn small" data-restore-draft hidden>{{ _("orders.restore_draft") }}</button>
+<form method="post" action="{{ ('/orders/' ~ order.id ~ '/edit') if order is defined else '/orders/new' }}" data-draft="{{ order.id if order is defined else 'new' }}" novalidate>
+  {{ ui.csrf() }}
+  <input type="hidden" name="form_token" value="{{ new_token() }}">
+  <fieldset><legend>{{ _("order.route") }}</legend>
+    {% if errors.points %}<p class="err">{{ _(errors.points) }}</p>{% endif %}
+    <div class="points" data-points>
+    {% set cities = form.point_city or ["", ""] %}
+    {% for city in cities %}
+      {% set i = loop.index0 %}
+      <div class="point">
+        <div class="field"><label>{{ _("order.point_kind") }}</label><select name="point_kind">{% for k in ("load", "stop", "unload") %}<option value="{{ k }}" {{ 'selected' if (form.point_kind or [])[i] == k or (not form.point_kind and ((i == 0 and k == 'load') or (i > 0 and k == 'unload'))) }}>{{ _("point." ~ k) }}</option>{% endfor %}</select></div>
+        <div class="field"><label>{{ _("order.city") }} *</label><input type="text" name="point_city" value="{{ city }}" list="cities"></div>
+        <div class="field"><label>{{ _("order.address") }}</label><input type="text" name="point_address" value="{{ (form.point_address or [])[i] if (form.point_address or [])|length > i else '' }}"></div>
+        <div class="field"><label>{{ _("order.contact") }}</label><input type="text" name="point_contact_name" value="{{ (form.point_contact_name or [])[i] if (form.point_contact_name or [])|length > i else '' }}"></div>
+        <div class="field"><label>{{ _("order.contact_phone") }}</label><input type="tel" name="point_contact_phone" value="{{ (form.point_contact_phone or [])[i] if (form.point_contact_phone or [])|length > i else '' }}"></div>
+        <button type="button" class="btn small" data-remove-point aria-label="{{ _('action.remove') }}">✕</button>
+      </div>
+    {% endfor %}
+    </div>
+    <template id="point-template"><div class="point">
+      <div class="field"><label>{{ _("order.point_kind") }}</label><select name="point_kind"><option value="stop">{{ _("point.stop") }}</option><option value="load">{{ _("point.load") }}</option><option value="unload">{{ _("point.unload") }}</option></select></div>
+      <div class="field"><label>{{ _("order.city") }}</label><input type="text" name="point_city" list="cities"></div>
+      <div class="field"><label>{{ _("order.address") }}</label><input type="text" name="point_address"></div>
+      <div class="field"><label>{{ _("order.contact") }}</label><input type="text" name="point_contact_name"></div>
+      <div class="field"><label>{{ _("order.contact_phone") }}</label><input type="tel" name="point_contact_phone"></div>
+      <button type="button" class="btn small" data-remove-point>✕</button></div></template>
+    <button type="button" class="btn small" data-add-point>+ {{ _("order.add_point") }}</button>
+    <datalist id="cities">{% for c in ("Алматы", "Астана", "Шымкент", "Караганда", "Актобе", "Тараз", "Павлодар", "Усть-Каменогорск", "Семей", "Атырау", "Костанай", "Кызылорда", "Уральск", "Петропавловск", "Актау", "Талдыкорган", "Туркестан", "Кокшетау", "Хоргос", "Достык", "Ташкент", "Бишкек", "Москва", "Урумчи", "Екатеринбург", "Омск", "Новосибирск") %}<option value="{{ c }}">{% endfor %}</datalist>
+    <p class="hint muted">{{ _("order.address_hint") }}</p>
+  </fieldset>
+
+  <fieldset><legend>{{ _("order.dates") }}</legend><div class="form-grid">
+    {{ ui.field("load_from", _("order.load_from"), form.load_from, type="datetime-local", errors=errors, required=true) }}
+    {{ ui.field("load_to", _("order.load_to"), form.load_to, type="datetime-local", errors=errors) }}
+    {{ ui.field("unload_from", _("order.unload_from"), form.unload_from, type="datetime-local", errors=errors) }}
+    {{ ui.field("unload_to", _("order.unload_to"), form.unload_to, type="datetime-local", errors=errors) }}
+    {{ ui.field("bidding_deadline", _("order.bidding_deadline"), form.bidding_deadline, type="datetime-local", errors=errors, hint=_("order.bidding_deadline_hint")) }}
+  </div></fieldset>
+
+  <fieldset><legend>{{ _("order.cargo") }}</legend><div class="form-grid">
+    {{ ui.field("cargo_name", _("order.cargo_name"), form.cargo_name, errors=errors, required=true) }}
+    <div class="field"><label for="f-cargo_type">{{ _("order.cargo_type") }}</label><select id="f-cargo_type" name="cargo_type">{% for i in cargo_types %}<option value="{{ i.code }}" {{ 'selected' if form.cargo_type == i.code }}>{{ i.name_kk if locale == 'kk' and i.name_kk else i.name_ru }}</option>{% endfor %}</select></div>
+    {{ ui.field("weight_kg", _("order.weight"), form.weight_kg, type="number", errors=errors, required=true, attrs='min="1"') }}
+    {{ ui.field("volume_m3", _("order.volume"), form.volume_m3, type="number", errors=errors, attrs='min="0"') }}
+    {{ ui.field("places", _("order.places"), form.places, type="number", errors=errors, attrs='min="0"') }}
+    {{ ui.field("packaging", _("order.packaging"), form.packaging, errors=errors) }}
+    {{ ui.field("cargo_value", _("order.cargo_value"), form.cargo_value, errors=errors, attrs='inputmode="decimal"') }}
+  </div></fieldset>
+
+  <fieldset><legend>{{ _("order.vehicle_req") }}</legend><div class="form-grid">
+    <div class="field"><label for="f-body_type">{{ _("order.body_type") }}</label><select id="f-body_type" name="body_type">{% for i in body_types %}<option value="{{ i.code }}" {{ 'selected' if form.body_type == i.code }}>{{ i.name_kk if locale == 'kk' and i.name_kk else i.name_ru }}</option>{% endfor %}</select></div>
+    {{ ui.field("min_capacity_kg", _("order.min_capacity"), form.min_capacity_kg, type="number", errors=errors) }}
+    {{ ui.field("temperature_mode", _("order.temperature"), form.temperature_mode, errors=errors, hint="+2…+6 °C") }}
+  </div>
+  <div class="row">{{ ui.checkbox("needs_tail_lift", _("order.tail_lift"), form.needs_tail_lift) }}{{ ui.checkbox("needs_straps", _("order.straps"), form.needs_straps) }}</div>
+  {{ ui.textarea("special_conditions", _("order.special"), form.special_conditions, errors=errors, rows=2) }}
+  </fieldset>
+
+  <details class="card flat" {{ 'open' if form.adr_class or form.is_international or errors.un_number or errors.countries }}><summary>{{ _("order.adr_intl") }}</summary>
+  <div class="form-grid">
+    <div class="field"><label for="f-adr_class">{{ _("order.adr_class") }}</label><select id="f-adr_class" name="adr_class"><option value="">{{ _("order.no_adr") }}</option>{% for i in adr_classes %}<option value="{{ i.code }}" {{ 'selected' if form.adr_class == i.code }}>{{ i.name_ru }}</option>{% endfor %}</select><span class="hint">{{ _("order.adr_hint") }}</span></div>
+    {{ ui.field("un_number", _("order.un_number"), form.un_number, errors=errors) }}
+  </div>
+  {{ ui.checkbox("is_international", _("order.international"), form.is_international) }}
+  <div class="form-grid">
+    {{ ui.field("countries", _("order.countries"), form.countries, errors=errors, hint="KZ, CN") }}
+    <div class="field{{ ' has-error' if errors.border_crossing }}"><label for="f-border_crossing">{{ _("order.border") }}</label><select id="f-border_crossing" name="border_crossing"><option value="">—</option>{% for i in crossings %}<option value="{{ i.code }}" {{ 'selected' if form.border_crossing == i.code }}>{{ i.name_ru }}</option>{% endfor %}</select>{% if errors.border_crossing %}<span class="err">{{ _(errors.border_crossing) }}</span>{% endif %}</div>
+  </div>
+  <div class="row">{{ ui.checkbox("needs_cmr", "CMR", form.needs_cmr) }}{{ ui.checkbox("needs_tir", "TIR", form.needs_tir) }}</div>
+  </details>
+
+  <fieldset><legend>{{ _("order.price") }}</legend><div class="form-grid">
+    {{ ui.field("desired_rate", _("order.desired_rate"), form.desired_rate, errors=errors, hint=_("order.desired_rate_hint"), attrs='inputmode="decimal"') }}
+    <div class="field"><label for="f-currency">{{ _("order.currency") }}</label><select id="f-currency" name="currency">{% for i in currencies %}<option value="{{ i.code }}" {{ 'selected' if form.currency == i.code }}>{{ i.code }}</option>{% endfor %}</select></div>
+    {{ ui.select("payment_terms", _("order.payment_terms"), [("prepay", _("pay.prepay")), ("on_unload", _("pay.on_unload")), ("deferred", _("pay.deferred"))], form.payment_terms, errors=errors) }}
+    {{ ui.field("payment_delay_days", _("order.delay_days"), form.payment_delay_days, type="number", errors=errors) }}
+    {{ ui.field("downtime_terms", _("order.downtime"), form.downtime_terms, errors=errors) }}
+    {{ ui.select("visibility", _("order.visibility"), [("public", _("order.vis_public")), ("pool", _("order.vis_pool"))], form.visibility) }}
+  </div>
+  {{ ui.checkbox("vat_included", _("order.vat_included"), form.vat_included) }}
+  </fieldset>
+  {% if order is defined and order.status in ("published", "bidding") %}{{ ui.field("change_note", _("order.change_note"), "", hint=_("order.change_note_hint")) }}{% endif %}
+  {% if role_text %}{{ ui.role_note(role_text) }}{% endif %}
+  <div class="actions">
+    {% if order is not defined or order.status == "draft" %}<button class="btn primary" name="action" value="publish">{{ _("orders.publish") }}</button>{% endif %}
+    <button class="btn" name="action" value="save">{{ _("orders.save_draft") if order is not defined else _("action.save") }}</button>
+    {% if order is not defined %}<button class="btn" name="action" value="preliminary" formnovalidate>{{ _("orders.save_preliminary") }}</button>{% endif %}
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ deal.number }}{% endblock %}
+{% block content %}
+{% set side = acc.side %}
+<div class="page-head">
+  <div><h1>{{ _("deal.title") }} {{ deal.number }}</h1>
+  <div class="row">{{ ui.status(order.status) }} {{ ui.route(order) }}
+    {% if deal.flagged %}<span class="badge err">{{ _("deal.flagged") }}</span>{% endif %}
+    {% if deal.needs_manual_review %}<span class="badge warn">{{ _("deal.manual_review") }}</span>{% endif %}
+    {% if deal.formalized_via_platform %}<span class="badge ok">{{ _("deal.formalized") }}</span>{% endif %}</div></div>
+  <div class="row">
+    {% if side in ("client", "carrier", "staff") %}<a class="btn" href="/deals/{{ deal.id }}/dossier.zip">{{ _("deal.dossier") }}</a>{% endif %}
+    {% if side == "client" %}<a class="btn" href="/orders/{{ order.id }}">{{ _("order.title") }} {{ order.number }}</a>{% endif %}
+  </div>
+</div>
+{% if side == "staff" %}
+<div class="card warn"><b>{{ _("admin.staff_view") }}</b>
+  {% if deal.needs_manual_review %}<form method="post" action="/admin/deals/{{ deal.id }}/clear-review" class="row">{{ ui.csrf() }}<input type="text" name="note" placeholder="{{ _('admin.review_note') }}" aria-label="{{ _('admin.review_note') }}" required><button class="btn small ok">{{ _("admin.clear_review") }}</button></form>{% endif %}
+  <a class="btn small" href="/admin/orders/{{ order.id }}">{{ _("admin.order_card") }}</a></div>
+{% endif %}
+{% if deal.needs_manual_review and side != "staff" %}<div class="alert warn">{{ _("deal.manual_review_text") }}</div>{% endif %}
+
+<div class="grid side">
+<div class="stack">
+
+{# ---------------- trip (driver-first) ---------------- #}
+{% if side in ("driver", "carrier") and order.status in ("docs_signed", "loading", "in_transit") %}
+<section class="card" id="trip">
+  <h2>{{ _("trip.title") }}</h2>
+  {% if next_checkpoints %}
+  <form method="post" action="/deals/{{ deal.id }}/checkpoint" enctype="multipart/form-data" class="stack" data-geo data-offline="{{ _('trip.saved_offline') }}">
+    {{ ui.csrf() }}<input type="hidden" name="lat"><input type="hidden" name="lng"><input type="hidden" name="offline_id" value="{{ new_token() }}">
+    <div class="big-actions">{% for k in next_checkpoints %}<button class="btn primary" name="kind" value="{{ k }}">{{ _("cp." ~ k) }}</button>{% endfor %}</div>
+    <div class="field"><label for="f-photo">{{ _("trip.photo") }}</label><input id="f-photo" type="file" name="photo" accept="image/*" capture="environment"><span class="hint">{{ _("trip.photo_hint") }}</span></div>
+    {{ ui.field("note", _("trip.note"), "") }}
+  </form>
+  {% endif %}
+  <form method="post" action="/deals/{{ deal.id }}/geo-consent" class="row">{{ ui.csrf() }}
+    {% if deal.geo_consent %}<span class="badge ok">{{ _("trip.geo_on") }}</span><input type="hidden" name="on" value="0"><button class="btn small">{{ _("trip.geo_stop") }}</button>
+    {% else %}<span class="badge">{{ _("trip.geo_off") }}</span><input type="hidden" name="on" value="1"><button class="btn small">{{ _("trip.geo_start") }}</button>{% endif %}
+  </form>
+  <p class="muted"><small>{{ _("trip.geo_hint") }}</small></p>
+  <details><summary>{{ _("trip.incident") }}</summary>
+    <form method="post" action="/deals/{{ deal.id }}/incident" class="stack">{{ ui.csrf() }}
+      <div class="field"><label for="f-ikind">{{ _("trip.incident_kind") }}</label><select id="f-ikind" name="kind">{% for i in incident_kinds %}<option value="{{ i.code }}">{{ i.name_ru }}</option>{% endfor %}</select></div>
+      {{ ui.textarea("description", _("trip.incident_desc"), "", rows=2, required=true) }}<button class="btn danger">{{ _("action.send") }}</button></form></details>
+</section>
+{% endif %}
+
+{% if side == "client" and order.status == "in_transit" %}
+<div class="card note row"><span>{{ _("deal.confirm_unloaded_text") }}</span><form method="post" action="/deals/{{ deal.id }}/unloaded">{{ ui.csrf() }}<button class="btn ok">{{ _("deal.confirm_unloaded") }}</button></form></div>
+{% endif %}
+
+{# ---------------- dispute ---------------- #}
+{% if dispute %}
+<section class="card warn">
+  <h2>{{ _("dispute.title") }}: {{ subject_map.get(dispute.subject, dispute.subject) }} {{ ui.status(dispute.status) }}</h2>
+  <p>{{ dispute.description }}</p>
+  <dl class="kv"><dt>{{ _("dispute.client_position") }}</dt><dd>{{ dispute.client_position or "—" }}</dd><dt>{{ _("dispute.carrier_position") }}</dt><dd>{{ dispute.carrier_position or "—" }}</dd>
+  {% if dispute.resolution %}<dt>{{ _("dispute.resolution") }}</dt><dd>{{ dispute.resolution }} ({{ status_label(dispute.outcome) }})</dd>{% endif %}</dl>
+  {% if dispute.status == "open" and side in ("client", "carrier") %}
+  <form method="post" action="/deals/{{ deal.id }}/dispute/{{ dispute.id }}/position" class="stack">{{ ui.csrf() }}{{ ui.textarea("text", _("dispute.your_position"), dispute.client_position if side == "client" else dispute.carrier_position, rows=3) }}<button class="btn">{{ _("action.save") }}</button></form>{% endif %}
+  <p class="muted"><small>{{ _("dispute.evidence_hint") }}</small></p>
+</section>
+{% endif %}
+
+{# ---------------- terms ---------------- #}
+<section class="card" id="terms">
+  <h2>{{ _("deal.terms") }}</h2>
+  <dl class="kv">
+    {% if show_finance %}<dt>{{ _("deal.price") }}</dt><dd><b>{{ money(deal.price_minor, deal.currency) }}</b> · {{ _("pay." ~ order.payment_terms) }}{% if order.payment_delay_days %} ({{ order.payment_delay_days }} {{ _("unit.days") }}){% endif %}</dd>{% endif %}
+    <dt>{{ _("deal.client") }}</dt><dd>{{ client.name }} · {{ _("auth.bin_iin") }} {{ client.bin_iin }}{% if side != "driver" %}<br><small>{{ client.contact_phone }} {{ client.contact_email }}</small>{% endif %}</dd>
+    <dt>{{ _("deal.carrier") }}</dt><dd>{{ carrier.name }} · {{ carrier.bin_iin }}{% if side != "driver" %}<br><small>{{ carrier.contact_phone }}</small>{% endif %}</dd>
+    <dt>{{ _("deal.vehicle") }}</dt><dd>{{ vehicle.plate if vehicle else "—" }}{% if deal.trailer_plate %} + {{ deal.trailer_plate }}{% endif %}</dd>
+    <dt>{{ _("deal.driver") }}</dt><dd>{{ driver.full_name if driver else "—" }}{% if driver and side != "driver" %} · {{ driver.phone }}{% endif %}</dd>
+    {% if snapshot %}<dt>{{ _("deal.snapshot") }}</dt><dd>v{{ snapshot.version }} · {{ fmt_dt(snapshot.created_at) }}<br><code>sha256: {{ snapshot.content_hash }}</code></dd>{% endif %}
+  </dl>
+  <h3>{{ _("order.route") }}</h3>
+  {% set show_address = true %}{% include "client/_order_details.html" %}
+
+  {% if supplements %}<h3>{{ _("deal.supplements") }}</h3><ul class="timeline">{% for s in supplements %}{% set ch = json_loads(s.changes) %}
+    <li>{{ fmt_dt(s.created_at) }} · {{ ui.status(s.status) }} {% if ch.price_minor %}{{ _("deal.new_price") }}: <b>{{ money(ch.price_minor, deal.currency) }}</b>{% endif %}{% if ch.trailer_plate %} {{ _("deal.trailer") }}: {{ ch.trailer_plate }}{% endif %} {% if s.reason %}<small>({{ s.reason }})</small>{% endif %}
+    {% if s.status == "proposed" and me.company and s.initiator_company_id != me.company.id and side in ("client", "carrier") %}
+      <form class="inline" method="post" action="/deals/{{ deal.id }}/supplement/{{ s.id }}">{{ ui.csrf() }}<input type="hidden" name="accept" value="1"><button class="btn small ok">{{ _("deal.accept") }}</button></form>
+      <form class="inline" method="post" action="/deals/{{ deal.id }}/supplement/{{ s.id }}">{{ ui.csrf() }}<input type="hidden" name="accept" value="0"><button class="btn small">{{ _("deal.reject") }}</button></form>{% endif %}</li>{% endfor %}</ul>{% endif %}
+
+  {% if exchanges %}<h3>{{ _("deal.executor_changes") }}</h3><ul class="timeline">{% for x in exchanges %}<li>{{ fmt_dt(x.created_at) }} · {{ ui.status(x.status) }} · {{ x.reason }}
+    {% if x.status == "proposed" and side == "client" %}<form class="inline" method="post" action="/deals/{{ deal.id }}/executor/{{ x.id }}">{{ ui.csrf() }}<input type="hidden" name="accept" value="1"><button class="btn small ok">{{ _("deal.accept") }}</button></form>
+    <form class="inline" method="post" action="/deals/{{ deal.id }}/executor/{{ x.id }}">{{ ui.csrf() }}<input type="hidden" name="accept" value="0"><button class="btn small">{{ _("deal.reject") }}</button></form>{% endif %}</li>{% endfor %}</ul>{% endif %}
+
+  {% if side in ("client", "carrier") and order.status not in ("completed", "cancelled", "dispute") and me.can("deal.manage") %}
+  <details><summary>{{ _("deal.change_terms") }}</summary>
+    <form method="post" action="/deals/{{ deal.id }}/supplement" class="stack">{{ ui.csrf() }}
+      <p class="muted"><small>{{ _("deal.supplement_hint") }}</small></p>
+      <div class="form-grid">{{ ui.field("price", _("deal.new_price"), "", attrs='inputmode="decimal"') }}{{ ui.field("trailer_plate", _("deal.trailer"), "") }}</div>
+      {{ ui.field("reason", _("deal.reason"), "") }}<button class="btn">{{ _("deal.propose") }}</button></form></details>
+  {% if side == "carrier" %}<details><summary>{{ _("deal.change_executor") }}</summary>
+    <form method="post" action="/deals/{{ deal.id }}/executor" class="stack">{{ ui.csrf() }}
+      <div class="form-grid"><div class="field"><label for="f-nv">{{ _("deal.vehicle") }}</label><select id="f-nv" name="vehicle_id"><option value="">{{ _("deal.no_change") }}</option>{% for v in my_vehicles %}<option value="{{ v.id }}">{{ v.plate }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="f-nd">{{ _("deal.driver") }}</label><select id="f-nd" name="driver_id"><option value="">{{ _("deal.no_change") }}</option>{% for d in my_drivers %}<option value="{{ d.id }}">{{ d.full_name }}</option>{% endfor %}</select></div></div>
+      {{ ui.field("reason", _("deal.reason"), "", required=true) }}<p class="muted"><small>{{ _("deal.executor_hint") }}</small></p><button class="btn">{{ _("deal.propose") }}</button></form></details>{% endif %}
+  {% endif %}
+</section>
+
+{# ---------------- documents ---------------- #}
+<section class="card" id="docs">
+  <h2>{{ _("deal.documents") }}</h2>
+  <div class="table-wrap"><table><thead><tr><th>{{ _("doc.title") }}</th><th>{{ _("common.status") }}</th><th>{{ _("doc.signatures") }}</th><th></th></tr></thead><tbody>
+  {% for doc in docs %}<tr>
+    <td><b>{{ _("doc." ~ doc.doc_type) }}</b> № {{ doc.number }}<br><small class="muted">{{ doc.title }} · {{ fmt_dt(doc.created_at) }}</small></td>
+    <td>{{ ui.status(doc.status) }}{% if doc.reject_reason %}<br><small>{{ doc.reject_reason }}</small>{% endif %}</td>
+    <td>{% for s in sigs[doc.id] %}<span class="badge ok" title="{{ fmt_dt(s.signed_at) }} · IP {{ s.ip }}">{{ _("sign." ~ s.kind) }}: {{ client.name if s.company_id == client.id else carrier.name }}</span><br>{% else %}{% if doc.requires_signatures %}<span class="muted">—</span>{% endif %}{% endfor %}</td>
+    <td>{% if doc.file_id %}<a class="btn small" href="{{ file_url(doc.file_id) }}" target="_blank" rel="noopener">{{ _("action.open") }}</a>{% endif %}
+      {% if doc.requires_signatures and side in ("client", "carrier") and me.can("deal.sign") and me.company.id not in (sigs[doc.id]|map(attribute="company_id")|list) %}
+        {% if sign_doc == doc.id|string %}
+        <form method="post" action="/deals/{{ deal.id }}/docs/{{ doc.id }}/sign" class="row">{{ ui.csrf() }}<input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="{{ _('auth.code') }}" aria-label="{{ _('auth.code') }}" required><button class="btn small ok">{{ _("sign.sign") }}</button></form>
+        {% else %}<form method="post" action="/deals/{{ deal.id }}/docs/{{ doc.id }}/sign-code">{{ ui.csrf() }}<button class="btn small primary">{{ _("sign.start") }}</button></form>{% endif %}
+      {% endif %}
+      {% if not doc.is_generated and side in ("client", "carrier") and me.company and doc.company_id != me.company.id and doc.status == "uploaded" %}
+        <form method="post" action="/deals/{{ deal.id }}/docs/{{ doc.id }}/review" class="row">{{ ui.csrf() }}<button class="btn small" name="status" value="checked">{{ _("doc.accept") }}</button><input type="text" name="reason" placeholder="{{ _('doc.reject_reason') }}" aria-label="{{ _('doc.reject_reason') }}"><button class="btn small danger" name="status" value="rejected">{{ _("doc.reject") }}</button></form>{% endif %}
+    </td></tr>{% else %}<tr><td colspan="4" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="muted"><small>{{ _("sign.simple_note") }}</small></p>
+  {% if side in ("client", "carrier", "driver") and order.status not in ("cancelled",) %}
+  <form method="post" action="/deals/{{ deal.id }}/docs/upload" enctype="multipart/form-data" class="form-grid">{{ ui.csrf() }}
+    <div class="field"><label for="f-dtype">{{ _("doc.type") }}</label><select id="f-dtype" name="doc_type">{% for t in upload_types %}<option value="{{ t }}">{{ _("doc." ~ t) }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="f-dfile">{{ _("kyc.file") }}</label><input id="f-dfile" type="file" name="file" accept=".pdf,image/*" required></div>
+    <div class="field"><label>&nbsp;</label><button class="btn">{{ _("kyc.upload_btn") }}</button></div>
+  </form>{% if order.status == "unloaded" %}<p class="muted"><small>{{ _("doc.closing_hint") }}</small></p>{% endif %}
+  {% endif %}
+</section>
+
+{# ---------------- finance ---------------- #}
+{% if invoice %}
+<section class="card"><h2>{{ _("deal.fee") }}</h2>
+  <p>{{ _("fin.invoice") }} № {{ invoice.number }} · <b>{{ money(invoice.amount_minor, invoice.currency) }}</b> · {{ ui.status(invoice.status) }} · {{ _("fin.due") }} {{ fmt_date(invoice.due_date) }}</p>
+  <p class="muted"><small>{{ _("fin.fee_note") }}</small></p></section>
+{% endif %}
+
+{# ---------------- rating ---------------- #}
+{% if side in ("client", "carrier") and order.status in ("closed_docs", "fee_invoiced", "completed") and not my_rating %}
+<section class="card"><h2>{{ _("rating.title") }}</h2>
+<form method="post" action="/deals/{{ deal.id }}/rate" class="stack">{{ ui.csrf() }}<div class="form-grid">
+  {% for k in ("score", "punctuality", "vehicle_condition", "documents_quality", "communication", "payment_discipline") %}
+  <div class="field"><label for="r-{{ k }}">{{ _("rating." ~ k) }}</label><select id="r-{{ k }}" name="{{ k }}">{% for n in (5, 4, 3, 2, 1) %}<option value="{{ n }}">{{ n }}</option>{% endfor %}</select></div>{% endfor %}
+</div>{{ ui.textarea("comment", _("rating.comment"), "", rows=2) }}<button class="btn primary">{{ _("action.send") }}</button></form></section>
+{% endif %}
+
+{% if can_dispute and not (dispute and dispute.status == "open") %}
+<details class="card"><summary>{{ _("dispute.open") }}</summary>
+  <form method="post" action="/deals/{{ deal.id }}/dispute" class="stack" data-confirm="{{ _('dispute.confirm') }}">{{ ui.csrf() }}
+    <div class="field"><label for="f-dsub">{{ _("dispute.subject") }}</label><select id="f-dsub" name="subject">{% for i in dispute_subjects %}<option value="{{ i.code }}">{{ i.name_ru }}</option>{% endfor %}</select></div>
+    {{ ui.textarea("description", _("dispute.description"), "", required=true) }}
+    <p class="muted"><small>{{ _("dispute.hint") }}</small></p><button class="btn danger">{{ _("dispute.open") }}</button></form></details>
+{% endif %}
+</div>
+
+<aside class="stack">
+<section class="card" id="chat">
+  <h2>{{ _("chat.title") }}</h2>
+  <div class="chat" data-chat="/deals/{{ deal.id }}/chat.json" data-last="{{ messages[-1].id if messages else '' }}" aria-live="polite">
+  {% for m in messages %}
+    {% if m.kind == "system" %}<div class="msg system" id="m-{{ m.id }}">{{ sysmsg(m.body) }}<span class="meta">{{ fmt_dt(m.created_at) }}</span></div>
+    {% else %}<div class="msg {{ 'mine' if m.author_user_id == me.user.id }}" id="m-{{ m.id }}">{{ m.body }}{% if m.attachment_file_id %}<br><a href="{{ file_url(m.attachment_file_id) }}" target="_blank" rel="noopener">📎 {{ _("chat.attachment") }}</a>{% endif %}
+      <span class="meta">{{ fmt_dt(m.created_at) }}{% if m.author_user_id == me.user.id %} · {{ "✓✓" if m.id in read_ids else "✓" }}{% endif %}{% if m.flags %} · ⚠{% endif %}</span>
+      {% if side == "staff" %}<form method="post" action="/admin/messages/{{ m.id }}/hide" class="row">{{ ui.csrf() }}<input type="text" name="reason" placeholder="{{ _('admin.hide_reason') }}" aria-label="{{ _('admin.hide_reason') }}" required><button class="btn small">{{ _("admin.hide") }}</button></form>{% endif %}</div>{% endif %}
+  {% endfor %}
+  </div>
+  {% if side != "staff" %}
+  <form method="post" action="/deals/{{ deal.id }}/chat" enctype="multipart/form-data" class="stack">{{ ui.csrf() }}
+    <label class="sr-only" for="f-body">{{ _("chat.message") }}</label><textarea id="f-body" name="body" rows="2" placeholder="{{ _('chat.placeholder') }}"></textarea>
+    <div class="row"><input type="file" name="file" accept=".pdf,image/*" aria-label="{{ _('chat.attachment') }}"><button class="btn primary">{{ _("action.send") }}</button></div>
+    <p class="muted"><small>{{ _("chat.rules") }}</small></p>
+  </form>{% endif %}
+</section>
+<section class="card"><h3>{{ _("deal.history") }}</h3><ul class="timeline">{% for h in history %}<li>{{ fmt_dt(h.created_at) }}<br><b>{{ status_label(h.to_status) }}</b> <small class="muted">{{ _("actor." ~ h.actor_role) }}</small>{% if h.reason %}<br><small>{{ h.reason }}</small>{% endif %}</li>{% endfor %}</ul></section>
+{% if checkpoints %}<section class="card"><h3>{{ _("trip.checkpoints") }}</h3><ul class="timeline">{% for c in checkpoints %}<li>{{ fmt_dt(c.happened_at) }} · <b>{{ _("cp." ~ c.kind) }}</b>{% if c.lat %}<br><small>📍 {{ "%.4f"|format(c.lat) }}, {{ "%.4f"|format(c.lng) }}</small>{% endif %}{% if c.photo_file_id %} <a href="{{ file_url(c.photo_file_id) }}" target="_blank" rel="noopener">📷</a>{% endif %}</li>{% endfor %}</ul></section>{% endif %}
+{% if incidents %}<section class="card"><h3>{{ _("trip.incidents") }}</h3><ul>{% for i in incidents %}<li>{{ fmt_dt(i.created_at) }} · {{ _("incident." ~ i.kind) }}: {{ i.description }}</li>{% endfor %}</ul></section>{% endif %}
+</aside>
+</div>
+{% endblock %}

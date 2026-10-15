@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("nav.fleet") }}{% endblock %}
+{% block content %}
+<h1>{{ _("nav.fleet") }}</h1>
+<div class="grid two">
+<section>
+  <h2>{{ _("fleet.vehicles") }} ({{ vehicles|length }})</h2>
+  <div class="table-wrap"><table><thead><tr><th>{{ _("fleet.plate") }}</th><th>{{ _("order.body_type") }}</th><th class="num">{{ _("fleet.capacity") }}</th><th>{{ _("common.status") }}</th><th></th></tr></thead><tbody>
+  {% for v in vehicles %}<tr><td><b>{{ v.plate }}</b>{% if v.adr_allowed %} <span class="badge err">ADR</span>{% endif %}{% if v.international_permit %} <span class="badge info">INT</span>{% endif %}<br><small class="muted">{{ v.vin }}</small></td><td>{{ body_map.get(v.body_type, v.body_type) }}</td><td class="num">{{ v.capacity_kg }} {{ _("unit.kg") }} / {{ v.volume_m3 }} {{ _("unit.m3") }}</td><td>{{ ui.status(v.status) }}{% if v.insurance_until %}<br><small>{{ _("fleet.insurance") }} {{ fmt_date(v.insurance_until) }}</small>{% endif %}</td>
+  <td><form method="post" action="/fleet/vehicles/{{ v.id }}/delete" data-confirm="{{ _('common.confirm_delete') }}">{{ ui.csrf() }}<button class="btn small link">{{ _("action.remove") }}</button></form></td></tr>
+  {% else %}<tr><td colspan="5" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+  <details class="card"><summary>+ {{ _("fleet.add_vehicle") }}</summary>
+  <form method="post" action="/fleet/vehicles" class="stack">{{ ui.csrf() }}<div class="form-grid">
+    {{ ui.field("plate", _("fleet.plate"), "", required=true, hint="123ABC02") }}
+    {{ ui.field("vin", "VIN", "") }}
+    <div class="field"><label for="f-vbody">{{ _("order.body_type") }}</label><select id="f-vbody" name="body_type">{% for i in body_types %}<option value="{{ i.code }}">{{ i.name_ru }}</option>{% endfor %}</select></div>
+    {{ ui.field("capacity_kg", _("fleet.capacity_kg"), "20000", type="number") }}
+    {{ ui.field("volume_m3", _("fleet.volume"), "82", type="number") }}
+    {{ ui.field("dimensions", _("fleet.dimensions"), "", hint="13.6×2.45×2.7") }}
+    {{ ui.field("insurance_until", _("fleet.insurance"), "", type="date") }}
+  </div>
+  <div class="row">{{ ui.checkbox("has_tachograph", _("fleet.tachograph")) }}{{ ui.checkbox("adr_allowed", _("fleet.adr")) }}{{ ui.checkbox("international_permit", _("fleet.intl")) }}</div>
+  <button class="btn primary">{{ _("action.add") }}</button></form></details>
+</section>
+<section>
+  <h2>{{ _("fleet.drivers") }} ({{ drivers|length }})</h2>
+  <div class="table-wrap"><table><thead><tr><th>{{ _("auth.full_name") }}</th><th>{{ _("fleet.license") }}</th><th>{{ _("common.status") }}</th><th></th></tr></thead><tbody>
+  {% for d in drivers %}<tr><td><b>{{ d.full_name }}</b>{% if d.user_id %} <span class="badge info">{{ _("fleet.has_app") }}</span>{% endif %}<br><small class="muted">{{ d.phone }}</small></td><td>{{ d.license_categories }}{% if d.license_until %}<br><small>{{ _("fleet.until") }} {{ fmt_date(d.license_until) }}</small>{% endif %}{% if d.adr_permit %} <span class="badge err">ADR</span>{% endif %}</td><td>{{ ui.status(d.status) }}</td>
+  <td><form method="post" action="/fleet/drivers/{{ d.id }}/delete" data-confirm="{{ _('common.confirm_delete') }}">{{ ui.csrf() }}<button class="btn small link">{{ _("action.remove") }}</button></form></td></tr>
+  {% else %}<tr><td colspan="4" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+  <details class="card"><summary>+ {{ _("fleet.add_driver") }}</summary>
+  <form method="post" action="/fleet/drivers" class="stack">{{ ui.csrf() }}<div class="form-grid">
+    {{ ui.field("full_name", _("auth.full_name"), "", required=true) }}
+    {{ ui.field("iin", _("fleet.iin"), "", attrs='inputmode="numeric" maxlength="12"') }}
+    {{ ui.field("phone", _("auth.phone"), "", type="tel") }}
+    {{ ui.field("license_number", _("fleet.license_number"), "") }}
+    {{ ui.field("license_categories", _("fleet.categories"), "C,CE") }}
+    {{ ui.field("license_until", _("fleet.license_until"), "", type="date") }}
+  </div>{{ ui.checkbox("adr_permit", _("fleet.adr_permit")) }}
+  <p class="muted"><small>{{ _("fleet.invite_hint") }}</small></p>
+  <button class="btn primary">{{ _("action.add") }}</button></form></details>
+</section>
+</div>
+{% endblock %}

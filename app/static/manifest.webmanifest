@@ -1,0 +1,13 @@
+{
+  "name": "AbdEX — площадка грузоперевозок",
+  "short_name": "AbdEX",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f7fa",
+  "theme_color": "#0b5cad",
+  "lang": "ru",
+  "icons": [
+    {"src": "/static/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}

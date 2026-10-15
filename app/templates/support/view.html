@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ t.number }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ t.number }} · {{ t.subject }}</h1>{{ ui.status(t.status) }}</div>
+<p class="muted">{{ cat_map.get(t.category, t.category) }} · SLA: {{ fmt_dt(t.sla_due_at) }}</p>
+<div class="chat">{% for m in messages %}<div class="msg {{ 'mine' if m.author_user_id == me.user.id }}">{{ m.body }}<span class="meta">{{ fmt_dt(m.created_at) }}{% if m.kind == "staff" %} · {{ _("support.staff") }}{% endif %}</span></div>{% endfor %}</div>
+<form method="post" action="/support/{{ t.id }}" class="stack">{{ ui.csrf() }}{{ ui.textarea("body", _("chat.message"), "", required=true, rows=3) }}<button class="btn primary">{{ _("action.send") }}</button></form>
+{% endblock %}

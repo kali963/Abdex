@@ -1,0 +1,8 @@
+{% set p = request.url.path %}
+<nav class="tabs" aria-label="{{ _('nav.account') }}">
+  <a href="/account" class="{{ 'active' if p == '/account' }}">{{ _("account.profile") }}</a>
+  <a href="/account/security" class="{{ 'active' if p == '/account/security' }}">{{ _("account.security") }}</a>
+  <a href="/account/sessions" class="{{ 'active' if p == '/account/sessions' }}">{{ _("account.sessions") }}</a>
+  <a href="/account/consents" class="{{ 'active' if p == '/account/consents' }}">{{ _("account.consents") }}</a>
+  <a href="/account/notifications" class="{{ 'active' if p == '/account/notifications' }}">{{ _("account.notifications") }}</a>
+</nav>

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("nav.support") }}{% endblock %}
+{% block content %}
+<h1>{{ _("nav.support") }}</h1>
+<p class="muted">{{ _("support.text") }} <a href="/help">{{ _("footer.help") }}</a></p>
+<div class="grid two">
+<form class="card stack" method="post" action="/support">{{ ui.csrf() }}
+  <h2>{{ _("support.new") }}</h2>
+  <div class="field"><label for="f-cat">{{ _("support.category") }}</label><select id="f-cat" name="category">{% for c in categories %}<option value="{{ c.code }}">{{ c.name_kk if locale == 'kk' and c.name_kk else c.name_ru }}</option>{% endfor %}</select></div>
+  {{ ui.field("subject", _("support.subject"), "", required=true) }}
+  {{ ui.textarea("body", _("support.body"), "", required=true) }}
+  {{ ui.field("deal_id", _("support.deal_id"), request.query_params.get("deal", ""), hint=_("support.deal_hint")) }}
+  <button class="btn primary">{{ _("action.send") }}</button>
+</form>
+<section><h2>{{ _("support.my") }}</h2>
+{% if items %}<div class="table-wrap"><table><tbody>{% for t in items %}<tr><td><a href="/support/{{ t.id }}">{{ t.number }}</a> {{ t.subject }}<br><small class="muted">{{ cat_map.get(t.category, t.category) }} · {{ fmt_dt(t.created_at) }}</small></td><td>{{ ui.status(t.status) }}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}{{ ui.empty(_("common.empty")) }}{% endif %}</section>
+</div>
+{% endblock %}

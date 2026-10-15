@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.pvd") }}{% endblock %}
+{% block content %}
+<h1>{{ _("pvd.title") }}</h1>
+<form class="card row" method="get"><label for="df">{{ _("common.from") }}</label><input id="df" type="date" name="date_from" value="{{ r.from.isoformat() }}"><label for="dt">{{ _("common.to") }}</label><input id="dt" type="date" name="date_to" value="{{ r.to.isoformat() }}"><button class="btn">{{ _("common.show") }}</button>
+<a class="btn" href="/admin/reports/pvd.xlsx?date_from={{ r.from.isoformat() }}&date_to={{ r.to.isoformat() }}">XLSX</a><a class="btn" href="/admin/reports/pvd.pdf?date_from={{ r.from.isoformat() }}&date_to={{ r.to.isoformat() }}">PDF</a></form>
+<div class="grid three">
+  <div class="card stat"><b>{{ money(r.total) }}</b><span>{{ _("pvd.total") }}</span></div>
+  <div class="card stat"><b>{{ money(r.priority) }}</b><span>{{ _("pvd.priority") }}</span></div>
+  <div class="card stat"><b>{{ r.priority_share }}%</b><span>{{ _("pvd.share") }}</span></div>
+</div>
+<div class="table-wrap"><table><thead><tr><th>{{ _("fin.income_type") }}</th><th class="num">{{ _("fin.amount") }}</th></tr></thead><tbody>{% for t, v in r.by_type.items() %}<tr><td>{{ labels.get(t, t) }}</td><td class="num">{{ money(v) }}</td></tr>{% endfor %}</tbody></table></div>
+<h2>{{ _("pvd.documents") }}</h2>
+<div class="table-wrap"><table><thead><tr><th>{{ _("common.date") }}</th><th>{{ _("fin.invoice") }}</th><th>{{ _("deal.number") }}</th><th>{{ _("fin.income_type") }}</th><th class="num">{{ _("fin.amount") }}</th></tr></thead>
+<tbody>{% for d in r.documents %}<tr><td>{{ fmt_dt(d.date) }}</td><td>{{ d.invoice }}</td><td>{{ d.deal }}</td><td>{{ labels.get(d.income_type, d.income_type) }}{% if d.storno %} <span class="badge warn">{{ _("fin.storno") }}</span>{% endif %}</td><td class="num">{{ money(d.amount_minor) }}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

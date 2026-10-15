@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="{{ locale }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <meta name="theme-color" content="#0b5cad">
+  <title>{% block title %}{{ _("app.name") }}{% endblock %} — AbdEX</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip" href="#main">{{ _("nav.skip") }}</a>
+<div class="offline-banner" role="status">{{ _("app.offline") }}</div>
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="logo" href="{{ '/dashboard' if me else '/' }}">Abd<span>EX</span></a>
+    <span class="spacer"></span>
+    <nav class="lang" aria-label="{{ _('nav.language') }}">
+      <a href="/lang/ru?next={{ request.url.path }}" class="{{ 'on' if locale == 'ru' }}">RU</a>
+      <a href="/lang/kk?next={{ request.url.path }}" class="{{ 'on' if locale == 'kk' }}">KZ</a>
+    </nav>
+    {% if me %}
+      {% if my_companies and my_companies|length > 1 and not me.session.is_admin %}
+      <form method="post" action="/switch-company" class="company-switch">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="sr-only" for="company-switch">{{ _("nav.company") }}</label>
+        <select id="company-switch" name="company_id" data-autosubmit>
+          {% for m, c in my_companies %}<option value="{{ c.id }}" {{ 'selected' if me.company and me.company.id == c.id }}>{{ c.name }}</option>{% endfor %}
+        </select>
+        <noscript><button class="btn small">OK</button></noscript>
+      </form>
+      {% endif %}
+      <a class="bell" href="/notifications" aria-label="{{ _('nav.notifications') }}">🔔{% if unread %}<span class="count">{{ unread }}</span>{% endif %}</a>
+      <a class="who" href="/account" title="{{ me.user.full_name }}">{{ me.user.full_name }}{% if me.company %} · {{ me.company.name }}{% endif %}</a>
+      <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn small">{{ _("nav.logout") }}</button></form>
+    {% else %}
+      <a class="btn small" href="/login">{{ _("nav.login") }}</a>
+      <a class="btn small primary" href="/register">{{ _("nav.register") }}</a>
+    {% endif %}
+  </div>
+</header>
+{% if me %}
+  {% set p = request.url.path %}
+  {% if me.session.is_admin %}
+  <nav class="nav admin" aria-label="{{ _('nav.main') }}"><div class="nav-in">
+    <a href="/admin" class="{{ 'active' if p == '/admin' }}">{{ _("admin.home") }}</a>
+    {% if me.can("admin.orders") %}<a href="/admin/orders" class="{{ 'active' if p.startswith('/admin/orders') }}">{{ _("admin.orders") }}</a>{% endif %}
+    {% if me.can("admin.moderation") %}<a href="/admin/moderation" class="{{ 'active' if p.startswith('/admin/moderation') }}">{{ _("admin.moderation") }}</a>{% endif %}
+    {% if me.can("admin.antifraud") %}<a href="/admin/antifraud" class="{{ 'active' if p.startswith('/admin/antifraud') }}">{{ _("admin.antifraud") }}</a>{% endif %}
+    {% if me.can("admin.disputes") %}<a href="/admin/disputes" class="{{ 'active' if p.startswith('/admin/disputes') }}">{{ _("admin.disputes") }}</a>{% endif %}
+    {% if me.can("admin.users") %}<a href="/admin/companies" class="{{ 'active' if p.startswith('/admin/companies') }}">{{ _("admin.companies") }}</a><a href="/admin/users" class="{{ 'active' if p.startswith('/admin/users') }}">{{ _("admin.users") }}</a>{% endif %}
+    {% if me.can("admin.finance") %}<a href="/admin/finance" class="{{ 'active' if p.startswith('/admin/finance') }}">{{ _("admin.finance") }}</a><a href="/admin/reports/pvd" class="{{ 'active' if p.startswith('/admin/reports') }}">{{ _("admin.pvd") }}</a>{% endif %}
+    {% if me.can("admin.kpi") %}<a href="/admin/kpi" class="{{ 'active' if p.startswith('/admin/kpi') }}">{{ _("admin.kpi") }}</a>{% endif %}
+    {% if me.can("admin.support") %}<a href="/admin/support" class="{{ 'active' if p.startswith('/admin/support') }}">{{ _("admin.support") }}</a>{% endif %}
+    {% if me.can("admin.dictionaries") %}<a href="/admin/dictionaries" class="{{ 'active' if p.startswith('/admin/dictionaries') }}">{{ _("admin.dictionaries") }}</a><a href="/admin/templates" class="{{ 'active' if p.startswith('/admin/templates') }}">{{ _("admin.templates") }}</a>{% endif %}
+    {% if me.can("admin.settings") %}<a href="/admin/flags" class="{{ 'active' if p.startswith('/admin/flags') }}">{{ _("admin.flags") }}</a><a href="/admin/settings" class="{{ 'active' if p.startswith('/admin/settings') }}">{{ _("admin.settings") }}</a>{% endif %}
+    {% if me.can("admin.audit") %}<a href="/admin/audit" class="{{ 'active' if p.startswith('/admin/audit') }}">{{ _("admin.audit") }}</a><a href="/admin/integrations" class="{{ 'active' if p.startswith('/admin/integrations') }}">{{ _("admin.integrations") }}</a>{% endif %}
+    <a href="/account/security" class="{{ 'active' if p.startswith('/account') }}">{{ _("nav.account") }}</a>
+  </div></nav>
+  {% elif me.company %}
+  <nav class="nav" aria-label="{{ _('nav.main') }}"><div class="nav-in">
+    {% if me.role == "driver" %}
+      <a href="/trips" class="{{ 'active' if p.startswith('/trips') or p.startswith('/deals') }}">{{ _("nav.trips") }}</a>
+    {% else %}
+      <a href="/dashboard" class="{{ 'active' if p == '/dashboard' }}">{{ _("nav.dashboard") }}</a>
+      {% if me.can("order.view") %}<a href="/orders" class="{{ 'active' if p.startswith('/orders') }}">{{ _("nav.orders") }}</a>{% endif %}
+      {% if me.can("market.view") %}<a href="/market" class="{{ 'active' if p.startswith('/market') }}">{{ _("nav.market") }}</a><a href="/my-bids" class="{{ 'active' if p.startswith('/my-bids') }}">{{ _("nav.my_bids") }}</a>{% endif %}
+      <a href="/deals" class="{{ 'active' if p.startswith('/deals') }}">{{ _("nav.deals") }}</a>
+      {% if me.can("plan.view") %}<a href="/plan" class="{{ 'active' if p.startswith('/plan') }}">{{ _("nav.plan") }}</a>{% endif %}
+      {% if me.can("fleet.manage") %}<a href="/fleet" class="{{ 'active' if p.startswith('/fleet') }}">{{ _("nav.fleet") }}</a>{% endif %}
+      {% if me.can("finance.view") %}<a href="/finance" class="{{ 'active' if p.startswith('/finance') }}">{{ _("nav.finance") }}</a>{% endif %}
+      {% if me.can("analytics.view") %}<a href="/analytics" class="{{ 'active' if p.startswith('/analytics') }}">{{ _("nav.analytics") }}</a>{% endif %}
+      {% if me.can("calc.use") %}<a href="/calc" class="{{ 'active' if p.startswith('/calc') }}">{{ _("nav.calc") }}</a>{% endif %}
+      {% if me.can("company.view") %}<a href="/company" class="{{ 'active' if p.startswith('/company') or p.startswith('/pool') }}">{{ _("nav.company") }}</a>{% endif %}
+    {% endif %}
+    <a href="/support" class="{{ 'active' if p.startswith('/support') }}">{{ _("nav.support") }}</a>
+    <a href="/account" class="{{ 'active' if p.startswith('/account') }}">{{ _("nav.account") }}</a>
+  </div></nav>
+  {% endif %}
+{% endif %}
+<main id="main">
+  {% if flash %}<div class="alert {{ flash.k }}" role="status">{{ _(flash.m, **flash.p) }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+<footer class="site"><div class="in">
+  <span>© AbdEX · {{ _("app.tagline") }}</span>
+  <a href="/legal/terms">{{ _("footer.terms") }}</a>
+  <a href="/legal/privacy">{{ _("footer.privacy") }}</a>
+  <a href="/legal/security">{{ _("footer.security") }}</a>
+  <a href="/help">{{ _("footer.help") }}</a>
+  {% if settings.is_dev %}<a href="/dev/outbox">{{ _("footer.dev_outbox") }}</a><a href="/api/docs">API</a>{% endif %}
+</div></footer>
+<script src="/static/js/app.js" defer></script>
+</body>
+</html>

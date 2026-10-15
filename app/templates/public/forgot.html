@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("auth.forgot") }}{% endblock %}
+{% block content %}
+<form class="card" method="post" action="/forgot-password">
+  <h1>{{ _("auth.forgot") }}</h1>
+  {% if sent %}<div class="alert info">{{ _("auth.reset_sent") }}</div>{% endif %}
+  {{ ui.csrf() }}
+  {{ ui.field("login", _("auth.login_field"), "", required=true) }}
+  <div class="actions"><button class="btn primary">{{ _("auth.send_link") }}</button></div>
+</form>
+{% endblock %}

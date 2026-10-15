@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("nav.market") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("market.title") }}</h1></div>
+{% if me.company.verification_level < 1 %}<div class="alert warn">{{ _("market.need_verification") }} <a href="/company/verification">{{ _("dash.verify_btn") }}</a></div>{% endif %}
+<form class="card" method="get" action="/market">
+  <div class="form-grid">
+    {{ ui.field("from_city", _("market.from"), filters.from_city, attrs='list="cities"') }}
+    {{ ui.field("to_city", _("market.to"), filters.to_city, attrs='list="cities"') }}
+    <div class="field"><label for="f-body_type">{{ _("order.body_type") }}</label><select id="f-body_type" name="body_type"><option value="">{{ _("common.any") }}</option>{% for i in body_types %}<option value="{{ i.code }}" {{ 'selected' if filters.body_type == i.code }}>{{ i.name_ru }}</option>{% endfor %}</select></div>
+    {{ ui.field("max_weight", _("market.max_weight"), filters.max_weight, type="number") }}
+    {{ ui.field("min_rate", _("market.min_rate"), filters.min_rate, attrs='inputmode="decimal"') }}
+    {{ ui.field("date_from", _("market.date_from"), filters.date_from, type="date") }}
+    {{ ui.field("date_to", _("market.date_to"), filters.date_to, type="date") }}
+  </div>
+  <div class="actions"><button class="btn primary">{{ _("common.find") }}</button><a class="btn" href="/market">{{ _("common.reset") }}</a></div>
+  <datalist id="cities">{% for c in ("Алматы", "Астана", "Шымкент", "Караганда", "Актобе", "Тараз", "Павлодар", "Усть-Каменогорск", "Атырау", "Костанай", "Хоргос", "Достык", "Ташкент", "Урумчи", "Москва") %}<option value="{{ c }}">{% endfor %}</datalist>
+</form>
+<details class="card flat"><summary>{{ _("market.subscriptions") }} ({{ saved|length }})</summary>
+  <form method="post" action="/market/saved" class="row">{{ ui.csrf() }}
+    {% for k, v in filters.items() %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+    <input type="text" name="name" placeholder="{{ _('market.sub_name') }}" aria-label="{{ _('market.sub_name') }}"><button class="btn small">{{ _("market.subscribe") }}</button></form>
+  <p class="muted"><small>{{ _("market.sub_hint") }}</small></p>
+  <ul>{% for s in saved %}<li>{{ s.name }} <code>{{ s.filters }}</code> <form class="inline" method="post" action="/market/saved/{{ s.id }}/delete">{{ ui.csrf() }}<button class="btn link">{{ _("action.remove") }}</button></form></li>{% endfor %}</ul>
+</details>
+{% if items %}<div class="table-wrap"><table>
+<thead><tr><th>{{ _("order.route") }}</th><th>{{ _("order.cargo") }}</th><th>{{ _("order.body_type") }}</th><th>{{ _("order.load_date") }}</th><th class="num">{{ _("order.rate") }}</th><th></th></tr></thead>
+<tbody>{% for o in items %}<tr>
+<td><a href="/market/{{ o.id }}">{{ ui.route(o) }}</a>{% if o.distance_km %}<br><small class="muted">{{ o.distance_km }} {{ _("unit.km") }}</small>{% endif %}{% if o.visibility == "pool" %} <span class="badge brand">{{ _("order.vis_pool") }}</span>{% endif %}{% if o.adr_class %} <span class="badge err">ADR {{ o.adr_class }}</span>{% endif %}</td>
+<td>{{ o.cargo_name }}<br><small class="muted">{{ o.weight_kg }} {{ _("unit.kg") }}</small></td>
+<td>{{ body_map.get(o.body_type, o.body_type) }}</td><td>{{ fmt_dt(o.load_from) }}</td>
+<td class="num">{{ money(o.desired_rate_minor, o.currency) if o.desired_rate_minor else _("order.rate_open") }}</td>
+<td>{% if my_bids.get(o.id) %}{{ ui.status(my_bids[o.id].status) }}{% else %}<a class="btn small primary" href="/market/{{ o.id }}">{{ _("market.bid") }}</a>{% endif %}</td>
+</tr>{% endfor %}</tbody></table></div>
+{% else %}{{ ui.empty(_("market.empty"), _("market.empty_hint")) }}{% endif %}
+{% endblock %}

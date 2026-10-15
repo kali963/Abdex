@@ -1,0 +1,16 @@
+# Pinned runtime dependencies (SEC-DEV-04). Update deliberately, run tests and pip-audit.
+fastapi==0.143.2
+starlette==1.6.0
+uvicorn[standard]==0.53.0
+SQLAlchemy==2.1.4
+alembic==1.20.0
+psycopg[binary]==3.3.6
+Jinja2==3.1.6
+python-multipart==0.0.32
+pydantic==2.13.5
+argon2-cffi==25.1.0
+pyotp==2.10.0
+itsdangerous==2.2.0
+reportlab==5.0.1
+openpyxl==3.1.5
+pillow==12.3.0

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.templates") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.templates") }}</h1>
+<p class="muted">{{ _("tpl.text") }}</p>
+<div class="table-wrap"><table><thead><tr><th>{{ _("doc.type") }}</th><th>{{ _("tpl.locale") }}</th><th>{{ _("tpl.version") }}</th><th>{{ _("tpl.valid_from") }}</th><th></th></tr></thead>
+<tbody>{% for t in items %}<tr><td>{{ _("doc." ~ t.doc_type) }}</td><td>{{ t.locale }}</td><td>v{{ t.version }}</td><td>{{ fmt_date(t.valid_from) }}</td><td><a href="?edit={{ t.id }}#editor">{{ _("action.edit") }}</a></td></tr>{% endfor %}</tbody></table></div>
+<form class="card stack" method="post" action="/admin/templates" id="editor">{{ ui.csrf() }}
+  <h2>{{ _("tpl.new_version") }}</h2>
+  {% set src = namespace(t=None) %}{% for t in items %}{% if t.id|string == edit %}{% set src.t = t %}{% endif %}{% endfor %}
+  <div class="form-grid">
+    {{ ui.select("doc_type", _("doc.type"), [("contract_order", _("doc.contract_order")), ("fee_invoice", _("doc.fee_invoice")), ("fee_act", _("doc.fee_act")), ("transport_request", _("doc.transport_request")), ("power_of_attorney", _("doc.power_of_attorney")), ("work_act", _("doc.work_act")), ("reconciliation_act", _("doc.reconciliation_act"))], src.t.doc_type if src.t else "contract_order") }}
+    {{ ui.select("locale", _("tpl.locale"), [("ru", "RU"), ("kk", "KZ")], src.t.locale if src.t else "ru") }}
+    {{ ui.field("valid_from", _("tpl.valid_from"), "", type="date", required=true) }}
+  </div>
+  {{ ui.field("title", _("tpl.title"), src.t.title if src.t else "") }}
+  {{ ui.textarea("body", _("tpl.body"), src.t.body if src.t else "", rows=14, hint=_("tpl.placeholders")) }}
+  <div class="row"><button class="btn primary">{{ _("tpl.save") }}</button><button class="btn" formaction="/admin/templates/preview" formtarget="_blank">{{ _("tpl.preview") }}</button></div>
+</form>
+{% endblock %}

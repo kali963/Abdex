@@ -1,0 +1,7 @@
+{% set p = request.url.path %}
+<nav class="tabs">
+  <a href="/company" class="{{ 'active' if p == '/company' }}">{{ _("company.profile") }}</a>
+  <a href="/company/verification" class="{{ 'active' if p == '/company/verification' }}">{{ _("company.verification") }}</a>
+  <a href="/pool" class="{{ 'active' if p == '/pool' }}">{{ _("company.pool") }}</a>
+  {% if me.can("company.manage") %}<a href="/company/api-keys" class="{{ 'active' if p == '/company/api-keys' }}">{{ _("company.api") }}</a>{% endif %}
+</nav>

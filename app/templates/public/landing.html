@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("landing.title") }}{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>{{ _("landing.h1") }}</h1>
+  <p>{{ _("landing.lead") }}</p>
+  <div class="actions">
+    {% if me %}<a class="btn primary" href="/dashboard">{{ _("nav.dashboard") }}</a>
+    {% else %}
+    <a class="btn primary" href="/register?type=client">{{ _("landing.cta_client") }}</a>
+    <a class="btn" href="/register?type=carrier">{{ _("landing.cta_carrier") }}</a>
+    <a class="btn" href="/register?type=driver">{{ _("landing.cta_driver") }}</a>
+    {% endif %}
+  </div>
+</section>
+<h2>{{ _("landing.problems") }}</h2>
+<div class="grid three">
+  <div class="card feature"><h3>🛡 {{ _("landing.f1_t") }}</h3><p>{{ _("landing.f1") }}</p></div>
+  <div class="card feature"><h3>🔒 {{ _("landing.f2_t") }}</h3><p>{{ _("landing.f2") }}</p></div>
+  <div class="card feature"><h3>📄 {{ _("landing.f3_t") }}</h3><p>{{ _("landing.f3") }}</p></div>
+  <div class="card feature"><h3>💬 {{ _("landing.f4_t") }}</h3><p>{{ _("landing.f4") }}</p></div>
+  <div class="card feature"><h3>🚚 {{ _("landing.f5_t") }}</h3><p>{{ _("landing.f5") }}</p></div>
+  <div class="card feature"><h3>📊 {{ _("landing.f6_t") }}</h3><p>{{ _("landing.f6") }}</p></div>
+</div>
+<h2>{{ _("landing.how") }}</h2>
+<div class="grid three">
+  <div class="card"><b>1.</b> {{ _("landing.step1") }}</div>
+  <div class="card"><b>2.</b> {{ _("landing.step2") }}</div>
+  <div class="card"><b>3.</b> {{ _("landing.step3") }}</div>
+  <div class="card"><b>4.</b> {{ _("landing.step4") }}</div>
+</div>
+<h2>{{ _("landing.levels") }}</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>{{ _("level.col_level") }}</th><th>{{ _("level.col_checked") }}</th><th>{{ _("level.col_opens") }}</th></tr></thead>
+  <tbody>
+  {% for n in range(4) %}<tr><td>{{ ui.level(n) }}</td><td>{{ _("level.checked" ~ n) }}</td><td>{{ _("level.opens" ~ n) }}</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+<div class="stack" id="role">{{ ui.role_note(role_text) }}</div>
+{% endblock %}

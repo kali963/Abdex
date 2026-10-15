@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("auth.verify_title") }}{% endblock %}
+{% block content %}
+<form class="card" method="post" action="/verify-phone">
+  <h1>{{ _("auth.verify_title") }}</h1>
+  <p class="muted">{{ _("auth.verify_text") }}</p>
+  {% if error %}<div class="alert error">{{ _(error) }}</div>{% endif %}
+  {{ ui.csrf() }}
+  {{ ui.field("code", _("auth.code"), "", attrs='inputmode="numeric" autocomplete="one-time-code" maxlength="6" autofocus') }}
+  <div class="actions"><button class="btn primary">{{ _("auth.confirm") }}</button><button class="btn" name="resend" value="1">{{ _("auth.resend") }}</button>
+  {% if settings.is_dev %}<a class="btn link" href="/dev/outbox" target="_blank">{{ _("footer.dev_outbox") }}</a>{% endif %}</div>
+</form>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("account.notifications") }}{% endblock %}
+{% block content %}
+<h1>{{ _("nav.account") }}</h1>
+{% include "account/_tabs.html" %}
+<div class="grid two">
+<section class="card">
+  <h2>Telegram</h2>
+  {% if tg and tg.address %}<p><span class="badge ok">{{ _("ntf.tg_linked") }}</span></p>
+  {% elif tg and tg.link_code %}<p>{{ _("ntf.tg_instructions") }}</p><div class="secret">/start {{ tg.link_code }}</div>
+  {% else %}<p>{{ _("ntf.tg_text") }}</p>{% endif %}
+  <form method="post" action="/account/notifications/telegram" class="actions">{{ ui.csrf() }}<button class="btn">{{ _("ntf.tg_link") }}</button></form>
+</section>
+<section class="card">
+  <h2>{{ _("ntf.categories") }}</h2>
+  <form method="post" action="/account/notifications/prefs" class="stack">{{ ui.csrf() }}
+    {% for e in ("order.matching", "bid.received", "trip.checkpoint", "chat.message") %}
+      {{ ui.checkbox("on_" ~ e, _("ntf.cat." ~ e), true) }}
+    {% endfor %}
+    <p class="muted">{{ _("ntf.security_always") }}</p>
+    <button class="btn primary">{{ _("action.save") }}</button>
+  </form>
+</section>
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("nav.calc") }}{% endblock %}
+{% block content %}
+<h1>{{ _("calc.title") }}</h1>
+<p class="muted">{{ _("calc.text") }}</p>
+<div class="grid two">
+<form class="card stack" method="post" action="/calc">{{ ui.csrf() }}<input type="hidden" name="kind" value="trip_cost">
+  <h2>{{ _("calc.trip_cost") }}</h2>
+  <div class="form-grid">
+    {{ ui.field("distance_km", _("calc.distance"), form.distance_km if kind == "trip_cost" else "", errors=errors if kind == "trip_cost" else {}, required=true, attrs='inputmode="decimal"') }}
+    {{ ui.field("days", _("calc.days"), form.days or "1", attrs='inputmode="decimal"') }}
+    {{ ui.field("fuel_per_100", _("calc.fuel_per_100"), form.fuel_per_100, hint=_("calc.from_dict")) }}
+    {{ ui.field("fuel_price", _("calc.fuel_price"), form.fuel_price, hint=_("calc.from_dict")) }}
+    {{ ui.field("tolls", _("calc.tolls"), form.tolls) }}
+    {{ ui.field("loading", _("calc.loading"), form.loading) }}
+    {{ ui.field("parking", _("calc.parking"), form.parking) }}
+    {{ ui.field("other", _("calc.other"), form.other) }}
+    {{ ui.field("price", _("calc.price"), form.price, hint=_("calc.price_hint")) }}
+  </div>
+  <button class="btn primary">{{ _("calc.calculate") }}</button>
+</form>
+<form class="card stack" method="post" action="/calc">{{ ui.csrf() }}<input type="hidden" name="kind" value="client_price">
+  <h2>{{ _("calc.client_price") }}</h2>
+  <div class="form-grid">
+    {{ ui.field("distance_km", _("calc.distance"), form.distance_km if kind == "client_price" else "", errors=errors if kind == "client_price" else {}, required=true, id="f-distance2") }}
+    <div class="field"><label for="f-cbody">{{ _("order.body_type") }}</label><select id="f-cbody" name="body_type">{% for i in body_types %}<option value="{{ i.code }}" {{ 'selected' if form.body_type == i.code }}>{{ i.name_ru }}</option>{% endfor %}</select></div>
+  </div>
+  <div class="row">{% for f in ("urgent", "temperature", "adr", "oversize", "season") %}{{ ui.checkbox(f, _("calc.s_" ~ f), form.get(f)) }}{% endfor %}</div>
+  <button class="btn primary">{{ _("calc.calculate") }}</button>
+</form>
+</div>
+{% if result %}
+<section class="card"><h2>{{ _("calc.result") }}</h2>
+<div class="table-wrap"><table>
+{% for k, v in result.items() %}{% if k not in ("applied", "multiplier", "margin_pct") %}<tr><td>{{ _("calc.r_" ~ k) }}</td><td class="num">{{ money(v) }}</td></tr>{% endif %}{% endfor %}
+{% if result.margin_pct is defined %}<tr><td>{{ _("calc.r_margin_pct") }}</td><td class="num"><b>{{ result.margin_pct }} %</b></td></tr>{% endif %}
+{% if result.multiplier is defined %}<tr><td>{{ _("calc.r_multiplier") }}</td><td class="num">× {{ result.multiplier }}</td></tr>{% endif %}
+</table></div>
+<p class="muted"><small>{{ _("calc.saved_note") }}</small></p></section>
+{% endif %}
+{% endblock %}

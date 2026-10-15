@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.finance") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.finance") }}</h1>
+<div class="grid two">
+<section class="card"><h2>{{ _("fin.tariffs") }}</h2>
+<div class="table-wrap"><table><thead><tr><th>{{ _("fin.tariff") }}</th><th>{{ _("fin.model") }}</th><th>{{ _("fin.params") }}</th><th>{{ _("fin.period") }}</th></tr></thead>
+<tbody>{% for t in tariffs %}<tr><td>{{ t.name }}<br><small class="muted">{{ names.get(t.company_id, _("fin.default_tariff")) }} · {{ t.deal_type }}</small></td><td>{{ _("fin.model_" ~ t.model) }}</td>
+<td><small>{% if t.fixed_minor %}{{ money(t.fixed_minor) }} {% endif %}{% if t.percent_bp %}{{ t.percent_bp / 100 }}% {% endif %}{% if t.min_minor %}min {{ money(t.min_minor) }} {% endif %}{% if t.max_minor %}max {{ money(t.max_minor) }}{% endif %}</small></td>
+<td><small>{{ fmt_date(t.valid_from) }} — {{ fmt_date(t.valid_to) if t.valid_to else "∞" }}</small></td></tr>{% endfor %}</tbody></table></div>
+<details><summary>+ {{ _("fin.new_tariff") }}</summary>
+<form method="post" action="/admin/finance/tariffs" class="stack">{{ ui.csrf() }}<div class="form-grid">
+  {{ ui.field("name", _("fin.tariff"), "", required=true) }}
+  {{ ui.select("model", _("fin.model"), [("fixed", _("fin.model_fixed")), ("percent", _("fin.model_percent")), ("combined", _("fin.model_combined"))], "fixed") }}
+  {{ ui.field("fixed", _("fin.fixed"), "35000") }}{{ ui.field("percent", _("fin.percent"), "0") }}
+  {{ ui.field("min", _("fin.min"), "0") }}{{ ui.field("max", _("fin.max"), "0") }}
+  <div class="field"><label for="f-tc">{{ _("pool.company") }}</label><select id="f-tc" name="company_id"><option value="">{{ _("fin.default_tariff") }}</option>{% for c in clients %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
+  {{ ui.select("deal_type", _("fin.deal_type"), [("any", _("common.any")), ("domestic", _("fin.domestic")), ("international", _("fin.international"))], "any") }}
+  {{ ui.field("valid_from", _("fin.valid_from"), "", type="date", required=true) }}{{ ui.field("valid_to", _("fin.valid_to"), "", type="date") }}
+</div><button class="btn primary">{{ _("action.add") }}</button></form></details>
+</section>
+<section class="card"><h2>{{ _("fin.statement") }}</h2><p class="muted">{{ _("fin.statement_hint") }}</p>
+<form method="post" action="/admin/finance/statement" enctype="multipart/form-data" class="row">{{ ui.csrf() }}<input type="file" name="file" accept=".csv,text/csv" required aria-label="CSV"><button class="btn">{{ _("fin.import") }}</button></form>
+<p><a href="/admin/reports/pvd">{{ _("admin.pvd") }} →</a></p></section>
+</div>
+<h2>{{ _("fin.invoices") }}</h2>
+<div class="table-wrap"><table><thead><tr><th>№</th><th>{{ _("deal.client") }}</th><th class="num">{{ _("fin.amount") }}</th><th>{{ _("fin.due") }}</th><th>{{ _("common.status") }}</th><th>{{ _("fin.register_payment") }}</th></tr></thead>
+<tbody>{% for i in invoices %}<tr><td>{{ i.number }}{% if i.deal_id and me.can("admin.deal_content") %}<br><a href="/admin/deals/{{ i.deal_id }}"><small>{{ _("deal.open") }}</small></a>{% endif %}</td><td>{{ names.get(i.company_id) }}</td><td class="num">{{ money(i.amount_minor, i.currency) }}</td><td>{{ fmt_date(i.due_date) }}</td><td>{{ ui.status(i.status) }}</td>
+<td>{% if i.status == "issued" %}<form method="post" action="/admin/finance/invoices/{{ i.id }}/pay" class="row">{{ ui.csrf() }}<input type="text" name="amount" value="{{ from_minor(i.amount_minor) }}" aria-label="{{ _('fin.amount') }}" inputmode="decimal"><input type="text" name="reference" placeholder="{{ _('fin.reference') }}" aria-label="{{ _('fin.reference') }}"><button class="btn small ok">{{ _("fin.paid_btn") }}</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+<h2>{{ _("fin.accruals") }}</h2>
+<div class="table-wrap"><table><thead><tr><th>{{ _("common.date") }}</th><th>{{ _("deal.client") }}</th><th>{{ _("fin.income_type") }}</th><th class="num">{{ _("fin.amount") }}</th><th>{{ _("fin.event") }}</th><th></th></tr></thead>
+<tbody>{% for a in accruals %}<tr><td>{{ fmt_dt(a.created_at) }}</td><td>{{ names.get(a.company_id) }}</td><td>{{ income_map.get(a.income_type, a.income_type) }}</td><td class="num">{{ money(a.amount_minor, a.currency) }}</td><td><small><code>{{ a.event }}</code>{% if a.note %}<br>{{ a.note }}{% endif %}</small></td>
+<td>{% if not a.storno_of_id %}<details><summary class="btn small link">{{ _("fin.storno") }}</summary><form method="post" action="/admin/finance/accruals/{{ a.id }}/storno" class="stack" data-confirm="{{ _('fin.storno_confirm') }}">{{ ui.csrf() }}<input type="text" name="reason" placeholder="{{ _('deal.reason') }}" aria-label="{{ _('deal.reason') }}" required><button class="btn small danger">{{ _("fin.storno") }}</button></form></details>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

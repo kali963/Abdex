@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ order.number }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ _("order.title") }} {{ order.number }}</h1><div class="row">{{ ui.status(order.status) }} <span class="muted">v{{ order.version }}</span> {{ ui.route(order) }}</div></div>
+  <div class="row">
+    {% if deal %}<a class="btn primary" href="/deals/{{ deal.id }}">{{ _("deal.open") }} {{ deal.number }}</a>{% endif %}
+    {% if can_submit and me.can("order.create") %}<form method="post" action="/orders/{{ order.id }}/submit">{{ ui.csrf() }}<button class="btn primary">{{ _("orders.publish") }}</button></form>{% endif %}
+    {% if can_edit and me.can("order.create") %}<a class="btn" href="/orders/{{ order.id }}/edit">{{ _("action.edit") }}</a>{% endif %}
+    {% if me.can("order.create") %}<form method="post" action="/orders/{{ order.id }}/repeat">{{ ui.csrf() }}<button class="btn">{{ _("orders.repeat") }}</button></form>{% endif %}
+  </div>
+</div>
+{% if order.status == "moderation" %}<div class="alert warn">{{ _("orders.on_moderation") }}{% if order.moderation_note %}: {{ order.moderation_note }}{% endif %}</div>{% endif %}
+{% if order.status == "draft" and order.moderation_note %}<div class="alert error">{{ _("orders.returned") }}: {{ order.moderation_note }}</div>{% endif %}
+<div class="grid side">
+<div class="stack">
+  {% if order.status in ("published", "bidding") or bids %}
+  <section>
+    <h2>{{ _("bids.title") }} ({{ bids|length }})</h2>
+    {% if bids %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>{{ _("bids.carrier") }}</th><th class="num">{{ _("bids.price") }}</th><th>{{ _("bids.ready") }}</th><th>{{ _("bids.reliability") }}</th><th>{{ _("common.status") }}</th><th></th></tr></thead>
+      <tbody>{% for row in bids %}{% set b = row.bid %}<tr>
+        <td><a href="/company/card/{{ row.carrier.id }}">{{ row.carrier.name }}</a><br>{{ ui.level(row.carrier.verification_level) }}{% if b.comment %}<br><small>{{ b.comment }}</small>{% endif %}</td>
+        <td class="num"><b>{{ money(b.price_minor, b.currency) }}</b>{% if b.counter_price_minor %}<br><small class="muted">{{ _("bids.your_counter") }}: {{ money(b.counter_price_minor, b.currency) }}</small>{% endif %}</td>
+        <td>{{ fmt_dt(b.ready_at) if b.ready_at else "—" }}{% if b.valid_until %}<br><small class="muted">{{ _("bids.valid_until") }} {{ fmt_dt(b.valid_until) }}</small>{% endif %}</td>
+        <td><small>{{ _("stats.rating") }}: {{ row.stats.rating or "—" }}<br>{{ _("stats.completed") }}: {{ row.stats.completed }}<br>{{ _("bids.with_you") }}: {{ row.history_with_me }}</small></td>
+        <td>{{ ui.status(b.status) }}</td>
+        <td>{% if order.status == "bidding" and b.status == "active" and me.can("bid.accept") %}
+          <form method="post" action="/bids/{{ b.id }}/accept" data-confirm="{{ _('bids.accept_confirm') }}">{{ ui.csrf() }}<input type="hidden" name="idem" value="{{ new_token() }}"><button class="btn small ok">{{ _("bids.accept") }}</button></form>
+          <details><summary class="btn small link">{{ _("bids.counter") }}</summary>
+            <form method="post" action="/bids/{{ b.id }}/counter" class="stack">{{ ui.csrf() }}{{ ui.field("counter_price", _("bids.counter_price"), "", attrs='inputmode="decimal"', id="cp-" ~ b.id) }}<button class="btn small">{{ _("action.send") }}</button></form></details>
+          <form method="post" action="/bids/{{ b.id }}/reject">{{ ui.csrf() }}<button class="btn small link">{{ _("bids.reject") }}</button></form>
+        {% endif %}</td></tr>
+        {% if row.events|length > 1 %}<tr><td colspan="6"><details><summary class="muted">{{ _("bids.history") }}</summary><ul class="timeline">{% for e in row.events %}<li>{{ fmt_dt(e.created_at) }} · {{ _("bidev." ~ e.kind) }}{% if e.price_minor %} · {{ money(e.price_minor, b.currency) }}{% endif %}{% if e.comment %} · {{ e.comment }}{% endif %}</li>{% endfor %}</ul></details></td></tr>{% endif %}
+      {% endfor %}</tbody></table></div>
+    {% else %}{{ ui.empty(_("bids.none"), _("bids.none_hint")) }}{% endif %}
+  </section>
+  {% endif %}
+  <section class="card"><h2>{{ _("order.details") }}</h2>{% set show_address = true %}{% include "client/_order_details.html" %}</section>
+</div>
+<aside class="stack">
+  {{ ui.role_note(role_text) }}
+  <section class="card"><h3>{{ _("order.history") }}</h3><ul class="timeline">{% for h in history %}<li>{{ fmt_dt(h.created_at) }}<br><b>{{ status_label(h.to_status) }}</b>{% if h.reason %} · <small>{{ h.reason }}</small>{% endif %}{% if h.is_rollback %} <span class="badge warn">{{ _("order.rollback") }}</span>{% endif %}</li>{% else %}<li class="muted">{{ _("common.empty") }}</li>{% endfor %}</ul></section>
+  {% if versions|length > 1 %}<section class="card"><h3>{{ _("order.versions") }}</h3><ul>{% for v in versions %}<li>v{{ v.version }} · {{ fmt_dt(v.created_at) }} {{ v.change_note }}</li>{% endfor %}</ul></section>{% endif %}
+  {% if me.can("order.create") %}
+  <section class="card"><h3>{{ _("orders.template") }}</h3><form method="post" action="/orders/{{ order.id }}/template" class="stack">{{ ui.csrf() }}{{ ui.field("name", _("orders.template_name"), order.cargo_name) }}<button class="btn small">{{ _("orders.save_template") }}</button></form></section>
+  {% if can_cancel %}<section class="card"><form method="post" action="/orders/{{ order.id }}/cancel" class="stack" data-confirm="{{ _('orders.cancel_confirm') }}">{{ ui.csrf() }}{{ ui.field("reason", _("orders.cancel_reason"), "") }}<button class="btn danger">{{ _("orders.cancel") }}</button></form></section>{% endif %}
+  {% endif %}
+</aside>
+</div>
+{% endblock %}

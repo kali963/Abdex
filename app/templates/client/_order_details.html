@@ -1,0 +1,14 @@
+{% set bmap = body_map if body_map is defined else (body_types if body_types is defined and body_types is mapping else {}) %}
+<dl class="kv">
+  <dt>{{ _("order.route") }}</dt><dd>{% for p in order.points %}{{ _("point." ~ p.kind) }}: <b>{{ p.city }}</b>{% if show_address and p.address %}, {{ p.address }}{% endif %}{% if show_address and p.contact_name %} ({{ p.contact_name }} {{ p.contact_phone }}){% endif %}<br>{% endfor %}</dd>
+  <dt>{{ _("order.distance") }}</dt><dd>{% if order.distance_km %}{{ order.distance_km }} {{ _("unit.km") }} · ~{{ order.duration_hours }} {{ _("unit.h") }} <small class="muted">({{ _("order.route_source") }}: {{ order.route_source }})</small>{% else %}—{% endif %}</dd>
+  <dt>{{ _("order.load_from") }}</dt><dd>{{ fmt_dt(order.load_from) }}{% if order.load_to %} — {{ fmt_dt(order.load_to) }}{% endif %}</dd>
+  <dt>{{ _("order.unload_to") }}</dt><dd>{{ fmt_dt(order.unload_to) if order.unload_to else "—" }}</dd>
+  <dt>{{ _("order.cargo") }}</dt><dd>{{ order.cargo_name }} · {{ order.weight_kg }} {{ _("unit.kg") }}{% if order.volume_m3 %} · {{ order.volume_m3 }} {{ _("unit.m3") }}{% endif %}{% if order.places %} · {{ order.places }} {{ _("unit.places") }}{% endif %}</dd>
+  <dt>{{ _("order.body_type") }}</dt><dd>{{ bmap.get(order.body_type, order.body_type) }}{% if order.temperature_mode %} · {{ order.temperature_mode }}{% endif %}{% if order.needs_tail_lift %} · {{ _("order.tail_lift") }}{% endif %}</dd>
+  {% if order.adr_class %}<dt>ADR</dt><dd><span class="badge err">{{ _("order.adr_class") }} {{ order.adr_class }}</span> UN {{ order.un_number }}</dd>{% endif %}
+  {% if order.is_international %}<dt>{{ _("order.international") }}</dt><dd>{{ order.countries }} · {{ order.border_crossing }}{% if order.needs_cmr %} · CMR{% endif %}{% if order.needs_tir %} · TIR{% endif %}</dd>{% endif %}
+  <dt>{{ _("order.desired_rate") }}</dt><dd>{{ money(order.desired_rate_minor, order.currency) if order.desired_rate_minor else _("order.rate_open") }} · {{ _("pay." ~ order.payment_terms) }}{% if order.payment_delay_days %} ({{ order.payment_delay_days }} {{ _("unit.days") }}){% endif %} · {{ _("order.vat_included") if order.vat_included else _("order.vat_excluded") }}</dd>
+  {% if order.special_conditions %}<dt>{{ _("order.special") }}</dt><dd>{{ order.special_conditions }}</dd>{% endif %}
+  <dt>{{ _("order.bidding_deadline") }}</dt><dd>{{ fmt_dt(order.bidding_deadline) if order.bidding_deadline else "—" }}</dd>
+</dl>
