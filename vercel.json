@@ -1,10 +1,10 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "api/index.py": {
-      "includeFiles": "{app,alembic}/**",
-      "maxDuration": 60
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python",
+      "config": { "includeFiles": ["app/**", "alembic/**", "alembic.ini"] }
     }
-  },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
+  ],
+  "routes": [{ "src": "/(.*)", "dest": "api/index.py" }]
 }
