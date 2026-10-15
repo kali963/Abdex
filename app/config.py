@@ -14,6 +14,24 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+# Serverless hosting (Vercel): the filesystem is read-only except /tmp and there are no
+# long-running processes, so defaults change. Persistent data needs DATABASE_URL (PostgreSQL).
+ON_VERCEL = bool(os.getenv("VERCEL"))
+if ON_VERCEL:
+    os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/abdex.db")
+    os.environ.setdefault("STORAGE_DIR", "/tmp/abdex-storage")  # noqa: S108 — only writable, per-instance dir on Vercel
+    os.environ.setdefault("RUN_BACKGROUND_WORKER", "false")
+    os.environ.setdefault("AUTO_MIGRATE", "true")
+
+
+def _normalize_db_url(url: str) -> str:
+    """Hosted PostgreSQL providers (Neon, Vercel Postgres) give postgres:// URLs."""
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
 def _bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)
     if raw is None:
@@ -31,8 +49,10 @@ class Settings:
     app_env: str = field(default_factory=lambda: os.getenv("APP_ENV", "development"))
     secret_key: str = field(default_factory=lambda: os.getenv("SECRET_KEY", ""))
     database_url: str = field(
-        default_factory=lambda: os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'var' / 'abdex.db'}")
+        default_factory=lambda: _normalize_db_url(os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'var' / 'abdex.db'}"))
     )
+    # Apply Alembic migrations on startup (serverless deploys have no separate migration step).
+    auto_migrate: bool = field(default_factory=lambda: _bool("AUTO_MIGRATE", False))
     storage_dir: Path = field(default_factory=lambda: Path(os.getenv("STORAGE_DIR", str(BASE_DIR / "var" / "storage"))))
     # Admin interface lives on a separate host in production (FR-ACL-04). Empty = same host.
     admin_host: str = field(default_factory=lambda: os.getenv("ADMIN_HOST", ""))
@@ -65,7 +85,17 @@ def load_settings() -> Settings:
     if not s.secret_key:
         if s.is_production:
             raise RuntimeError("SECRET_KEY must be set in production")
-        object.__setattr__(s, "secret_key", secrets.token_urlsafe(48))
+        if ON_VERCEL and os.getenv("VERCEL_PROJECT_ID"):
+            # Demo deploy without SECRET_KEY: instances must share a key or logins break between them.
+            # Not secret — set SECRET_KEY in the Vercel project settings for anything beyond a demo.
+            import hashlib
+            import logging
+
+            logging.getLogger("abdex").warning("SECRET_KEY is not set; using a derived demo key")
+            object.__setattr__(s, "secret_key", hashlib.sha256(
+                ("abdex-demo:" + os.environ["VERCEL_PROJECT_ID"]).encode()).hexdigest())
+        else:
+            object.__setattr__(s, "secret_key", secrets.token_urlsafe(48))
     if s.is_production:
         # Hard rules that cannot be relaxed in production.
         object.__setattr__(s, "require_2fa_privileged", True)

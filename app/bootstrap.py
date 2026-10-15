@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from datetime import date
 
 from sqlalchemy import select
@@ -209,9 +210,38 @@ ${subject}
 }
 
 
+_init_lock = threading.Lock()
+_initialized = False
+
+
+def ensure_initialized() -> None:
+    """Idempotent, safe to call on every request (serverless runtimes may skip lifespan)."""
+    global _initialized
+    if _initialized:
+        return
+    with _init_lock:
+        if not _initialized:
+            init_db()
+            _initialized = True
+
+
+def _migrate() -> None:
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    root = Path(__file__).resolve().parent.parent
+    cfg = Config(str(root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(root / "alembic"))
+    command.upgrade(cfg, "head")
+
+
 def init_db() -> None:
-    if settings.database_url.startswith("sqlite"):  # PostgreSQL: `alembic upgrade head`
+    if settings.database_url.startswith("sqlite"):
         Base.metadata.create_all(engine)
+    elif settings.auto_migrate:
+        _migrate()  # otherwise PostgreSQL is migrated by `alembic upgrade head` at deploy
     db = SessionLocal()
     try:
         seed_reference(db)

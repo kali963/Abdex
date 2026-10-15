@@ -49,9 +49,9 @@ def create_app() -> FastAPI:
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
-        from app.bootstrap import init_db
+        from app.bootstrap import ensure_initialized
 
-        init_db()
+        ensure_initialized()
         task = None
         if settings.run_background_worker:
             from app.worker import run_forever
@@ -67,7 +67,10 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def context_middleware(request: Request, call_next):
+        from app.bootstrap import ensure_initialized
         from app.web.deps import DEVICE_COOKIE, LANG_COOKIE
+
+        await asyncio.to_thread(ensure_initialized)
 
         rid = request.headers.get("x-request-id", "")[:40] or uuid7().hex
         fwd = request.headers.get("x-forwarded-for", "")

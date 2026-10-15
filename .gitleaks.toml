@@ -1,0 +1,12 @@
+# Gitleaks config: default rules + narrow allowlist for known non-secrets.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures and the deny-list of weak passwords (not secrets)"
+paths = ['''^tests/''']
+regexTarget = "line"
+regexes = [
+  '''"123456789012", "password1234", "qwerty123456"''',
+  '''"1234567890qwe", "qwertyuiop12", "passwordpassword"''',
+]
