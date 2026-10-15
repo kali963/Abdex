@@ -102,7 +102,9 @@ def detect_duplicates(db: Session, *, company_id, bin_iin: str = "", iin: str = 
     for kind, others, details in checks:
         if others:
             details["other_companies"] = [str(o) for o in others]
-            alerts.append(raise_alert(db, kind, severity="high", company_id=company_id, details=details))
+            alert = raise_alert(db, kind, severity="high", company_id=company_id, details=details)
+            if alert is not None:
+                alerts.append(alert)
     return alerts
 
 

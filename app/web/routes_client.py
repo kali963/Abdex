@@ -58,6 +58,10 @@ def order_new(request: Request, template: str = "", db: Session = Depends(get_db
             raise NotFound()
         form = json.loads(tpl.data)
     templates_ = list(db.execute(select(OrderTemplate).where(OrderTemplate.company_id == me.company.id)).scalars())
+    from app.modules.analytics.product import track
+
+    track(db, "order_form_view")
+    db.commit()
     return render(request, "client/order_form.html", {**_form_ctx(db), "form": form, "templates": templates_,
                                                       "role_text": localized_setting(db, "platform.role_explanation")})
 

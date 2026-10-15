@@ -128,7 +128,12 @@ def logout(request: Request, db: Session = Depends(get_db), me: Principal | None
 
 
 @router.get("/register")
-def register_form(request: Request, type: str = "client", me: Principal | None = Depends(get_principal_optional)):
+def register_form(request: Request, type: str = "client", db: Session = Depends(get_db),
+                  me: Principal | None = Depends(get_principal_optional)):
+    from app.modules.analytics.product import track
+
+    track(db, "register_view", role=type if type in ("client", "carrier", "driver") else "")
+    db.commit()
     return render(request, "public/register.html", {"form": {"account_type": type}})
 
 
@@ -147,6 +152,9 @@ async def register(request: Request, db: Session = Depends(get_db)):
         safe = {k: v for k, v in form.items() if k not in ("password", "csrf_token")}
         return render(request, "public/register.html", {"errors": exc.fields, "form": safe}, status_code=422)
     raw, _ = accounts.create_session(db, user, mfa_passed=True)
+    from app.modules.analytics.product import track
+
+    track(db, "register_done", role=data.account_type)
     db.commit()
     resp = redirect("/verify-phone", flash=("info", "msg.code_sent"))
     _set_session_cookie(resp, raw)
@@ -170,6 +178,9 @@ async def verify_phone(request: Request, db: Session = Depends(get_db), me: Prin
         db.commit()
         return render(request, "public/verify_phone.html", {"error": "error.code_invalid"}, status_code=400)
     user.phone_verified = True
+    from app.modules.analytics.product import track
+
+    track(db, "phone_verified")
     db.commit()
     return redirect("/dashboard", flash=("success", "msg.phone_verified"))
 

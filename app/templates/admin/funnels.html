@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.funnels") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.funnels") }}</h1>
+<p class="muted">{{ _("fun.text") }}</p>
+<form class="card row" method="get"><label for="d1">{{ _("common.from") }}</label><input id="d1" type="date" name="date_from" value="{{ d1.isoformat() }}"><label for="d2">{{ _("common.to") }}</label><input id="d2" type="date" name="date_to" value="{{ d2.isoformat() }}"><button class="btn">{{ _("common.show") }}</button></form>
+<div class="grid three">
+{% for name, rows in funnels.items() %}
+<section class="card">
+  <h2>{{ _("fun." ~ name) }}</h2>
+  <ol class="funnel">{% for r in rows %}<li><div class="row"><b>{{ _("fun.step." ~ r.step) }}</b><span class="muted">{{ r.count }}</span></div>
+    <span class="meter wide"><i data-w="{{ (r.from_start // 10) * 10 }}"></i><small>{{ r.from_start }}% {{ _("fun.of_start") }}{% if not loop.first %} · {{ r.from_prev }}% {{ _("fun.of_prev") }}{% endif %}</small></span></li>{% endfor %}</ol>
+</section>
+{% endfor %}
+</div>
+{% endblock %}

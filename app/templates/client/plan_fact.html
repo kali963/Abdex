@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("planf.title") }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ _("planf.title") }}</h1><p class="muted">{{ _("planf.text") }}</p></div><a class="btn" href="/plan">{{ _("plan.title") }}</a></div>
+{% if problems %}
+<div class="alert error">{{ _("import.failed", count=problems|length) }}</div>
+<div class="table-wrap"><table><thead><tr><th>{{ _("import.row") }}</th><th>{{ _("import.column") }}</th><th>{{ _("import.problem") }}</th></tr></thead><tbody>
+{% for row, col, msg in problems %}<tr><td class="num">{{ row }}</td><td><code>{{ col }}</code></td><td>{{ _(msg) }}</td></tr>{% endfor %}</tbody></table></div>
+{% endif %}
+<div class="grid side">
+<div class="stack">
+{% if current and pf %}
+<section class="card">
+  <div class="page-head"><div><h2>{{ current.name }}</h2><small class="muted">{{ fmt_date(current.period_from) }} — {{ fmt_date(current.period_to) }}</small></div>
+    {% if me.can("order.create") %}<form method="post" action="/plan/periods/{{ current.id }}/delete" data-confirm="{{ _('common.confirm_delete') }}">{{ ui.csrf() }}<button class="btn small link">{{ _("action.remove") }}</button></form>{% endif %}</div>
+  <div class="grid three">
+    <div class="card stat"><b>{{ pf.total_plan }}</b><span>{{ _("planf.plan") }}</span></div>
+    <div class="card stat"><b>{{ pf.total_fact }}</b><span>{{ _("planf.fact") }}</span></div>
+    <div class="card stat"><b>{{ "%+d"|format(pf.total_deviation) }} · {{ pf.percent }}%</b><span>{{ _("planf.deviation") }}</span></div>
+  </div>
+  <div class="table-wrap"><table><thead><tr><th>{{ _("planf.direction") }}</th><th class="num">{{ _("planf.plan") }}</th><th class="num">{{ _("planf.fact") }}</th><th class="num">{{ _("planf.deviation") }}</th><th>{{ _("planf.progress") }}</th><th class="num">{{ _("planf.weight") }}</th></tr></thead><tbody>
+  {% for r in pf.lines %}<tr><td>{{ r.line.from_city }} → {{ r.line.to_city }}</td><td class="num">{{ r.line.trips }}</td><td class="num">{{ r.fact_trips }}</td>
+    <td class="num"><span class="badge {{ 'ok' if r.deviation >= 0 else ('warn' if r.percent >= 70 else 'err') }}">{{ "%+d"|format(r.deviation) }}</span></td>
+    <td><span class="meter wide" title="{{ r.percent }}%"><i data-w="{{ [((r.percent // 10) * 10), 100]|min }}"></i><small>{{ r.percent }}%</small></span></td>
+    <td class="num">{{ r.fact_weight }} / {{ r.line.weight_kg or "—" }}</td></tr>
+  {% else %}<tr><td colspan="6" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+  {% if pf.unplanned %}<h3>{{ _("planf.unplanned") }}</h3><ul class="plain-list">{% for k, v in pf.unplanned %}<li>{{ k[0]|title }} → {{ k[1]|title }}: <b>{{ v[0] }}</b></li>{% endfor %}</ul>{% endif %}
+</section>
+{% elif not problems %}{{ ui.empty(_("planf.none"), _("planf.none_hint")) }}{% endif %}
+</div>
+<aside class="stack">
+{% if items %}<section class="card"><h3>{{ _("planf.list") }}</h3><ul class="plain-list">{% for p in items %}<li><a href="/plan/periods?id={{ p.id }}" class="{{ 'active' if current and current.id == p.id }}">{{ p.name }}</a><br><small class="muted">{{ fmt_date(p.period_from) }} — {{ fmt_date(p.period_to) }}</small></li>{% endfor %}</ul></section>{% endif %}
+{% if me.can("order.create") %}
+<form method="post" action="/plan/periods" enctype="multipart/form-data" class="card stack">{{ ui.csrf() }}
+  <h3>{{ _("planf.upload") }}</h3>
+  {{ ui.field("name", _("planf.name"), "") }}
+  <div class="form-grid">{{ ui.field("period_from", _("common.from"), today.replace(day=1).isoformat(), type="date", required=true) }}{{ ui.field("period_to", _("common.to"), "", type="date", required=true) }}</div>
+  <div class="field"><label for="f-file">{{ _("import.upload") }}</label><input id="f-file" type="file" name="file" accept=".xlsx,.csv" required><span class="hint">{{ _("planf.columns") }}: <code>{{ columns|join(", ") }}</code> · <a href="/plan/periods/template.xlsx">{{ _("planf.template") }}</a></span></div>
+  <button class="btn primary">{{ _("planf.upload_btn") }}</button>
+</form>
+{% endif %}
+</aside>
+</div>
+{% endblock %}

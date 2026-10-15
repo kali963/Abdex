@@ -110,6 +110,12 @@ def place_bid(db: Session, order_id, carrier: Company, form: dict) -> Bid:
     notify_event(db, "bid.received", params={"number": order.number}, link=f"/orders/{order.id}",
                  client_company_id=order.client_company_id, dedup=f"bid:{bid.id}:{bid.price_minor}")
     audit(db, "bid.placed", object_type="bid", object_id=bid.id, details={"order": str(order.id)})
+    from app.modules.platform.antifraud import track
+
+    track(db, "bid", company_id=carrier.id)
+    from app.modules.analytics.product import track as product_event
+
+    product_event(db, "bid_placed")
     return bid
 
 
@@ -227,6 +233,9 @@ def accept(db: Session, bid_id, client: Company, *, idempotency_key: str | None 
     _event(db, bid, "accepted", bid.price_minor)
     idempotent_store(db, ctx.user_id, idempotency_key, "bid.accept", str(deal.id))
     audit(db, "bid.accepted", object_type="deal", object_id=deal.id, details={"bid": str(bid.id)})
+    from app.modules.analytics.product import track as product_event
+
+    product_event(db, "bid_accepted")
     return deal
 
 

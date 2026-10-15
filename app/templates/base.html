@@ -18,6 +18,7 @@
 {% if me and me.session.mfa_passed %}{% set p = request.url.path %}
   {% if me.session.is_admin %}
     {% set _n = nav.append(("/admin", "admin.home", "home", p == "/admin")) %}
+    {% set _n = nav.append(("/admin/approvals", "admin.approvals", "check", p.startswith("/admin/approvals"))) %}
     {% if me.can("admin.orders") %}{% set _n = nav.append(("/admin/orders", "admin.orders", "box", p.startswith("/admin/orders"))) %}{% endif %}
     {% if me.can("admin.moderation") %}{% set _n = nav.append(("/admin/moderation", "admin.moderation", "shield", p.startswith("/admin/moderation"))) %}{% endif %}
     {% if me.can("admin.antifraud") %}{% set _n = nav.append(("/admin/antifraud", "admin.antifraud", "alert", p.startswith("/admin/antifraud"))) %}{% endif %}
@@ -29,7 +30,8 @@
     {% if me.can("admin.dictionaries") %}{% set _n = nav.append(("/admin/dictionaries", "admin.dictionaries", "list", p.startswith("/admin/dictionaries"))) %}{% set _n = nav.append(("/admin/templates", "admin.templates", "deal", p.startswith("/admin/templates"))) %}{% endif %}
     {% if me.can("admin.finance") %}{% set _n = nav.append(("/admin/promo", "admin.promo", "tag", p.startswith("/admin/promo"))) %}{% endif %}
     {% if me.can("admin.settings") %}{% set _n = nav.append(("/admin/flags", "admin.flags", "tag", p.startswith("/admin/flags"))) %}{% set _n = nav.append(("/admin/settings", "admin.settings", "gear", p.startswith("/admin/settings"))) %}{% set _n = nav.append(("/admin/permissions", "admin.permissions", "shield", p.startswith("/admin/permissions"))) %}{% endif %}
-    {% if me.can("admin.audit") %}{% set _n = nav.append(("/admin/audit", "admin.audit", "shield", p.startswith("/admin/audit"))) %}{% set _n = nav.append(("/admin/integrations", "admin.integrations", "gear", p.startswith("/admin/integrations"))) %}{% endif %}
+    {% if me.can("admin.kpi") %}{% set _n = nav.append(("/admin/funnels", "admin.funnels", "chart", p.startswith("/admin/funnels"))) %}{% endif %}
+    {% if me.can("admin.audit") %}{% set _n = nav.append(("/admin/security", "admin.security", "alert", p.startswith("/admin/security"))) %}{% set _n = nav.append(("/admin/audit", "admin.audit", "shield", p.startswith("/admin/audit"))) %}{% set _n = nav.append(("/admin/integrations", "admin.integrations", "gear", p.startswith("/admin/integrations"))) %}{% endif %}
     {% set _n = nav.append(("/account/security", "nav.account", "user", p.startswith("/account"))) %}
   {% elif me.company %}
     {% if me.role == "driver" %}

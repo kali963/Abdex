@@ -77,6 +77,7 @@ class Settings:
     telegram_bot_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
     # Secret Telegram sends in X-Telegram-Bot-Api-Secret-Token (set via setWebhook secret_token)
     telegram_webhook_secret: str = field(default_factory=lambda: os.getenv("TELEGRAM_WEBHOOK_SECRET", ""))
+    metrics_token: str = field(default_factory=lambda: os.getenv("METRICS_TOKEN", ""))  # NFR-OBS-01
 
     @property
     def is_production(self) -> bool:

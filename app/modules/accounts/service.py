@@ -185,6 +185,10 @@ def register(db: Session, data: RegistrationData) -> User:
 
         detect_duplicates(db, company_id=company.id, bin_iin=company.bin_iin)
     audit(db, "user.register", object_type="user", object_id=user.id, user_id=user.id, company_id=company.id)
+    db.flush()
+    from app.modules.platform.antifraud import track
+
+    track(db, "register", user_id=user.id, company_id=company.id if company else None)  # SEC-FRD-02/03
     send_otp(db, phone, "verify_phone")
     return user
 
@@ -276,6 +280,9 @@ def create_session(db: Session, user: User, *, mfa_passed: bool, is_admin: bool 
     user.last_login_at = now
     db.flush()
     audit(db, "auth.login", object_type="user", object_id=user.id, user_id=user.id, company_id=company_id)
+    from app.modules.platform.antifraud import track
+
+    track(db, "login", user_id=user.id, company_id=company_id)  # SEC-FRD-02
     if not known_device and had_sessions and ctx.device_id:
         # SEC-AUT-11 / FR-NTF-05: security notifications cannot be disabled
         from app.modules.notifications.service import notify_user
@@ -489,6 +496,9 @@ def request_bank_change(db: Session, company: Company, user: User, iban: str, ba
     db.add(acc)
     db.flush()
     send_otp(db, user.phone, "bank_change", context=str(acc.id))
+    from app.modules.platform.antifraud import track
+
+    track(db, "bank_change", user_id=user.id, company_id=company.id)  # SEC-FRD-03
     audit(db, "company.bank_change_requested", object_type="bank_account", object_id=acc.id)
     return acc
 

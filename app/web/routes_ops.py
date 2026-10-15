@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core import ratelimit
 from app.core.audit import audit
-from app.core.errors import NotFound
+from app.core.errors import NotFound, ValidationFailed
 from app.core.i18n import translate
 from app.db import get_db, utcnow
 from app.modules.accounts import support_access
@@ -31,7 +31,7 @@ router = APIRouter(dependencies=[Depends(csrf_protect)])
 RETURN_COOKIE = "abdex_imp_return"
 
 
-def _parse_day(raw: str | None, default: date) -> date:
+def _parse_day(raw: str | None, default: date | None) -> date | None:
     try:
         return date.fromisoformat(raw) if raw else default
     except ValueError:
@@ -229,3 +229,64 @@ def impersonation_end(request: Request, db: Session = Depends(get_db), me: Princ
         resp.delete_cookie(SESSION_COOKIE, path="/")
     resp.delete_cookie(RETURN_COOKIE, path="/")
     return resp
+
+
+# ------------------------------------------------------------------ plan / fact (FR-PLAN-03)
+
+
+@router.get("/plan/periods")
+def plan_periods(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("plan.view"))):
+    from app.modules.orders import plan as plans
+
+    if me.company.kind != "client":
+        raise NotFound()
+    items = plans.company_plans(db, me.company.id)
+    pid = request.query_params.get("id")
+    current = plans.get_plan(db, me.company.id, parse_uuid(pid)) if pid else (items[0] if items else None)
+    return render(request, "client/plan_fact.html", {
+        "items": items, "current": current, "pf": plans.plan_vs_fact(db, current) if current else None,
+        "columns": plans.COLUMNS, "today": utcnow().date()})
+
+
+@router.get("/plan/periods/template.xlsx")
+def plan_template(me: Principal = Depends(require("plan.view"))):
+    from app.modules.orders import plan as plans
+
+    return Response(plans.template_xlsx(),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="abdex-plan-template.xlsx"'})
+
+
+@router.post("/plan/periods")
+async def plan_upload(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("order.create"))):
+    from app.modules.orders import plan as plans
+
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not getattr(upload, "filename", ""):
+        raise ValidationFailed({"file": "error.required"})
+    ratelimit.hit("upload", str(me.user.id))
+    data = await upload.read()  # the request size is capped by the middleware (413)
+    plan, problems = plans.upload(db, me.company, name=str(form.get("name", "")),
+                                  period_from=_parse_day(str(form.get("period_from", "")), None),
+                                  period_to=_parse_day(str(form.get("period_to", "")), None),
+                                  filename=upload.filename, data=data)
+    if problems:
+        db.rollback()
+        items = plans.company_plans(db, me.company.id)
+        return render(request, "client/plan_fact.html", {"items": items, "current": None, "pf": None,
+                                                         "problems": problems, "columns": plans.COLUMNS,
+                                                         "today": utcnow().date()}, status_code=422)
+    db.commit()
+    return redirect(f"/plan/periods?id={plan.id}", flash=("success", "planf.uploaded"))
+
+
+@router.post("/plan/periods/{pid}/delete")
+def plan_delete(pid: str, db: Session = Depends(get_db), me: Principal = Depends(require("order.create"))):
+    from app.modules.orders import plan as plans
+
+    p = plans.get_plan(db, me.company.id, parse_uuid(pid))
+    p.is_deleted = True
+    audit(db, "plan.deleted", object_type="shipment_plan", object_id=p.id)
+    db.commit()
+    return redirect("/plan/periods", flash=("success", "msg.saved"))

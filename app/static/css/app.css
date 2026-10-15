@@ -490,3 +490,9 @@ table.matrix input[type=checkbox] { width: 1.15rem; height: 1.15rem; }
   .panel-3d, .stat { transform: none !important; }
 }
 @media print { .topbar, .tabbar, footer.site, .actions, form { display: none !important; } body { background: #fff; } .card, .table-wrap { box-shadow: none; } }
+.meter.wide { min-width: 7rem; }
+.funnel { list-style: none; padding: 0; margin: .5rem 0 0; display: grid; gap: .7rem; } .funnel .row { justify-content: space-between; }
+form.af-rule { flex-wrap: wrap; align-items: center; gap: .5rem .8rem; }
+form.af-rule select { width: auto; min-width: 9rem; }
+form.af-rule .inline-num { display: inline-flex; align-items: center; gap: .35rem; font-size: .85rem; color: var(--muted); }
+form.af-rule .inline-num input { width: 5.5rem; }

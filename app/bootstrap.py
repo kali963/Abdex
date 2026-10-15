@@ -137,6 +137,17 @@ SETTINGS = {
     "matching.weights": ({"body": 25, "geo": 20, "history": 15, "rating": 20, "level": 10, "load": 10},
                          "FR-BID-04: веса скоринга автоподбора перевозчиков"),
     "impersonation.minutes": (30, "FR-ADM-05: длительность сеанса работы от имени пользователя, мин"),
+    "ratelimit.limits": ({"bid": [60, 3600], "order_create": [100, 3600], "export": [20, 3600], "login": [10, 300]},
+                         "SEC-APP-07: лимиты действий {корзина: [число, окно в секундах]}"),
+    "retention.policies": ({"otp_codes": 7, "sessions": 180, "notifications": 365, "outbox": 90, "device_events": 180,
+                            "product_events": 400, "idempotency_keys": 30, "webhook_deliveries": 90,
+                            "invitations": 90, "support_grants": 365},
+                           "SEC-DAT-06: сроки хранения по категориям, дней (0 — не удалять)"),
+    "security.thresholds": ({"failed_logins": 5, "bulk_exports_per_hour": 5, "access_denied_per_hour": 20,
+                             "work_from": 8, "work_to": 20, "timezone": "Asia/Almaty"},
+                            "SEC-LOG-06: пороги корреляции событий безопасности"),
+    "security.vuln_status": ("CI: pip-audit, bandit, gitleaks — без замечаний высокого уровня",
+                             "SEC-LOG-08: статус уязвимостей для ежемесячного отчета"),
 }
 
 FLAGS = [
@@ -247,7 +258,20 @@ def _migrate() -> None:
     command.upgrade(cfg, "head")
 
 
+def _ratelimit_loader() -> dict:
+    db = SessionLocal()
+    try:
+        from app.modules.platform.service import get_setting
+
+        return get_setting(db, "ratelimit.limits", {}) or {}
+    finally:
+        db.close()
+
+
 def init_db() -> None:
+    from app.core import ratelimit
+
+    ratelimit.loader = _ratelimit_loader
     if settings.database_url.startswith("sqlite"):
         Base.metadata.create_all(engine)
     elif settings.auto_migrate:
@@ -293,6 +317,9 @@ def seed_reference(db) -> None:
     from app.modules.accounts.acl import seed as seed_acl
 
     seed_acl(db)
+    from app.modules.platform.antifraud import seed as seed_antifraud
+
+    seed_antifraud(db)
     if not db.execute(select(Tariff.id).where(Tariff.company_id.is_(None))).first():
         db.add(Tariff(name="Базовый: фиксированное вознаграждение", model="fixed", fixed_minor=3_500_000,
                       valid_from=date(2026, 1, 1)))

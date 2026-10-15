@@ -2,7 +2,7 @@
 {% import "components.html" as ui with context %}
 {% block title %}{{ _("nav.plan") }}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>{{ _("plan.title") }}</h1><div class="row"><a class="btn small" href="/plan?week={{ prev }}">← {{ _("plan.prev") }}</a><a class="btn small" href="/plan">{{ _("plan.today") }}</a><a class="btn small" href="/plan?week={{ next }}">{{ _("plan.next") }} →</a></div></div>
+<div class="page-head"><h1>{{ _("plan.title") }}</h1><div class="row">{% if me.company.kind == "client" %}<a class="btn small" href="/plan/periods">{{ _("planf.title") }}</a>{% endif %}<a class="btn small" href="/plan?week={{ prev }}">← {{ _("plan.prev") }}</a><a class="btn small" href="/plan">{{ _("plan.today") }}</a><a class="btn small" href="/plan?week={{ next }}">{{ _("plan.next") }} →</a></div></div>
 <div class="calendar">
 {% for d in days %}{% set key = fmt_date(d) %}
   <div class="day"><b>{{ _("weekday." ~ d.weekday()) }}, {{ key }}</b>
