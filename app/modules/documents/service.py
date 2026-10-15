@@ -196,6 +196,13 @@ def mark_status(db: Session, doc: Document, status: str, reason: str = "") -> No
         raise ValidationFailed({"status": "error.invalid_choice"})
     doc.status = status
     doc.reject_reason = reason[:300]
+    if status == "rejected" and doc.deal_id and doc.company_id and not doc.is_generated:
+        from app.modules.deals.models import Deal
+        from app.modules.rating.service import on_document_rejected
+
+        deal = db.get(Deal, doc.deal_id)
+        if deal is not None:
+            on_document_rejected(db, deal, doc.company_id)  # FR-RAT-01: document quality
     audit(db, "document.status", object_type="document", object_id=doc.id, details={"status": status})
 
 
@@ -204,3 +211,70 @@ def get_file(db: Session, file_id) -> tuple[StoredFile, bytes]:
     if f is None or f.scan_status != "clean":
         raise NotFound()
     return f, storage.get(f.storage_key)
+
+
+# ---------------------------------------------------------------- FR-DOC-09: bulk export by period
+
+PERIOD_ZIP_MAX_DOCS = 2000
+PERIOD_ZIP_MAX_BYTES = 200 * 1024 * 1024
+_EXT = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png"}
+
+
+def period_documents(db: Session, company_id, date_from: date, date_to: date) -> list[tuple[Document, str]]:
+    """Documents of the company's deals (either side) and its own platform invoices/acts in the period."""
+    from datetime import datetime as _dt
+    from datetime import time as _time
+    from datetime import timezone as _tz
+
+    from sqlalchemy import or_
+
+    from app.modules.deals.models import Deal
+
+    start = _dt.combine(date_from, _time.min, tzinfo=_tz.utc)
+    end = _dt.combine(date_to, _time.max, tzinfo=_tz.utc)
+    deals = select(Deal.id).where(or_(Deal.client_company_id == company_id, Deal.carrier_company_id == company_id))
+    rows = db.execute(
+        select(Document, Deal.number).outerjoin(Deal, Deal.id == Document.deal_id)
+        .where(Document.created_at >= start, Document.created_at <= end, Document.is_deleted.is_(False),
+               Document.file_id.is_not(None),
+               or_(Document.deal_id.in_(deals), Document.company_id == company_id))
+        .order_by(Document.created_at).limit(PERIOD_ZIP_MAX_DOCS + 1)).all()
+    # Platform fee documents of another company sit on the same deal: never hand them to the counterparty.
+    fee_types = ("fee_invoice", "fee_act")
+    return [(d, n or "") for d, n in rows if d.doc_type not in fee_types or d.company_id == company_id]
+
+
+def period_zip(db: Session, company_id, date_from: date, date_to: date, labels: dict[str, str]) -> bytes:
+    import csv
+    import zipfile
+
+    if date_to < date_from or (date_to - date_from).days > 366:
+        raise ValidationFailed({"date_to": "error.period"})
+    docs = period_documents(db, company_id, date_from, date_to)
+    if not docs:
+        raise AppError("export_empty", status_code=404)
+    if len(docs) > PERIOD_ZIP_MAX_DOCS:
+        raise AppError("export_too_large", limit=PERIOD_ZIP_MAX_DOCS)
+    buf = io.BytesIO()
+    inventory = io.StringIO()
+    w = csv.writer(inventory, delimiter=";")
+    w.writerow(["№", labels["deal"], labels["type"], labels["number"], labels["title"], labels["status"],
+                labels["date"], "SHA-256", labels["file"]])
+    total = 0
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for i, (doc, deal_number) in enumerate(docs, start=1):
+            f = db.get(StoredFile, doc.file_id)
+            if f is None or f.scan_status != "clean":
+                continue
+            data = storage.get(f.storage_key)
+            total += len(data)
+            if total > PERIOD_ZIP_MAX_BYTES:
+                raise AppError("export_too_large", limit=PERIOD_ZIP_MAX_DOCS)
+            folder = deal_number or "platform"
+            name = f"{folder}/{doc.doc_type}-{doc.number}.{_EXT.get(f.content_type, 'bin')}".replace("..", ".")
+            z.writestr(name, data)
+            w.writerow([i, deal_number, labels.get(f"doc.{doc.doc_type}", doc.doc_type), doc.number, doc.title,
+                        labels.get(f"st.{doc.status}", doc.status), doc.created_at.strftime("%d.%m.%Y %H:%M"),
+                        f.sha256, name])
+        z.writestr("inventory.csv", "﻿" + inventory.getvalue())
+    return buf.getvalue()

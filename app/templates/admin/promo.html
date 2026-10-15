@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.promo") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.promo") }}</h1>
+<p class="muted">{{ _("promo.admin_text") }}</p>
+<div class="grid side">
+<div class="table-wrap"><table><thead><tr><th>{{ _("promo.code") }}</th><th>{{ _("promo.kind") }}</th><th>{{ _("promo.period") }}</th><th class="num">{{ _("promo.uses") }}</th><th>{{ _("common.status") }}</th><th></th></tr></thead>
+<tbody>{% for p in items %}<tr><td><b>{{ p.code }}</b>{% if p.description %}<br><small class="muted">{{ p.description }}</small>{% endif %}</td>
+  <td>{{ _("promo.kind." ~ p.kind, value=(money(p.value) if p.kind == "fixed" else p.value)) }}{% if p.kind != "free_days" %}<br><small class="muted">{{ _("promo.per_company", n=p.deals_per_company) }}</small>{% endif %}</td>
+  <td>{{ fmt_date(p.valid_from) }} — {{ fmt_date(p.valid_to) if p.valid_to else "∞" }}</td>
+  <td class="num">{{ p.uses }}{% if p.max_uses %} / {{ p.max_uses }}{% endif %}</td>
+  <td><span class="badge {{ 'ok' if p.active else '' }}">{{ _("promo.on") if p.active else _("promo.off") }}</span></td>
+  <td><form method="post" action="/admin/promo/{{ p.id }}/toggle">{{ ui.csrf() }}<button class="btn small">{{ _("promo.disable") if p.active else _("promo.enable") }}</button></form></td></tr>
+{% else %}<tr><td colspan="6" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+<form method="post" action="/admin/promo" class="card stack">{{ ui.csrf() }}
+  <h2>{{ _("promo.new") }}</h2>
+  {{ ui.field("code", _("promo.code"), "", required=true, hint=_("promo.code_hint")) }}
+  {{ ui.select("kind", _("promo.kind"), [("percent", _("promo.kind_percent")), ("fixed", _("promo.kind_fixed")), ("free_days", _("promo.kind_free_days"))], "percent") }}
+  {{ ui.field("value", _("promo.value"), "", required=true, hint=_("promo.value_hint"), attrs='inputmode="decimal"') }}
+  <div class="form-grid">{{ ui.field("valid_from", _("common.from"), "", type="date") }}{{ ui.field("valid_to", _("common.to"), "", type="date") }}</div>
+  <div class="form-grid">{{ ui.field("max_uses", _("promo.max_uses"), "0", attrs='inputmode="numeric"', hint=_("promo.max_uses_hint")) }}{{ ui.field("deals_per_company", _("promo.deals_per_company"), "1", attrs='inputmode="numeric"') }}</div>
+  {{ ui.field("description", _("promo.description"), "") }}
+  <button class="btn primary">{{ _("promo.create") }}</button>
+</form>
+</div>
+{% endblock %}

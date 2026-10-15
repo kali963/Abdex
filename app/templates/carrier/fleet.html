@@ -2,7 +2,7 @@
 {% import "components.html" as ui with context %}
 {% block title %}{{ _("nav.fleet") }}{% endblock %}
 {% block content %}
-<h1>{{ _("nav.fleet") }}</h1>
+<div class="page-head"><h1>{{ _("nav.fleet") }}</h1><a class="btn" href="/fleet/schedule">{{ _("schedule.title") }}</a></div>
 <div class="grid two">
 <section>
   <h2>{{ _("fleet.vehicles") }} ({{ vehicles|length }})</h2>

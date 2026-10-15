@@ -30,6 +30,8 @@ from app.modules.deals.models import (
 )
 from app.modules.fleet.models import Driver, Vehicle
 from app.modules.orders import flow
+from app.modules.rating import service as rating
+from app.modules.webhooks import service as webhooks
 from app.modules.orders.models import Order, StatusHistory
 from app.modules.platform.service import get_setting, next_number, raise_alert
 
@@ -242,6 +244,8 @@ def on_document_signed(db: Session, deal: Deal) -> None:
             flow.transition(db, order, flow.DOCS_SIGNED, actor=flow.SYSTEM, reason="contract signed by both sides")
         # FR-DEAL-05: formalized via AbdEX = accepted bid on platform + snapshot + contract signed by both
         deal.formalized_via_platform = latest_snapshot(db, deal.id) is not None
+        webhooks.enqueue(db, (deal.client_company_id, deal.carrier_company_id), "deal.document_signed",
+                         {"deal_id": str(deal.id), "deal_number": deal.number, "document": contract.number})
     elif contract.status == "required":
         contract.status = "uploaded"
 
@@ -321,6 +325,10 @@ def propose_executor_change(db: Session, acc: DealAccess, vehicle_id, driver_id,
     d = db.get(Driver, driver_id) if driver_id else None
     if (vehicle_id and v is None) or (driver_id and d is None):
         raise ValidationFailed({"vehicle_id": "error.invalid_choice"})
+    from app.modules.fleet.schedule import ensure_free
+
+    ensure_free(db, acc.order, vehicle_id=v.id if v else None, driver_id=d.id if d else None,
+                exclude_deal_id=acc.deal.id)  # FR-PLAN-04
     ch = ExecutorChange(deal_id=acc.deal.id, old_vehicle_id=acc.deal.vehicle_id, new_vehicle_id=v.id if v else None,
                         old_driver_id=acc.deal.driver_id, new_driver_id=d.id if d else None, reason=reason[:500],
                         created_by=get_ctx().user_id)
@@ -383,8 +391,12 @@ def add_checkpoint(db: Session, acc: DealAccess, kind: str, *, lat=None, lng=Non
         flow.transition(db, order, target, actor=flow.DRIVER, reason=f"checkpoint {kind}")
     if kind == "unloaded":
         acc.deal.geo_consent = False  # stop geo sharing automatically after the trip
+        rating.on_unloaded_late(db, acc.deal, order)
     from app.modules.notifications.service import notify_event
 
+    webhooks.enqueue(db, (acc.deal.client_company_id, acc.deal.carrier_company_id), "deal.checkpoint",
+                     {"deal_id": str(acc.deal.id), "deal_number": acc.deal.number, "kind": kind,
+                      "at": cp.happened_at.isoformat()})
     notify_event(db, "trip.checkpoint", params={"number": acc.deal.number, "kind": kind},
                  link=f"/deals/{acc.deal.id}", client_company_id=acc.deal.client_company_id,
                  carrier_company_id=acc.deal.carrier_company_id, dedup=f"cp:{cp.id}")
@@ -460,11 +472,17 @@ def add_dispute_position(db: Session, acc: DealAccess, dispute: Dispute, text: s
         raise Forbidden()
 
 
-def resolve_dispute(db: Session, dispute: Dispute, *, outcome: str, resolution: str, manager: User) -> None:
+FAULTS = ("none", "carrier", "client")
+
+
+def resolve_dispute(db: Session, dispute: Dispute, *, outcome: str, resolution: str, manager: User,
+                    fault: str = "none") -> None:
     if dispute.status != "open":
         raise Conflict("dispute_closed")
     if outcome not in (flow.CLOSED_DOCS, flow.CANCELLED):
         raise ValidationFailed({"outcome": "error.invalid_choice"})
+    if fault not in FAULTS:
+        raise ValidationFailed({"fault": "error.invalid_choice"})
     deal = db.get(Deal, dispute.deal_id)
     order = flow.lock_order(db, deal.order_id)
     flow.transition(db, order, outcome, actor=flow.MANAGER, reason=resolution, user_id=manager.id)
@@ -473,7 +491,10 @@ def resolve_dispute(db: Session, dispute: Dispute, *, outcome: str, resolution: 
     dispute.resolution = resolution[:4000]
     dispute.resolved_by = manager.id
     dispute.resolved_at = utcnow()
-    audit(db, "dispute.resolved", object_type="dispute", object_id=dispute.id, details={"outcome": outcome})
+    dispute.fault = fault
+    rating.on_dispute_resolved(db, deal, outcome=outcome, fault=fault)
+    audit(db, "dispute.resolved", object_type="dispute", object_id=dispute.id,
+          details={"outcome": outcome, "fault": fault})
 
 
 def open_dispute_for(db: Session, deal_id) -> Dispute | None:

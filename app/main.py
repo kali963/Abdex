@@ -142,12 +142,17 @@ def create_app() -> FastAPI:
         routes_client,
         routes_deals,
         routes_misc,
+        routes_ops,
         routes_public,
     )
 
-    for module in (routes_public, routes_account, routes_client, routes_carrier, routes_deals, routes_misc,
-                   routes_admin, routes_api):
+    # routes_ops first: its static paths (/orders/series, /fleet/schedule) must win over /orders/{oid}
+    for module in (routes_public, routes_account, routes_ops, routes_client, routes_carrier, routes_deals,
+                   routes_misc, routes_admin, routes_api):
         app.include_router(module.router)
+    from app.web import routes_admin_ops
+
+    app.include_router(routes_admin_ops.router)
     app.include_router(routes_api.html, include_in_schema=False)
     from app.web import routes_hooks
 

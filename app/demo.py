@@ -89,7 +89,9 @@ def seed_demo(db) -> None:
                 license_until=date.today() + timedelta(days=900), status="approved", adr_permit=True)
     d2 = Driver(company_id=carrier.id, full_name="Нурлан Ахметов", iin=make_bin("79120230045"), phone="+77020000004",
                 license_categories="C,CE", status="approved")
-    db.add_all([v1, v2, d1, d2])
+    v4 = Vehicle(company_id=carrier.id, plate="888TNT03", vin="YS2R4X20005123456", body_type="tent", capacity_kg=20000,
+                 volume_m3=82, status="approved", insurance_until=date.today() + timedelta(days=300))
+    db.add_all([v1, v2, v4, d1, d2])
 
     carrier2 = _company(db, "carrier", "ИП Сапаров А.К.", "88062030078", 1, form="ИП", phone="+77030000001")
     owner2 = _user(db, "+77030000001", "Айдар Сапаров")
@@ -108,7 +110,7 @@ def seed_demo(db) -> None:
                   min_minor=1_500_000, max_minor=0, valid_from=date(2026, 1, 1), deal_type="international"))
     db.commit()
 
-    _build_orders(db, client, carrier, carrier2, owner, logist, fleet_owner, owner2, staff, v1, v2, v3, d1, d2, d3)
+    _build_orders(db, client, carrier, carrier2, owner, logist, fleet_owner, owner2, staff, v1, v2, v3, d1, d2, d3, v4)
 
 
 def _as(user, company, role):
@@ -132,7 +134,7 @@ def _form(cities, cargo, weight, rate, load_in_days, body="tent", **extra):
     return form
 
 
-def _build_orders(db, client, carrier, carrier2, owner, logist, fleet_owner, owner2, staff, v1, v2, v3, d1, d2, d3):
+def _build_orders(db, client, carrier, carrier2, owner, logist, fleet_owner, owner2, staff, v1, v2, v3, d1, d2, d3, v4):
     from app.modules.bids.service import accept, counter_offer, place_bid
     from app.modules.billing.models import Invoice
     from app.modules.billing.service import register_payment
@@ -180,7 +182,7 @@ def _build_orders(db, client, carrier, carrier2, owner, logist, fleet_owner, own
     counter_offer(db, b22, "380000", "Можем сразу согласовать на 380 000")
     db.commit()
     reset_ctx(tok)
-    b3 = bid(o3, carrier, fleet_owner, 375000, v1, d1)
+    b3 = bid(o3, carrier, fleet_owner, 375000, v4, d2)  # v1/d1 are busy on o4 the same days (FR-PLAN-04)
     b4 = bid(o4, carrier, fleet_owner, 300000, v1, d1)
 
     def sign_both(deal):
@@ -205,8 +207,15 @@ def _build_orders(db, client, carrier, carrier2, owner, logist, fleet_owner, own
                         (deal4, ("arrived_load", "loaded", "departed", "arrived_unload", "unloaded"))):
         acc = deals.get_access(db, deal.id, user=fleet_owner, company_id=carrier.id, role="fleet_owner")
         acc.deal.geo_consent = True
+        from app.modules.integrations.adapters import CITY_COORDS
+
+        order = acc.order
+        a = CITY_COORDS.get(order.origin.city.lower(), (43.24, 76.89))
+        b = CITY_COORDS.get(order.destination.city.lower(), (51.17, 71.45))
         for i, k in enumerate(kinds):
-            deals.add_checkpoint(db, acc, k, lat=43.2 + i * 0.3, lng=76.9 + i * 0.4, offline_id=f"demo-{deal.id}-{k}")
+            f = {"arrived_load": 0.0, "loaded": 0.0, "departed": 0.35, "arrived_unload": 1.0, "unloaded": 1.0}[k]
+            deals.add_checkpoint(db, acc, k, lat=round(a[0] + (b[0] - a[0]) * f + 0.01 * i, 4),
+                                 lng=round(a[1] + (b[1] - a[1]) * f, 4), offline_id=f"demo-{deal.id}-{k}")
         db.commit()
     acc4 = deals.get_access(db, deal4.id, user=fleet_owner, company_id=carrier.id, role="fleet_owner")
     pdf = render_pdf("CMR / ТТН", "Груз принят без замечаний. Пломба № 445566.")

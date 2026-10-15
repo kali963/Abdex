@@ -8,4 +8,14 @@
 <form method="post" action="/admin/support/{{ t.id }}" class="stack">{{ ui.csrf() }}{{ ui.textarea("body", _("chat.message"), "", rows=3) }}
 {{ ui.select("status", _("common.status"), [("open", status_label("open")), ("in_progress", status_label("in_progress")), ("resolved", status_label("resolved"))], t.status) }}
 <button class="btn primary">{{ _("action.send") }}</button></form>
+{% if me.can("admin.impersonate") %}
+<section class="card">
+  <h3>{{ _("imp.title") }}</h3>
+  <p class="muted"><small>{{ _("imp.consent_given", until=fmt_dt(grant.valid_until)) if grant else _("imp.no_consent") }}</small></p>
+  <form method="post" action="/admin/users/{{ t.user_id }}/impersonate" class="stack" data-confirm="{{ _('imp.confirm') }}">{{ ui.csrf() }}
+    {{ ui.field("reason", _("admin.reason"), _("imp.ticket_reason", number=t.number), required=true, hint=_("imp.reason_hint")) }}
+    {% if not grant %}{{ ui.checkbox("regulation", _("imp.regulation")) }}{% endif %}
+    <div><button class="btn danger">{{ _("imp.start") }}</button></div></form>
+</section>
+{% endif %}
 {% endblock %}

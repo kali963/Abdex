@@ -64,7 +64,9 @@ DICTIONARIES: dict[str, list[tuple]] = {
                         ("better_offer", "Взят другой заказ", "Басқа тапсырыс алынды")],
     "dispute_subjects": [("payment", "Оплата", "Төлем"), ("damage", "Повреждение груза", "Жүктің бүлінуі"),
                          ("delay", "Срыв сроков", "Мерзімнің бұзылуы"), ("downtime", "Простой", "Тұрып қалу"),
-                         ("documents", "Документы", "Құжаттар"), ("other", "Другое", "Басқа")],
+                         ("documents", "Документы", "Құжаттар"),
+                         ("carrier_refusal", "Отказ перевозчика от рейса", "Тасымалдаушының рейстен бас тартуы"),
+                         ("other", "Другое", "Басқа")],
     "incident_kinds": [("delay", "Задержка", "Кешігу"), ("breakdown", "Поломка", "Бұзылу"), ("accident", "ДТП", "ЖКО"),
                        ("refused", "Отказ в приемке", "Қабылдаудан бас тарту"), ("downtime", "Простой", "Тұрып қалу")],
     "support_categories": [
@@ -127,6 +129,14 @@ SETTINGS = {
     "billing.reference_fixed_fee_minor": (3_500_000, "Ориентир фиксированного вознаграждения (тиын)"),
     "billing.vat_note": ("Без НДС", "Отметка об НДС в счетах"),
     "chat.leak_mode": ("flag", "Реакция на контакты в чате: flag / mask"),
+    "rating.formula": ({"w_reviews": 0.6, "w_reliability": 0.4, "neutral_review": 4.0, "window_days": 365,
+                        "penalty": {"breakdown": 3.0, "late_delivery": 1.0, "doc_rejected": 0.5, "dispute_lost": 2.0}},
+                       "FR-RAT-01: формула рейтинга (веса и штрафы)"),
+    "rating.breakdown_limit": ({"count": 3, "days": 90, "restrict_days": 30},
+                               "FR-BID-08: порог срывов и срок ограничения подачи предложений"),
+    "matching.weights": ({"body": 25, "geo": 20, "history": 15, "rating": 20, "level": 10, "load": 10},
+                         "FR-BID-04: веса скоринга автоподбора перевозчиков"),
+    "impersonation.minutes": (30, "FR-ADM-05: длительность сеанса работы от имени пользователя, мин"),
 }
 
 FLAGS = [
@@ -280,6 +290,9 @@ def seed_reference(db) -> None:
         if not found:
             db.add(DocumentTemplate(doc_type=doc_type, locale=locale, version=1, title=title, body=body,
                                     valid_from=date(2026, 1, 1)))
+    from app.modules.accounts.acl import seed as seed_acl
+
+    seed_acl(db)
     if not db.execute(select(Tariff.id).where(Tariff.company_id.is_(None))).first():
         db.add(Tariff(name="Базовый: фиксированное вознаграждение", model="fixed", fixed_minor=3_500_000,
                       valid_from=date(2026, 1, 1)))

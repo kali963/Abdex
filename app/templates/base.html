@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0a3d7a">
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}{{ _("app.name") }}{% endblock %} — AbdEX</title>
-  <link rel="stylesheet" href="/static/css/app.css?v=2">
+  <link rel="stylesheet" href="/static/css/app.css?v=3">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icons/icon.svg">
@@ -27,7 +27,8 @@
     {% if me.can("admin.kpi") %}{% set _n = nav.append(("/admin/kpi", "admin.kpi", "chart", p.startswith("/admin/kpi"))) %}{% endif %}
     {% if me.can("admin.support") %}{% set _n = nav.append(("/admin/support", "admin.support", "help", p.startswith("/admin/support"))) %}{% endif %}
     {% if me.can("admin.dictionaries") %}{% set _n = nav.append(("/admin/dictionaries", "admin.dictionaries", "list", p.startswith("/admin/dictionaries"))) %}{% set _n = nav.append(("/admin/templates", "admin.templates", "deal", p.startswith("/admin/templates"))) %}{% endif %}
-    {% if me.can("admin.settings") %}{% set _n = nav.append(("/admin/flags", "admin.flags", "tag", p.startswith("/admin/flags"))) %}{% set _n = nav.append(("/admin/settings", "admin.settings", "gear", p.startswith("/admin/settings"))) %}{% endif %}
+    {% if me.can("admin.finance") %}{% set _n = nav.append(("/admin/promo", "admin.promo", "tag", p.startswith("/admin/promo"))) %}{% endif %}
+    {% if me.can("admin.settings") %}{% set _n = nav.append(("/admin/flags", "admin.flags", "tag", p.startswith("/admin/flags"))) %}{% set _n = nav.append(("/admin/settings", "admin.settings", "gear", p.startswith("/admin/settings"))) %}{% set _n = nav.append(("/admin/permissions", "admin.permissions", "shield", p.startswith("/admin/permissions"))) %}{% endif %}
     {% if me.can("admin.audit") %}{% set _n = nav.append(("/admin/audit", "admin.audit", "shield", p.startswith("/admin/audit"))) %}{% set _n = nav.append(("/admin/integrations", "admin.integrations", "gear", p.startswith("/admin/integrations"))) %}{% endif %}
     {% set _n = nav.append(("/account/security", "nav.account", "user", p.startswith("/account"))) %}
   {% elif me.company %}
@@ -53,6 +54,12 @@
 <body class="{{ 'has-tabbar' if nav }} {{ 'is-admin' if me and me.session.is_admin }}">
 <a class="skip" href="#main">{{ _("nav.skip") }}</a>
 <div class="offline-banner" role="status">{{ _("app.offline") }}</div>
+{% if me and me.session.impersonator_id %}
+<div class="imp-banner" role="alert">
+  <span>{{ _("imp.banner", staff=impersonator, user=me.user.full_name, until=fmt_dt(me.session.expires_at)) }}</span>
+  <form method="post" action="/impersonation/end"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn small">{{ _("imp.end") }}</button></form>
+</div>
+{% endif %}
 <header class="topbar">
   <div class="topbar-in">
     <a class="logo" href="{{ '/dashboard' if me else '/' }}" aria-label="AbdEX"><span class="logo-mark" aria-hidden="true"></span>Abd<span>EX</span></a>
@@ -114,6 +121,6 @@
   {% endif %}
 </nav>
 {% endif %}
-<script src="/static/js/app.js?v=2" defer></script>
+<script src="/static/js/app.js?v=3" defer></script>
 </body>
 </html>

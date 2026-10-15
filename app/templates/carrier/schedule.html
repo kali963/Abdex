@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("schedule.title") }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ _("schedule.title") }}</h1><p class="muted">{{ _("schedule.text") }}</p></div>
+  <div class="row"><a class="btn small" href="/fleet/schedule?from={{ prev.isoformat() }}">← {{ _("schedule.prev") }}</a><a class="btn small" href="/fleet/schedule">{{ _("schedule.today") }}</a><a class="btn small" href="/fleet/schedule?from={{ next.isoformat() }}">{{ _("schedule.next") }} →</a></div>
+</div>
+{% macro board_rows(rows, kind) %}
+  {% for res, cells in rows %}<tr>
+    <th scope="row">{{ res.plate if kind == "v" else res.full_name }}</th>
+    {% for c in cells %}<td class="slot{{ ' busy' if c }}">{% if c %}<a href="/deals/{{ c.deal.id }}" title="{{ c.deal.number }} · {{ c.order.origin.city if c.order.origin }} → {{ c.order.destination.city if c.order.destination }}">{{ c.deal.number[-4:] }}</a>{% endif %}</td>{% endfor %}
+  </tr>{% else %}<tr><td colspan="{{ b.days|length + 1 }}" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}
+{% endmacro %}
+<section class="card">
+  <div class="board-wrap"><table class="board">
+    <thead><tr><th>{{ _("schedule.resource") }}</th>{% for d in b.days %}<th class="{{ 'we' if d.isoweekday() > 5 }}">{{ _("wd." ~ d.isoweekday()) }}<br><small>{{ d.strftime("%d.%m") }}</small></th>{% endfor %}</tr></thead>
+    <tbody>
+      <tr class="group"><th colspan="{{ b.days|length + 1 }}">{{ _("fleet.vehicles") }}</th></tr>
+      {{ board_rows(b.vehicles, "v") }}
+      <tr class="group"><th colspan="{{ b.days|length + 1 }}">{{ _("fleet.drivers") }}</th></tr>
+      {{ board_rows(b.drivers, "d") }}
+    </tbody>
+  </table></div>
+  <p class="muted"><small>{{ _("schedule.legend") }}</small></p>
+</section>
+{% if b.unassigned %}<section class="card warn"><h3>{{ _("schedule.unassigned") }}</h3><ul>{% for x in b.unassigned %}<li><a href="/deals/{{ x.deal.id }}">{{ x.deal.number }}</a> · {{ fmt_dt(x.start) }} — {{ fmt_dt(x.end) }}</li>{% endfor %}</ul></section>{% endif %}
+{% endblock %}

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core import ratelimit
 from app.core.audit import audit
 from app.core.errors import Forbidden, NotFound, ValidationFailed
-from app.db import get_db
+from app.db import get_db, utcnow
 from app.modules.analytics import service as analytics
 from app.modules.billing import service as billing
 from app.modules.calc import service as calc
@@ -27,6 +27,10 @@ def finance(request: Request, db: Session = Depends(get_db), me: Principal = Dep
     ctx = {"ledger": billing.ledger(db, me.company.id)} if me.company.kind == "client" else {}
     if me.company.kind == "carrier":
         ctx["carrier"] = analytics.carrier_analytics(db, me.company.id)
+    else:
+        ctx["promos"] = billing.company_promos(db, me.company.id)
+    today = utcnow().date()
+    ctx.update(today=today, month_start=today.replace(day=1))
     return render(request, "finance/finance.html", ctx)
 
 

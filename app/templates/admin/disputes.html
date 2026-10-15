@@ -7,9 +7,10 @@
 <section class="card">
   <div class="page-head"><h3><a href="/admin/deals/{{ deal.id }}">{{ deal.number }}</a> · {{ subject_map.get(d.subject, d.subject) }}</h3>{{ ui.status(d.status) }}</div>
   <p>{{ d.description }}</p>
-  <dl class="kv"><dt>{{ _("dispute.client_position") }}</dt><dd>{{ d.client_position or "—" }}</dd><dt>{{ _("dispute.carrier_position") }}</dt><dd>{{ d.carrier_position or "—" }}</dd>{% if d.resolution %}<dt>{{ _("dispute.resolution") }}</dt><dd>{{ d.resolution }} ({{ status_label(d.outcome) }})</dd>{% endif %}</dl>
+  <dl class="kv"><dt>{{ _("dispute.client_position") }}</dt><dd>{{ d.client_position or "—" }}</dd><dt>{{ _("dispute.carrier_position") }}</dt><dd>{{ d.carrier_position or "—" }}</dd>{% if d.resolution %}<dt>{{ _("dispute.resolution") }}</dt><dd>{{ d.resolution }} ({{ status_label(d.outcome) }}{% if d.fault and d.fault != "none" %} · {{ _("fault." ~ d.fault) }}{% endif %})</dd>{% endif %}</dl>
   {% if d.status == "open" %}<form method="post" action="/admin/disputes/{{ d.id }}/resolve" class="stack">{{ ui.csrf() }}
     {{ ui.textarea("resolution", _("dispute.resolution"), "", required=true, rows=2) }}
+    {{ ui.select("fault", _("dispute.fault"), [("none", _("fault.none")), ("carrier", _("fault.carrier")), ("client", _("fault.client"))], "carrier" if d.subject == "carrier_refusal" else "none", hint=_("dispute.fault_hint")) }}
     <div class="row"><button class="btn ok" name="outcome" value="closed_docs">{{ _("dispute.close_docs") }}</button><button class="btn danger" name="outcome" value="cancelled">{{ _("dispute.cancel_deal") }}</button></div>
     <p class="muted"><small>{{ _("dispute.resolve_hint") }}</small></p></form>{% endif %}
 </section>

@@ -20,6 +20,27 @@
 <tbody>{% for p in ledger.payments %}<tr><td>{{ fmt_dt(p.created_at) }}</td><td class="num">{{ money(p.amount_minor, p.currency) }}</td><td>{{ _("fin.src_" ~ p.source) }}</td><td>{{ p.reference }}</td></tr>
 {% else %}<tr><td colspan="4" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
 {% endif %}
+<div class="grid two">
+{% if me.company.kind == "client" %}
+<section class="card">
+  <h2>{{ _("promo.title") }}</h2>
+  {% if promos %}<ul class="plain-list">{% for red, p in promos %}<li><b>{{ p.code }}</b> · {{ _("promo.kind." ~ p.kind, value=(money(p.value) if p.kind == "fixed" else p.value)) }}
+    {% if p.kind == "free_days" %}· {{ _("promo.until") }} {{ fmt_date(red.free_until) }}{% else %}· {{ _("promo.used", used=red.deals_used, total=p.deals_per_company) }}{% endif %}</li>{% endfor %}</ul>{% endif %}
+  <form method="post" action="/finance/promo" class="row">{{ ui.csrf() }}<label class="sr-only" for="f-code">{{ _("promo.code") }}</label><input id="f-code" name="code" placeholder="{{ _('promo.code') }}" autocomplete="off" maxlength="40" required><button class="btn">{{ _("promo.apply") }}</button></form>
+</section>
+{% endif %}
+{% if me.can("export.bulk") %}
+<section class="card">
+  <h2>{{ _("zip.title") }}</h2>
+  <p class="muted"><small>{{ _("zip.text") }}</small></p>
+  <form method="get" action="/documents/export.zip" class="row">
+    <label for="z-from">{{ _("common.from") }}</label><input id="z-from" type="date" name="date_from" value="{{ month_start.isoformat() }}" required>
+    <label for="z-to">{{ _("common.to") }}</label><input id="z-to" type="date" name="date_to" value="{{ today.isoformat() }}" required>
+    <button class="btn">{{ _("zip.download") }}</button>
+  </form>
+</section>
+{% endif %}
+</div>
 {% if carrier %}
 <div class="grid three">
   <div class="card stat"><b>{{ money(carrier.income_minor) }}</b><span>{{ _("fin.income") }}</span></div>

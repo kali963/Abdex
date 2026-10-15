@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("rating.title") }}{% endblock %}
+{% block content %}
+<h1>{{ _("rating.title") }}</h1>
+{% if me.company %}{% include "company/_tabs.html" %}{% endif %}
+{% if r %}
+<div class="grid three">
+  <div class="card stat"><b>{{ r.value if r.value is not none else "—" }}</b><span>{{ _("rating.value") }}{% if r.is_new %} · {{ _("rating.new") }}{% endif %}</span></div>
+  <div class="card stat"><b>{{ r.reliability }}%</b><span>{{ _("rating.reliability") }}</span></div>
+  <div class="card stat"><b>{{ r.reviews_avg }}</b><span>{{ _("rating.reviews") }} ({{ r.reviews_n }})</span></div>
+</div>
+{% if breakdowns_window %}<div class="alert {{ 'error' if breakdowns_window >= limit.count else 'warn' }}">{{ _("rating.breakdowns_now", count=breakdowns_window, limit=limit.count, days=limit.days) }}</div>{% endif %}
+{% endif %}
+<div class="grid two">
+<section class="card">
+  <h2>{{ _("rating.how") }}</h2>
+  <p>{{ _("rating.formula_text") }}</p>
+  <div class="formula" aria-label="{{ _('rating.formula') }}">
+    <span>{{ _("rating.value") }}</span> = <b>{{ formula.w_reviews }}</b> × <span>{{ _("rating.reviews") }}</span> + <b>{{ formula.w_reliability }}</b> × 5 × <span>{{ _("rating.reliability") }}</span> + <span>{{ _("rating.corrections") }}</span>
+  </div>
+  <ul class="plain-list">
+    <li>{{ _("rating.reviews_hint", neutral=formula.neutral_review) }}</li>
+    <li>{{ _("rating.reliability_hint") }}</li>
+    <li>{{ _("rating.window_hint", days=formula.window_days) }}</li>
+    <li>{{ _("rating.corrections_hint") }}</li>
+  </ul>
+  <h3>{{ _("rating.penalties") }}</h3>
+  <div class="table-wrap"><table><thead><tr><th>{{ _("rating.event") }}</th><th class="num">{{ _("rating.weight") }}</th>{% if r %}<th class="num">{{ _("rating.count") }}</th>{% endif %}</tr></thead><tbody>
+    <tr><td>{{ _("rating.kind.deal_completed") }}</td><td class="num">+1</td>{% if r %}<td class="num">{{ r.completed }}</td>{% endif %}</tr>
+    {% for k, w in formula.penalty.items() %}<tr><td>{{ _("rating.kind." ~ k) }}</td><td class="num">−{{ w }}</td>{% if r %}<td class="num">{{ r.counts.get(k, 0) }}</td>{% endif %}</tr>{% endfor %}
+  </tbody></table></div>
+  <p class="muted"><small>{{ _("rating.limit_text", count=limit.count, days=limit.days, restrict=limit.restrict_days) }}</small></p>
+</section>
+<section class="card" id="matching">
+  <h2>{{ _("match.how_title") }}</h2>
+  <p>{{ _("match.how_text") }}</p>
+  <div class="table-wrap"><table><thead><tr><th>{{ _("match.factor") }}</th><th class="num">{{ _("rating.weight") }}</th></tr></thead><tbody>
+    {% for k, w in weights.items() %}<tr><td>{{ _("match.part." ~ k) }}<br><small class="muted">{{ _("match.part_hint." ~ k) }}</small></td><td class="num">{{ w|int }}</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+</div>
+{% if events %}
+<section><h2>{{ _("rating.history") }}</h2>
+<div class="table-wrap"><table><thead><tr><th>{{ _("common.date") }}</th><th>{{ _("rating.event") }}</th><th>{{ _("rating.reason") }}</th></tr></thead><tbody>
+{% for e in events %}<tr><td>{{ fmt_dt(e.created_at) }}</td><td>{{ _("rating.kind." ~ e.kind) }}{% if e.kind == "correction" %} <b>{{ "%+.2f"|format(e.delta / 100) }}</b>{% endif %}</td><td>{{ e.reason or "—" }}</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endif %}
+{% endblock %}

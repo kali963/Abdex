@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Integer, String, Text, Uuid
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import AwareDateTime, Model
@@ -48,3 +48,17 @@ class ChannelLink(Model):
     address: Mapped[str] = mapped_column(String(100), default="")
     link_code: Mapped[str] = mapped_column(String(20), default="")
     disabled_events: Mapped[str] = mapped_column(Text, default="")
+
+
+class NotificationPrefs(Model):
+    """FR-NTF-04: quiet hours and digest instead of a stream. Security events ignore both (FR-NTF-05)."""
+
+    __tablename__ = "notification_prefs"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), unique=True)
+    quiet_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    quiet_from: Mapped[str] = mapped_column(String(5), default="22:00")  # local time of the user
+    quiet_to: Mapped[str] = mapped_column(String(5), default="08:00")
+    digest: Mapped[str] = mapped_column(String(10), default="off")  # off / hourly / daily
+    digest_hour: Mapped[int] = mapped_column(Integer, default=9)
+    digest_sent_at: Mapped[datetime | None] = mapped_column(AwareDateTime)

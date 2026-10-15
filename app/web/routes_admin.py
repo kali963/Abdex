@@ -191,7 +191,7 @@ async def resolve(dsid: str, request: Request, db: Session = Depends(get_db),
     if d is None:
         raise NotFound()
     deals.resolve_dispute(db, d, outcome=str(form.get("outcome", "")), resolution=str(form.get("resolution", "")),
-                          manager=db.get(User, me.user.id))
+                          manager=db.get(User, me.user.id), fault=str(form.get("fault", "none")))
     db.commit()
     return redirect("/admin/disputes", flash=("success", "msg.saved"))
 
@@ -274,8 +274,14 @@ def company_card(cid: str, request: Request, reveal: str = "", db: Session = Dep
     else:
         audit(db, "staff.company_viewed", object_type="company", object_id=c.id)
     db.commit()
+    from app.modules.accounts.support_access import active_grant
+    from app.modules.rating import service as rating
+
+    grants = {u.id: active_grant(db, u.id) for _, u in members}
     return render(request, "admin/company.html", {"c": c, "members": members, "restrictions": restrictions,
-                                                  "stats": fleet.company_stats(db, c.id), "revealed": revealed})
+                                                  "stats": fleet.company_stats(db, c.id), "revealed": revealed,
+                                                  "r": rating.compute(db, c.id), "grants": grants,
+                                                  "rating_events": rating.history(db, c.id, limit=30)})
 
 
 @router.post("/companies/{cid}/restrict")
@@ -289,7 +295,7 @@ async def restrict(cid: str, request: Request, db: Session = Depends(get_db), me
     if not reason:
         raise ValidationFailed({"reason": "error.reason_required"})
     kind = str(form.get("kind", "block"))
-    if kind not in ("block", "limit", "no_new_orders"):
+    if kind not in ("block", "limit", "no_new_orders", "no_bids"):
         raise ValidationFailed({"kind": "error.invalid_choice"})
     until = _d(str(form.get("until", "")), None) if form.get("until") else None
     db.add(Restriction(company_id=c.id, kind=kind, reason=reason, until=until, created_by=me.user.id))
@@ -717,8 +723,11 @@ def support_ticket(tid: str, request: Request, db: Session = Depends(get_db), me
     t = db.get(Ticket, parse_uuid(tid))
     if t is None:
         raise NotFound()
+    from app.modules.accounts.support_access import active_grant
+
     return render(request, "admin/support_ticket.html", {"t": t, "messages": chat.thread_messages(db, ticket_id=t.id),
-                                                         "cat_map": dictionary_map(db, "support_categories")})
+                                                         "cat_map": dictionary_map(db, "support_categories"),
+                                                         "grant": active_grant(db, t.user_id)})
 
 
 @router.post("/support/{tid}")

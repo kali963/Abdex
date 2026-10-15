@@ -15,6 +15,7 @@ from app.modules.accounts.models import Company, User
 from app.modules.billing.models import Invoice
 from app.modules.chat import service as chat
 from app.modules.deals import service as deals
+from app.modules.deals.tracking import trip_map
 from app.modules.deals.models import Dispute, ExecutorChange, Incident, Rating, Supplement
 from app.modules.documents import service as documents
 from app.modules.documents.models import Document
@@ -77,6 +78,7 @@ def deal_card(did: str, request: Request, db: Session = Depends(get_db), me: Pri
         if acc.side == "client" else None,
         "show_finance": show_finance,
         "next_checkpoints": _next_checkpoints(o.status, deals.checkpoints(db, d.id)),
+        "trip_map": trip_map(d, o, deals.checkpoints(db, d.id)),
         "can_dispute": acc.side in ("client", "carrier") and o.status in (flow.ASSIGNED, flow.IN_TRANSIT, flow.UNLOADED),
         "my_vehicles": company_vehicles(db, carrier.id) if acc.side == "carrier" else [],
         "my_drivers": company_drivers(db, carrier.id) if acc.side == "carrier" else [],

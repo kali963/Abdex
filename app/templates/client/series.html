@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("series.title") }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ _("series.title") }}</h1><p class="muted">{{ _("series.text") }}</p></div><a class="btn" href="/orders">{{ _("nav.orders") }}</a></div>
+{% for s in items %}
+<section class="card">
+  <div class="page-head">
+    <div><h3>{{ s.name }}</h3>{% set src = sources.get(s.id) %}{% if src %}<div class="row">{{ ui.route(src) }} <a class="muted" href="/orders/{{ src.id }}"><small>{{ _("series.source") }} {{ src.number }}</small></a></div>{% endif %}</div>
+    <span class="badge {{ 'ok' if s.active else '' }}">{{ _("series.active") if s.active else _("series.paused") }}</span>
+  </div>
+  <dl class="kv">
+    <dt>{{ _("series.weekdays") }}</dt><dd>{% for d in s.weekdays.split(",") %}{{ _("wd." ~ d) }}{{ ", " if not loop.last }}{% endfor %}</dd>
+    <dt>{{ _("series.period") }}</dt><dd>{{ fmt_date(s.start_date) }} — {{ fmt_date(s.end_date) if s.end_date else _("series.no_end") }}</dd>
+    <dt>{{ _("series.lead_days") }}</dt><dd>{{ s.lead_days }}</dd>
+    <dt>{{ _("series.auto_submit") }}</dt><dd>{{ _("common.yes") if s.auto_submit else _("common.no") }}</dd>
+    <dt>{{ _("series.created_count") }}</dt><dd>{{ s.created_count }}</dd>
+    <dt>{{ _("series.next") }}</dt><dd>{% for d in upcoming.get(s.id, []) %}{{ fmt_date(d) }}{{ ", " if not loop.last }}{% else %}—{% endfor %}</dd>
+  </dl>
+  {% if me.can("order.create") %}<div class="row">
+    <form method="post" action="/orders/series/{{ s.id }}/{{ 'pause' if s.active else 'resume' }}">{{ ui.csrf() }}<button class="btn small">{{ _("series.pause") if s.active else _("series.resume") }}</button></form>
+    <form method="post" action="/orders/series/{{ s.id }}/delete" data-confirm="{{ _('common.confirm_delete') }}">{{ ui.csrf() }}<button class="btn small link">{{ _("action.remove") }}</button></form>
+  </div>{% endif %}
+</section>
+{% else %}{{ ui.empty(_("series.none"), _("series.none_hint"), "/orders", _("nav.orders")) }}{% endfor %}
+{% endblock %}
