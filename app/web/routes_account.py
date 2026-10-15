@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import audit
 from app.core.errors import AppError, Forbidden, NotFound, ValidationFailed
-from app.core.security import new_totp_secret, token, totp_uri, verify_totp
+from app.core.security import mask_phone, new_totp_secret, token, totp_uri
 from app.core.storage import save_upload
 from app.db import get_db, utcnow
 from app.modules.accounts import service as accounts
@@ -104,9 +104,32 @@ async def account_save(request: Request, db: Session = Depends(get_db), me: Prin
     return resp
 
 
+@router.post("/account/delete")
+async def delete_account(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    """FR-AUTH-10: soft delete with anonymised history; confirmed by the current password."""
+    from app.core.security import verify_password
+
+    form = await request.form()
+    user = db.get(User, me.user.id)
+    if user.staff_role:
+        raise AppError("staff_delete_via_admin")
+    if not verify_password(user.password_hash, str(form.get("password", ""))):
+        raise ValidationFailed({"password": "error.invalid_password"})
+    if form.get("confirm") != "on":
+        raise ValidationFailed({"confirm": "error.confirm_required"})
+    accounts.anonymize_user(db, user, reason="self-service request")
+    db.commit()
+    from app.web.deps import SESSION_COOKIE
+
+    resp = redirect("/", flash=("success", "msg.account_deleted"))
+    resp.delete_cookie(SESSION_COOKIE)
+    return resp
+
+
 @router.get("/account/security")
 def security(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal), enroll: int = 0):
-    ctx = {"enroll": enroll, "must": accounts.must_enroll_2fa(db, me.user)}
+    ctx = {"enroll": enroll, "must": accounts.must_enroll_2fa(db, me.user),
+           "sms_action": request.query_params.get("sms", ""), "phone_masked": mask_phone(me.user.phone)}
     if not me.user.totp_enabled:
         user = db.get(User, me.user.id)
         if not user.totp_secret:
@@ -114,6 +137,9 @@ def security(request: Request, db: Session = Depends(get_db), me: Principal = De
             db.commit()
         ctx["secret"] = user.totp_secret
         ctx["uri"] = totp_uri(user.totp_secret, user.email or user.phone)
+        import segno
+
+        ctx["qr"] = segno.make(ctx["uri"], error="m").svg_data_uri(scale=4, border=2)
     return render(request, "account/security.html", ctx)
 
 
@@ -135,9 +161,11 @@ async def change_password(request: Request, db: Session = Depends(get_db), me: P
 
 @router.post("/account/2fa/enable")
 async def enable_2fa(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    """Authenticator app (TOTP)."""
     form = await request.form()
     user = db.get(User, me.user.id)
-    if not verify_totp(user.totp_secret, str(form.get("code", ""))):
+    if not accounts.verify_totp_code(user, str(form.get("code", ""))):
+        db.commit()
         raise ValidationFailed({"code": "error.code_invalid"})
     user.totp_enabled = True
     audit(db, "auth.2fa_enabled", object_type="user", object_id=user.id)
@@ -152,18 +180,50 @@ async def enable_2fa(request: Request, db: Session = Depends(get_db), me: Princi
 async def disable_2fa(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
     form = await request.form()
     user = db.get(User, me.user.id)
-    if accounts.must_enroll_2fa(db, User(staff_role=user.staff_role, id=user.id, totp_enabled=False)):
+    if accounts.must_enroll_2fa(db, user, totp=False):
         raise AppError("2fa_mandatory")
-    if not verify_totp(user.totp_secret, str(form.get("code", ""))):
+    if not accounts.verify_totp_code(user, str(form.get("code", ""))):
+        db.commit()
         raise ValidationFailed({"code": "error.code_invalid"})
     user.totp_enabled = False
     user.totp_secret = None
+    user.totp_last_step = 0
     audit(db, "auth.2fa_disabled", object_type="user", object_id=user.id)
     from app.modules.notifications.service import notify_user
 
     notify_user(db, user.id, "security.2fa_changed", {}, link="/account/security", critical=True)
     db.commit()
     return redirect("/account/security", flash=("success", "msg.saved"))
+
+
+@router.post("/account/2fa/sms/code")
+async def sms_2fa_code(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    """Step 1 of enabling or disabling SMS 2FA: a code to the account phone proves possession."""
+    form = await request.form()
+    action = "enable" if form.get("action") == "enable" else "disable"
+    user = db.get(User, me.user.id)
+    if action == "disable" and accounts.must_enroll_2fa(db, user, sms=False):
+        raise AppError("2fa_mandatory")
+    accounts.send_otp(db, user.phone, f"sms_2fa_{action}")
+    db.commit()
+    return redirect(f"/account/security?sms={action}#sms", flash=("info", "msg.code_sent"))
+
+
+@router.post("/account/2fa/sms/confirm")
+async def sms_2fa_confirm(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    form = await request.form()
+    action = "enable" if form.get("action") == "enable" else "disable"
+    user = db.get(User, me.user.id)
+    if action == "disable" and accounts.must_enroll_2fa(db, user, sms=False):
+        raise AppError("2fa_mandatory")
+    if not accounts.check_otp(db, user.phone, f"sms_2fa_{action}", str(form.get("code", ""))):
+        db.commit()
+        raise ValidationFailed({"code": "error.code_invalid"})
+    accounts.set_sms_2fa(db, user, action == "enable")
+    db.commit()
+    message = "msg.2fa_enabled" if action == "enable" else "msg.2fa_sms_disabled"
+    return redirect("/admin" if me.session.is_admin and action == "enable" else "/account/security",
+                    flash=("success", message))
 
 
 @router.get("/account/sessions")

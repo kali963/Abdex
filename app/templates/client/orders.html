@@ -2,7 +2,7 @@
 {% import "components.html" as ui with context %}
 {% block title %}{{ _("nav.orders") }}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>{{ _("nav.orders") }}</h1>{% if me.can("order.create") %}<a class="btn primary" href="/orders/new">+ {{ _("orders.new") }}</a>{% endif %}</div>
+<div class="page-head"><h1>{{ _("nav.orders") }}</h1>{% if me.can("order.create") %}<div class="row"><a class="btn" href="/orders/import">{{ _("orders.import") }}</a><a class="btn primary" href="/orders/new">+ {{ _("orders.new") }}</a></div>{% endif %}</div>
 <form class="card row" method="get" action="/orders">
   <label class="sr-only" for="q">{{ _("common.search") }}</label>
   <input id="q" type="search" name="q" value="{{ q }}" placeholder="{{ _('orders.search_hint') }}">

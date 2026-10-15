@@ -164,8 +164,10 @@ def _snapshot(order: Order) -> str:
     return json.dumps(cols, ensure_ascii=False, default=str)
 
 
-def create_order(db: Session, company: Company, form: dict, *, preliminary: bool = False) -> Order:
-    ratelimit.hit("order_create", str(company.id))
+def create_order(db: Session, company: Company, form: dict, *, preliminary: bool = False,
+                 rate_limited: bool = True) -> Order:
+    if rate_limited:
+        ratelimit.hit("order_create", str(company.id))
     if company.kind != "client":
         raise Forbidden()
     _check_restrictions(db, company)

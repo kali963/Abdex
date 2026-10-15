@@ -47,6 +47,8 @@ class User(Model):
     timezone: Mapped[str] = mapped_column(String(40), default="Asia/Almaty")
     totp_secret: Mapped[str | None] = mapped_column(String(64))
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    totp_last_step: Mapped[int] = mapped_column(Integer, default=0)  # blocks TOTP code replay
+    sms_2fa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     staff_role: Mapped[str | None] = mapped_column(String(20))
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
@@ -57,6 +59,10 @@ class User(Model):
     @property
     def is_staff(self) -> bool:
         return bool(self.staff_role)
+
+    @property
+    def has_2fa(self) -> bool:
+        return bool(self.totp_enabled or self.sms_2fa_enabled)
 
 
 class Company(Model):

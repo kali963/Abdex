@@ -8,6 +8,7 @@ from app.main import app
 PUBLIC = {
     "/", "/lang/{code}", "/login", "/register", "/forgot-password", "/reset-password", "/invite/{raw}",
     "/legal/{page}", "/help", "/manifest.webmanifest", "/sw.js", "/healthz", "/dev/outbox", "/logout",
+    "/hooks/telegram",  # authenticated by Telegram's secret token header, not by a session
 }
 POLICY_DEPS = {"get_principal", "api_caller"}
 
@@ -34,5 +35,5 @@ def test_every_route_has_access_policy():
 
 def test_state_changing_routes_have_csrf():
     for route in app.routes:
-        if isinstance(route, APIRoute) and route.methods & {"POST", "PUT", "PATCH", "DELETE"}:
+        if isinstance(route, APIRoute) and route.methods & {"POST", "PUT", "PATCH", "DELETE"} and not route.path.startswith("/hooks/"):
             assert "csrf_protect" in _dep_names(route.dependant), route.path

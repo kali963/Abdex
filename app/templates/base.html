@@ -2,20 +2,60 @@
 <html lang="{{ locale }}">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  <meta name="theme-color" content="#0b5cad">
+  <meta name="theme-color" content="#0a3d7a">
+  <meta name="color-scheme" content="light dark">
   <title>{% block title %}{{ _("app.name") }}{% endblock %} — AbdEX</title>
-  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/css/app.css?v=2">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icons/icon.svg">
 </head>
-<body>
+{% macro icon(name, cls="ico") -%}<svg class="{{ cls }}" aria-hidden="true"><use href="/static/icons/sprite.svg#i-{{ name }}"></use></svg>{%- endmacro %}
+{# ---- navigation model: one list drives the desktop bar, the mobile tab bar and the "more" sheet ---- #}
+{% set nav = [] %}
+{% if me and me.session.mfa_passed %}{% set p = request.url.path %}
+  {% if me.session.is_admin %}
+    {% set _n = nav.append(("/admin", "admin.home", "home", p == "/admin")) %}
+    {% if me.can("admin.orders") %}{% set _n = nav.append(("/admin/orders", "admin.orders", "box", p.startswith("/admin/orders"))) %}{% endif %}
+    {% if me.can("admin.moderation") %}{% set _n = nav.append(("/admin/moderation", "admin.moderation", "shield", p.startswith("/admin/moderation"))) %}{% endif %}
+    {% if me.can("admin.antifraud") %}{% set _n = nav.append(("/admin/antifraud", "admin.antifraud", "alert", p.startswith("/admin/antifraud"))) %}{% endif %}
+    {% if me.can("admin.disputes") %}{% set _n = nav.append(("/admin/disputes", "admin.disputes", "deal", p.startswith("/admin/disputes"))) %}{% endif %}
+    {% if me.can("admin.users") %}{% set _n = nav.append(("/admin/companies", "admin.companies", "building", p.startswith("/admin/companies"))) %}{% set _n = nav.append(("/admin/users", "admin.users", "user", p.startswith("/admin/users"))) %}{% endif %}
+    {% if me.can("admin.finance") %}{% set _n = nav.append(("/admin/finance", "admin.finance", "wallet", p.startswith("/admin/finance"))) %}{% set _n = nav.append(("/admin/reports/pvd", "admin.pvd", "chart", p.startswith("/admin/reports"))) %}{% endif %}
+    {% if me.can("admin.kpi") %}{% set _n = nav.append(("/admin/kpi", "admin.kpi", "chart", p.startswith("/admin/kpi"))) %}{% endif %}
+    {% if me.can("admin.support") %}{% set _n = nav.append(("/admin/support", "admin.support", "help", p.startswith("/admin/support"))) %}{% endif %}
+    {% if me.can("admin.dictionaries") %}{% set _n = nav.append(("/admin/dictionaries", "admin.dictionaries", "list", p.startswith("/admin/dictionaries"))) %}{% set _n = nav.append(("/admin/templates", "admin.templates", "deal", p.startswith("/admin/templates"))) %}{% endif %}
+    {% if me.can("admin.settings") %}{% set _n = nav.append(("/admin/flags", "admin.flags", "tag", p.startswith("/admin/flags"))) %}{% set _n = nav.append(("/admin/settings", "admin.settings", "gear", p.startswith("/admin/settings"))) %}{% endif %}
+    {% if me.can("admin.audit") %}{% set _n = nav.append(("/admin/audit", "admin.audit", "shield", p.startswith("/admin/audit"))) %}{% set _n = nav.append(("/admin/integrations", "admin.integrations", "gear", p.startswith("/admin/integrations"))) %}{% endif %}
+    {% set _n = nav.append(("/account/security", "nav.account", "user", p.startswith("/account"))) %}
+  {% elif me.company %}
+    {% if me.role == "driver" %}
+      {% set _n = nav.append(("/trips", "nav.trips", "truck", p.startswith("/trips") or p.startswith("/deals"))) %}
+    {% else %}
+      {% set _n = nav.append(("/dashboard", "nav.dashboard", "home", p == "/dashboard")) %}
+      {% if me.can("order.view") %}{% set _n = nav.append(("/orders", "nav.orders", "box", p.startswith("/orders"))) %}{% endif %}
+      {% if me.can("market.view") %}{% set _n = nav.append(("/market", "nav.market", "truck", p.startswith("/market"))) %}{% endif %}
+      {% set _n = nav.append(("/deals", "nav.deals", "deal", p.startswith("/deals"))) %}
+      {% if me.can("market.view") %}{% set _n = nav.append(("/my-bids", "nav.my_bids", "tag", p.startswith("/my-bids"))) %}{% endif %}
+      {% if me.can("plan.view") %}{% set _n = nav.append(("/plan", "nav.plan", "calendar", p.startswith("/plan"))) %}{% endif %}
+      {% if me.can("fleet.manage") %}{% set _n = nav.append(("/fleet", "nav.fleet", "truck", p.startswith("/fleet"))) %}{% endif %}
+      {% if me.can("finance.view") %}{% set _n = nav.append(("/finance", "nav.finance", "wallet", p.startswith("/finance"))) %}{% endif %}
+      {% if me.can("analytics.view") %}{% set _n = nav.append(("/analytics", "nav.analytics", "chart", p.startswith("/analytics"))) %}{% endif %}
+      {% if me.can("calc.use") %}{% set _n = nav.append(("/calc", "nav.calc", "calc", p.startswith("/calc"))) %}{% endif %}
+      {% if me.can("company.view") %}{% set _n = nav.append(("/company", "nav.company", "building", p.startswith("/company") or p.startswith("/pool"))) %}{% endif %}
+    {% endif %}
+    {% set _n = nav.append(("/support", "nav.support", "help", p.startswith("/support"))) %}
+    {% set _n = nav.append(("/account", "nav.account", "user", p.startswith("/account"))) %}
+  {% endif %}
+{% endif %}
+<body class="{{ 'has-tabbar' if nav }} {{ 'is-admin' if me and me.session.is_admin }}">
 <a class="skip" href="#main">{{ _("nav.skip") }}</a>
 <div class="offline-banner" role="status">{{ _("app.offline") }}</div>
 <header class="topbar">
   <div class="topbar-in">
-    <a class="logo" href="{{ '/dashboard' if me else '/' }}">Abd<span>EX</span></a>
+    <a class="logo" href="{{ '/dashboard' if me else '/' }}" aria-label="AbdEX"><span class="logo-mark" aria-hidden="true"></span>Abd<span>EX</span></a>
     <span class="spacer"></span>
     <nav class="lang" aria-label="{{ _('nav.language') }}">
       <a href="/lang/ru?next={{ request.url.path }}" class="{{ 'on' if locale == 'ru' }}">RU</a>
@@ -32,54 +72,20 @@
         <noscript><button class="btn small">OK</button></noscript>
       </form>
       {% endif %}
-      <a class="bell" href="/notifications" aria-label="{{ _('nav.notifications') }}">🔔{% if unread %}<span class="count">{{ unread }}</span>{% endif %}</a>
-      <a class="who" href="/account" title="{{ me.user.full_name }}">{{ me.user.full_name }}{% if me.company %} · {{ me.company.name }}{% endif %}</a>
-      <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn small">{{ _("nav.logout") }}</button></form>
+      <a class="icon-btn bell" href="/notifications" aria-label="{{ _('nav.notifications') }}">{{ icon("bell") }}{% if unread %}<span class="count">{{ unread if unread < 100 else "99+" }}</span>{% endif %}</a>
+      <a class="who" href="/account" title="{{ me.user.full_name }}"><span class="avatar" aria-hidden="true">{{ me.user.full_name[:1] }}</span><span class="who-text">{{ me.user.full_name }}{% if me.company %}<small>{{ me.company.name }}</small>{% endif %}</span></a>
+      <form method="post" action="/logout" class="logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="icon-btn" aria-label="{{ _('nav.logout') }}" title="{{ _('nav.logout') }}">{{ icon("logout") }}</button></form>
     {% else %}
-      <a class="btn small" href="/login">{{ _("nav.login") }}</a>
+      <a class="btn small ghost" href="/login">{{ _("nav.login") }}</a>
       <a class="btn small primary" href="/register">{{ _("nav.register") }}</a>
     {% endif %}
   </div>
-</header>
-{% if me %}
-  {% set p = request.url.path %}
-  {% if me.session.is_admin %}
-  <nav class="nav admin" aria-label="{{ _('nav.main') }}"><div class="nav-in">
-    <a href="/admin" class="{{ 'active' if p == '/admin' }}">{{ _("admin.home") }}</a>
-    {% if me.can("admin.orders") %}<a href="/admin/orders" class="{{ 'active' if p.startswith('/admin/orders') }}">{{ _("admin.orders") }}</a>{% endif %}
-    {% if me.can("admin.moderation") %}<a href="/admin/moderation" class="{{ 'active' if p.startswith('/admin/moderation') }}">{{ _("admin.moderation") }}</a>{% endif %}
-    {% if me.can("admin.antifraud") %}<a href="/admin/antifraud" class="{{ 'active' if p.startswith('/admin/antifraud') }}">{{ _("admin.antifraud") }}</a>{% endif %}
-    {% if me.can("admin.disputes") %}<a href="/admin/disputes" class="{{ 'active' if p.startswith('/admin/disputes') }}">{{ _("admin.disputes") }}</a>{% endif %}
-    {% if me.can("admin.users") %}<a href="/admin/companies" class="{{ 'active' if p.startswith('/admin/companies') }}">{{ _("admin.companies") }}</a><a href="/admin/users" class="{{ 'active' if p.startswith('/admin/users') }}">{{ _("admin.users") }}</a>{% endif %}
-    {% if me.can("admin.finance") %}<a href="/admin/finance" class="{{ 'active' if p.startswith('/admin/finance') }}">{{ _("admin.finance") }}</a><a href="/admin/reports/pvd" class="{{ 'active' if p.startswith('/admin/reports') }}">{{ _("admin.pvd") }}</a>{% endif %}
-    {% if me.can("admin.kpi") %}<a href="/admin/kpi" class="{{ 'active' if p.startswith('/admin/kpi') }}">{{ _("admin.kpi") }}</a>{% endif %}
-    {% if me.can("admin.support") %}<a href="/admin/support" class="{{ 'active' if p.startswith('/admin/support') }}">{{ _("admin.support") }}</a>{% endif %}
-    {% if me.can("admin.dictionaries") %}<a href="/admin/dictionaries" class="{{ 'active' if p.startswith('/admin/dictionaries') }}">{{ _("admin.dictionaries") }}</a><a href="/admin/templates" class="{{ 'active' if p.startswith('/admin/templates') }}">{{ _("admin.templates") }}</a>{% endif %}
-    {% if me.can("admin.settings") %}<a href="/admin/flags" class="{{ 'active' if p.startswith('/admin/flags') }}">{{ _("admin.flags") }}</a><a href="/admin/settings" class="{{ 'active' if p.startswith('/admin/settings') }}">{{ _("admin.settings") }}</a>{% endif %}
-    {% if me.can("admin.audit") %}<a href="/admin/audit" class="{{ 'active' if p.startswith('/admin/audit') }}">{{ _("admin.audit") }}</a><a href="/admin/integrations" class="{{ 'active' if p.startswith('/admin/integrations') }}">{{ _("admin.integrations") }}</a>{% endif %}
-    <a href="/account/security" class="{{ 'active' if p.startswith('/account') }}">{{ _("nav.account") }}</a>
-  </div></nav>
-  {% elif me.company %}
-  <nav class="nav" aria-label="{{ _('nav.main') }}"><div class="nav-in">
-    {% if me.role == "driver" %}
-      <a href="/trips" class="{{ 'active' if p.startswith('/trips') or p.startswith('/deals') }}">{{ _("nav.trips") }}</a>
-    {% else %}
-      <a href="/dashboard" class="{{ 'active' if p == '/dashboard' }}">{{ _("nav.dashboard") }}</a>
-      {% if me.can("order.view") %}<a href="/orders" class="{{ 'active' if p.startswith('/orders') }}">{{ _("nav.orders") }}</a>{% endif %}
-      {% if me.can("market.view") %}<a href="/market" class="{{ 'active' if p.startswith('/market') }}">{{ _("nav.market") }}</a><a href="/my-bids" class="{{ 'active' if p.startswith('/my-bids') }}">{{ _("nav.my_bids") }}</a>{% endif %}
-      <a href="/deals" class="{{ 'active' if p.startswith('/deals') }}">{{ _("nav.deals") }}</a>
-      {% if me.can("plan.view") %}<a href="/plan" class="{{ 'active' if p.startswith('/plan') }}">{{ _("nav.plan") }}</a>{% endif %}
-      {% if me.can("fleet.manage") %}<a href="/fleet" class="{{ 'active' if p.startswith('/fleet') }}">{{ _("nav.fleet") }}</a>{% endif %}
-      {% if me.can("finance.view") %}<a href="/finance" class="{{ 'active' if p.startswith('/finance') }}">{{ _("nav.finance") }}</a>{% endif %}
-      {% if me.can("analytics.view") %}<a href="/analytics" class="{{ 'active' if p.startswith('/analytics') }}">{{ _("nav.analytics") }}</a>{% endif %}
-      {% if me.can("calc.use") %}<a href="/calc" class="{{ 'active' if p.startswith('/calc') }}">{{ _("nav.calc") }}</a>{% endif %}
-      {% if me.can("company.view") %}<a href="/company" class="{{ 'active' if p.startswith('/company') or p.startswith('/pool') }}">{{ _("nav.company") }}</a>{% endif %}
-    {% endif %}
-    <a href="/support" class="{{ 'active' if p.startswith('/support') }}">{{ _("nav.support") }}</a>
-    <a href="/account" class="{{ 'active' if p.startswith('/account') }}">{{ _("nav.account") }}</a>
+  {% if nav %}
+  <nav class="nav {{ 'admin' if me.session.is_admin }}" aria-label="{{ _('nav.main') }}"><div class="nav-in">
+    {% for href, key, ic, active in nav %}<a href="{{ href }}" class="{{ 'active' if active }}"{% if active %} aria-current="page"{% endif %}>{{ icon(ic) }}<span>{{ _(key) }}</span></a>{% endfor %}
   </div></nav>
   {% endif %}
-{% endif %}
+</header>
 <main id="main">
   {% if flash %}<div class="alert {{ flash.k }}" role="status">{{ _(flash.m, **flash.p) }}</div>{% endif %}
   {% block content %}{% endblock %}
@@ -92,6 +98,22 @@
   <a href="/help">{{ _("footer.help") }}</a>
   {% if settings.is_dev %}<a href="/dev/outbox">{{ _("footer.dev_outbox") }}</a><a href="/api/docs">API</a>{% endif %}
 </div></footer>
-<script src="/static/js/app.js" defer></script>
+{% if nav %}
+{# Mobile: the first four destinations as a thumb-reachable tab bar, the rest in a sheet #}
+{% set primary = nav[:4] if nav|length > 5 else nav %}
+<nav class="tabbar" aria-label="{{ _('nav.main') }}">
+  {% for href, key, ic, active in primary %}<a href="{{ href }}" class="{{ 'active' if active }}"{% if active %} aria-current="page"{% endif %}>{{ icon(ic) }}<span>{{ _(key) }}</span></a>{% endfor %}
+  {% if nav|length > 5 %}
+  <details class="tab-more">
+    <summary>{{ icon("menu") }}<span>{{ _("nav.more") }}</span></summary>
+    <div class="sheet" role="menu">
+      {% for href, key, ic, active in nav[4:] %}<a role="menuitem" href="{{ href }}" class="{{ 'active' if active }}">{{ icon(ic) }}<span>{{ _(key) }}</span></a>{% endfor %}
+      <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button role="menuitem">{{ icon("logout") }}<span>{{ _("nav.logout") }}</span></button></form>
+    </div>
+  </details>
+  {% endif %}
+</nav>
+{% endif %}
+<script src="/static/js/app.js?v=2" defer></script>
 </body>
 </html>

@@ -3,9 +3,12 @@
 {% block content %}
 <h1>{{ _("footer.dev_outbox") }}</h1>
 <div class="alert warn">{{ _("dev.outbox_note") }}</div>
-<div class="table-wrap"><table>
+{% if anonymous %}<div class="card empty"><b>{{ _("dev.login_first") }}</b></div>
+{% else %}
+<div class="table-wrap"><table class="responsive">
 <thead><tr><th>{{ _("dev.channel") }}</th><th>{{ _("dev.to") }}</th><th>{{ _("dev.text") }}</th><th>{{ _("dev.at") }}</th></tr></thead>
-<tbody>{% for m in messages %}<tr><td>{{ m.channel }}</td><td>{{ m.to }}</td><td>{{ m.body }}</td><td class="muted">{{ m.at[:19] }}</td></tr>
+<tbody>{% for m in messages %}<tr><td data-label="{{ _('dev.channel') }}">{{ m.channel }}</td><td data-label="{{ _('dev.to') }}">{{ m.to }}</td><td data-label="{{ _('dev.text') }}"><b>{{ m.body }}</b></td><td data-label="{{ _('dev.at') }}" class="muted">{{ m.at[:19] }}</td></tr>
 {% else %}<tr><td colspan="4" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody>
 </table></div>
+{% endif %}
 {% endblock %}

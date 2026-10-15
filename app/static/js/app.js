@@ -5,6 +5,14 @@
 
   var csrf = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
 
+  // ---- logout wipes the offline cache (driver trips) so the next person on a shared phone sees nothing
+  document.querySelectorAll('form[action="/logout"]').forEach(function (f) {
+    f.addEventListener("submit", function () {
+      try { localStorage.removeItem("abdex-checkpoints"); } catch (e) { /* ignore */ }
+      if (window.caches) caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
+    });
+  });
+
   // ---- confirmations ------------------------------------------------------------------
   document.addEventListener("submit", function (e) {
     var f = e.target;
@@ -137,6 +145,51 @@
     };
     chat.scrollTop = chat.scrollHeight;
     setInterval(poll, 5000);
+  }
+
+  // ---- 3D tilt for panels (pointer devices only, respects reduced motion) ----------
+  var fine = window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (fine && !calm) {
+    document.querySelectorAll(".panel-3d, .stat").forEach(function (el) {
+      var raf = 0;
+      el.addEventListener("pointermove", function (e) {
+        var r = el.getBoundingClientRect();
+        var x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(function () {
+          var max = r.width > 520 ? 2.5 : 6;  // big panels tilt less
+          el.style.setProperty("--ry", ((x - 0.5) * max * 2).toFixed(2) + "deg");
+          el.style.setProperty("--rx", ((0.5 - y) * max * 2).toFixed(2) + "deg");
+          el.style.setProperty("--mx", (x * 100).toFixed(1) + "%");
+          el.style.setProperty("--my", (y * 100).toFixed(1) + "%");
+          el.classList.add("is-tilting");
+        });
+      });
+      el.addEventListener("pointerleave", function () {
+        cancelAnimationFrame(raf);
+        el.style.setProperty("--rx", "0deg"); el.style.setProperty("--ry", "0deg");
+        el.classList.remove("is-tilting");
+      });
+    });
+  }
+
+  // ---- tables -> stacked cards on phones: copy column headers into data-label -------
+  document.querySelectorAll(".table-wrap table").forEach(function (t) {
+    var heads = Array.prototype.map.call(t.querySelectorAll("thead th"), function (th) { return th.textContent.trim(); });
+    if (!heads.length) return;
+    t.querySelectorAll("tbody tr").forEach(function (tr) {
+      Array.prototype.forEach.call(tr.children, function (td, i) {
+        if (!td.hasAttribute("data-label") && heads[i] && !td.hasAttribute("colspan")) td.setAttribute("data-label", heads[i]);
+      });
+    });
+  });
+
+  // ---- mobile "more" sheet: close on outside tap / Escape -----------------------------
+  var more = document.querySelector(".tab-more");
+  if (more) {
+    document.addEventListener("click", function (e) { if (more.open && !more.contains(e.target)) more.open = false; });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") more.open = false; });
   }
 
   // ---- PWA ----------------------------------------------------------------------------

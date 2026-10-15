@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import hmac
 from datetime import datetime, timedelta
 from typing import Literal
 
@@ -58,7 +59,7 @@ def api_caller(request: Request, db: Session = Depends(get_db), x_api_key: str |
         if len(parts) != 3 or parts[0] != "abx":
             raise AppError("unauthorized", status_code=401)
         key = db.execute(select(ApiKey).where(ApiKey.prefix == parts[1])).scalar_one_or_none()
-        if (key is None or key.key_hash != hash_token(x_api_key) or key.revoked_at
+        if (key is None or not hmac.compare_digest(key.key_hash, hash_token(x_api_key)) or key.revoked_at
                 or (key.expires_at and key.expires_at < utcnow())):
             raise AppError("unauthorized", status_code=401)
         key.last_used_at = utcnow()

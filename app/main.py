@@ -5,6 +5,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 import time
 
 from fastapi import FastAPI, Request
@@ -39,6 +40,8 @@ def _setup_logging() -> None:
     root.setLevel(logging.INFO)
 
 
+_REQUEST_ID_RE = re.compile(r"[^A-Za-z0-9._-]")
+
 CSP = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; "
        "connect-src 'self'; font-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; "
        "object-src 'none'; manifest-src 'self'; worker-src 'self'")
@@ -68,13 +71,20 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def context_middleware(request: Request, call_next):
         from app.bootstrap import ensure_initialized
-        from app.web.deps import DEVICE_COOKIE, LANG_COOKIE
+        from app.web.deps import DEVICE_COOKIE, LANG_COOKIE, SESSION_COOKIE
 
         await asyncio.to_thread(ensure_initialized)
 
-        rid = request.headers.get("x-request-id", "")[:40] or uuid7().hex
-        fwd = request.headers.get("x-forwarded-for", "")
-        ip = (fwd.split(",")[0].strip() if fwd else "") or (request.client.host if request.client else "")
+        rid = _REQUEST_ID_RE.sub("", request.headers.get("x-request-id", ""))[:40] or uuid7().hex
+        ip = request.client.host if request.client else ""
+        if settings.trust_proxy:
+            fwd = request.headers.get("x-forwarded-for", "")
+            ip = (fwd.split(",")[0].strip() if fwd else "") or ip
+        length = request.headers.get("content-length", "")
+        if length.isdigit() and int(length) > (settings.max_upload_mb + 2) * 1024 * 1024:
+            return JSONResponse(status_code=413, content={"error": {
+                "code": "payload_too_large", "message": translate("error.file_too_large", limit=settings.max_upload_mb),
+                "fields": {}, "request_id": rid}})
         device = request.cookies.get(DEVICE_COOKIE) or ""
         new_device = ""
         if not device:
@@ -103,10 +113,14 @@ def create_app() -> FastAPI:
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(self), camera=(self), microphone=(), payment=()"
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
         if settings.secure_cookies:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        if request.url.path.startswith(("/deals", "/orders", "/company", "/account", "/admin", "/finance", "/files")):
-            response.headers["Cache-Control"] = "no-store"
+            response.headers["Content-Security-Policy"] = CSP + "; upgrade-insecure-requests"
+        if not request.url.path.startswith("/static/") and (
+                SESSION_COOKIE in request.cookies or request.url.path.startswith(("/files", "/admin", "/api/"))):
+            response.headers["Cache-Control"] = "no-store"  # personal pages never land in shared caches
         if new_device:
             response.set_cookie(DEVICE_COOKIE, new_device, max_age=3600 * 24 * 365 * 2, httponly=True,
                                 samesite="lax", secure=settings.secure_cookies)
@@ -135,6 +149,9 @@ def create_app() -> FastAPI:
                    routes_admin, routes_api):
         app.include_router(module.router)
     app.include_router(routes_api.html, include_in_schema=False)
+    from app.web import routes_hooks
+
+    app.include_router(routes_hooks.router, include_in_schema=False)
     return app
 
 

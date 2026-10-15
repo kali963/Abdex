@@ -3,32 +3,33 @@
 {% block title %}{{ _("landing.title") }}{% endblock %}
 {% block content %}
 <section class="hero">
-  <h1>{{ _("landing.h1") }}</h1>
-  <p>{{ _("landing.lead") }}</p>
-  <div class="actions">
-    {% if me %}<a class="btn primary" href="/dashboard">{{ _("nav.dashboard") }}</a>
-    {% else %}
-    <a class="btn primary" href="/register?type=client">{{ _("landing.cta_client") }}</a>
-    <a class="btn" href="/register?type=carrier">{{ _("landing.cta_carrier") }}</a>
-    <a class="btn" href="/register?type=driver">{{ _("landing.cta_driver") }}</a>
-    {% endif %}
+  <div>
+    <h1>{{ _("landing.h1") }}</h1>
+    <p>{{ _("landing.lead") }}</p>
+    <div class="actions">
+      {% if me %}<a class="btn primary" href="/dashboard">{{ _("nav.dashboard") }}</a>
+      {% else %}
+      <a class="btn primary" href="/register?type=client">{{ _("landing.cta_client") }}</a>
+      <a class="btn" href="/register?type=carrier">{{ _("landing.cta_carrier") }}</a>
+      <a class="btn" href="/register?type=driver">{{ _("landing.cta_driver") }}</a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="scene" aria-hidden="true">
+    <div class="slab"><b>{{ _("landing.hero_card1") }}</b>{{ _("landing.hero_card1_t") }}</div>
+    <div class="slab"><b>{{ _("landing.hero_card2") }}</b>{{ _("landing.hero_card2_t") }}</div>
+    <div class="slab"><b>{{ _("landing.hero_card3") }}</b>{{ _("landing.hero_card3_t") }}</div>
   </div>
 </section>
 <h2>{{ _("landing.problems") }}</h2>
 <div class="grid three">
-  <div class="card feature"><h3>🛡 {{ _("landing.f1_t") }}</h3><p>{{ _("landing.f1") }}</p></div>
-  <div class="card feature"><h3>🔒 {{ _("landing.f2_t") }}</h3><p>{{ _("landing.f2") }}</p></div>
-  <div class="card feature"><h3>📄 {{ _("landing.f3_t") }}</h3><p>{{ _("landing.f3") }}</p></div>
-  <div class="card feature"><h3>💬 {{ _("landing.f4_t") }}</h3><p>{{ _("landing.f4") }}</p></div>
-  <div class="card feature"><h3>🚚 {{ _("landing.f5_t") }}</h3><p>{{ _("landing.f5") }}</p></div>
-  <div class="card feature"><h3>📊 {{ _("landing.f6_t") }}</h3><p>{{ _("landing.f6") }}</p></div>
+  {% for n, ic in ((1, "shield"), (2, "deal"), (3, "box"), (4, "help"), (5, "truck"), (6, "chart")) %}
+  <div class="card feature panel-3d"><div class="f-ico">{{ ui.icon(ic) }}</div><h3>{{ _("landing.f" ~ n ~ "_t") }}</h3><p>{{ _("landing.f" ~ n) }}</p></div>
+  {% endfor %}
 </div>
 <h2>{{ _("landing.how") }}</h2>
-<div class="grid three">
-  <div class="card"><b>1.</b> {{ _("landing.step1") }}</div>
-  <div class="card"><b>2.</b> {{ _("landing.step2") }}</div>
-  <div class="card"><b>3.</b> {{ _("landing.step3") }}</div>
-  <div class="card"><b>4.</b> {{ _("landing.step4") }}</div>
+<div class="grid three steps">
+  {% for n in range(1, 5) %}<div class="card panel-3d">{{ _("landing.step" ~ n) }}</div>{% endfor %}
 </div>
 <h2>{{ _("landing.levels") }}</h2>
 <div class="table-wrap"><table>

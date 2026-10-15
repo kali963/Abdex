@@ -17,37 +17,35 @@ log = logging.getLogger("abdex.worker")
 _last_daily = 0.0
 
 
+def _run(name: str, job, stats: dict) -> None:
+    """Each job in its own session; one failing job never stops the others."""
+    db = SessionLocal()
+    try:
+        stats[name] = job(db)
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        log.exception("job %s failed", name)
+    finally:
+        db.close()
+
+
 def tick() -> dict:
     global _last_daily
     from app.modules.billing.service import enforce_debt_limits
     from app.modules.fleet.service import check_document_expiry
+    from app.modules.integrations.base import flush_journal
     from app.modules.notifications.service import process_outbox
     from app.modules.orders.service import expire_bidding
-
-    from app.modules.integrations.base import flush_journal
+    from app.modules.support.service import escalate_overdue
 
     stats = {"journal": flush_journal()}
-    for name, job in (("outbox", process_outbox), ("bidding", expire_bidding)):
-        db = SessionLocal()
-        try:
-            stats[name] = job(db)
-        except Exception:  # noqa: BLE001
-            db.rollback()
-            log.exception("job %s failed", name)
-        finally:
-            db.close()
+    for name, job in (("outbox", process_outbox), ("bidding", expire_bidding), ("sla", escalate_overdue)):
+        _run(name, job, stats)
     if time.time() - _last_daily > 6 * 3600:
         _last_daily = time.time()
         for name, job in (("doc_expiry", check_document_expiry), ("debt", enforce_debt_limits)):
-            db = SessionLocal()
-            try:
-                stats[name] = job(db)
-                db.commit()
-            except Exception:  # noqa: BLE001
-                db.rollback()
-                log.exception("job %s failed", name)
-            finally:
-                db.close()
+            _run(name, job, stats)
     return stats
 
 

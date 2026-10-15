@@ -136,7 +136,7 @@ def _on_status(db: Session, order, frm, to, **_):
         flow.transition(db, order, flow.FEE_INVOICED, actor=flow.SYSTEM, reason="platform fee accrued")
         from app.modules.notifications.service import notify_event
 
-        notify_event(db, "fee.invoiced", params={"number": deal.number}, link="/finance",
+        notify_event(db, "fee.invoiced", params={"number": deal.number}, link=f"/deals/{deal.id}#docs",
                      client_company_id=deal.client_company_id, include_managers=True, dedup=f"fee:{deal.id}")
 
 
@@ -194,7 +194,10 @@ def import_bank_statement(db: Session, raw: bytes) -> dict:
     """FR-BIL-04: CSV statement (invoice_number;amount;reference) matched by invoice number."""
     text = raw.decode("utf-8-sig", errors="replace")
     sample = text[:1000]
-    dialect = csv.Sniffer().sniff(sample, delimiters=";,\t") if sample else csv.excel
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=";,\t") if sample else csv.excel
+    except csv.Error:
+        dialect = csv.excel  # one column or not a CSV at all: rows simply won't match
     matched, unmatched = 0, []
     for row in csv.reader(io.StringIO(text), dialect):
         if not row or row[0].lower().startswith("invoice"):

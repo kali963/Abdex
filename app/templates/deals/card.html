@@ -17,7 +17,7 @@
 {% if side == "staff" %}
 <div class="card warn"><b>{{ _("admin.staff_view") }}</b>
   {% if deal.needs_manual_review %}<form method="post" action="/admin/deals/{{ deal.id }}/clear-review" class="row">{{ ui.csrf() }}<input type="text" name="note" placeholder="{{ _('admin.review_note') }}" aria-label="{{ _('admin.review_note') }}" required><button class="btn small ok">{{ _("admin.clear_review") }}</button></form>{% endif %}
-  <a class="btn small" href="/admin/orders/{{ order.id }}">{{ _("admin.order_card") }}</a></div>
+  {% if me.can("admin.orders") %}<a class="btn small" href="/admin/orders/{{ order.id }}">{{ _("admin.order_card") }}</a>{% endif %}</div>
 {% endif %}
 {% if deal.needs_manual_review and side != "staff" %}<div class="alert warn">{{ _("deal.manual_review_text") }}</div>{% endif %}
 
@@ -59,7 +59,7 @@
   <p>{{ dispute.description }}</p>
   <dl class="kv"><dt>{{ _("dispute.client_position") }}</dt><dd>{{ dispute.client_position or "—" }}</dd><dt>{{ _("dispute.carrier_position") }}</dt><dd>{{ dispute.carrier_position or "—" }}</dd>
   {% if dispute.resolution %}<dt>{{ _("dispute.resolution") }}</dt><dd>{{ dispute.resolution }} ({{ status_label(dispute.outcome) }})</dd>{% endif %}</dl>
-  {% if dispute.status == "open" and side in ("client", "carrier") %}
+  {% if dispute.status == "open" and side in ("client", "carrier") and me.can("deal.manage") %}
   <form method="post" action="/deals/{{ deal.id }}/dispute/{{ dispute.id }}/position" class="stack">{{ ui.csrf() }}{{ ui.textarea("text", _("dispute.your_position"), dispute.client_position if side == "client" else dispute.carrier_position, rows=3) }}<button class="btn">{{ _("action.save") }}</button></form>{% endif %}
   <p class="muted"><small>{{ _("dispute.evidence_hint") }}</small></p>
 </section>
@@ -164,7 +164,7 @@
     {% if m.kind == "system" %}<div class="msg system" id="m-{{ m.id }}">{{ sysmsg(m.body) }}<span class="meta">{{ fmt_dt(m.created_at) }}</span></div>
     {% else %}<div class="msg {{ 'mine' if m.author_user_id == me.user.id }}" id="m-{{ m.id }}">{{ m.body }}{% if m.attachment_file_id %}<br><a href="{{ file_url(m.attachment_file_id) }}" target="_blank" rel="noopener">📎 {{ _("chat.attachment") }}</a>{% endif %}
       <span class="meta">{{ fmt_dt(m.created_at) }}{% if m.author_user_id == me.user.id %} · {{ "✓✓" if m.id in read_ids else "✓" }}{% endif %}{% if m.flags %} · ⚠{% endif %}</span>
-      {% if side == "staff" %}<form method="post" action="/admin/messages/{{ m.id }}/hide" class="row">{{ ui.csrf() }}<input type="text" name="reason" placeholder="{{ _('admin.hide_reason') }}" aria-label="{{ _('admin.hide_reason') }}" required><button class="btn small">{{ _("admin.hide") }}</button></form>{% endif %}</div>{% endif %}
+      {% if side == "staff" and me.can("admin.antifraud") %}<form method="post" action="/admin/messages/{{ m.id }}/hide" class="row">{{ ui.csrf() }}<input type="text" name="reason" placeholder="{{ _('admin.hide_reason') }}" aria-label="{{ _('admin.hide_reason') }}" required><button class="btn small">{{ _("admin.hide") }}</button></form>{% endif %}</div>{% endif %}
   {% endfor %}
   </div>
   {% if side != "staff" %}

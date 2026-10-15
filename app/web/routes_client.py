@@ -88,6 +88,43 @@ async def order_create(request: Request, db: Session = Depends(get_db), me: Prin
     return redirect(f"/orders/{order.id}", flash=("success", "msg.order_saved"))
 
 
+@router.get("/orders/import")
+def import_page(request: Request, me: Principal = Depends(require("order.create"))):
+    from app.modules.orders.importer import COLUMNS, MAX_ROWS, REQUIRED
+
+    return render(request, "client/import.html", {"columns": COLUMNS, "required": REQUIRED, "max_rows": MAX_ROWS})
+
+
+@router.get("/orders/import/template.xlsx")
+def import_template(me: Principal = Depends(require("order.create"))):
+    from fastapi.responses import Response
+
+    from app.modules.orders.importer import template_xlsx
+
+    return Response(template_xlsx(), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="abdex-orders-template.xlsx"'})
+
+
+@router.post("/orders/import")
+async def import_run(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("order.create"))):
+    """FR-ORD-06: all rows validated first; any error -> nothing is created, report by row."""
+    from app.core.audit import audit
+    from app.modules.orders.importer import COLUMNS, MAX_ROWS, REQUIRED, import_orders
+
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not hasattr(upload, "read"):
+        raise ValidationFailed({"file": "error.required"})
+    result = import_orders(db, db.get(Company, me.company.id), upload.filename or "", await upload.read())
+    ctx = {"columns": COLUMNS, "required": REQUIRED, "max_rows": MAX_ROWS, "result": result}
+    if result.errors:
+        db.rollback()
+        return render(request, "client/import.html", ctx, status_code=422)
+    audit(db, "order.imported", object_type="company", object_id=me.company.id, details={"count": len(result.created)})
+    db.commit()
+    return render(request, "client/import.html", ctx)
+
+
 @router.get("/orders/{oid}")
 def order_view(oid: str, request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("order.view"))):
     order = orders.get_for_client(db, parse_uuid(oid), me.company.id)

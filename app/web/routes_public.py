@@ -68,6 +68,9 @@ async def login(request: Request, db: Session = Depends(get_db)):
     db.commit()
     if not sess.mfa_passed:
         target = "/login/2fa"
+        if user.sms_2fa_enabled and not user.totp_enabled:
+            accounts.start_login_sms(db, user)  # SMS is the chosen second factor: send the code right away
+            db.commit()
     elif accounts.must_enroll_2fa(db, user):
         target = "/account/security?enroll=1"
     elif not user.phone_verified:
@@ -81,7 +84,12 @@ async def login(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/login/2fa")
 def twofa_form(request: Request, me: Principal = Depends(get_principal)):
-    return render(request, "public/login_2fa.html")
+    from app.core.security import mask_phone
+
+    if me.session.mfa_passed:
+        return redirect("/dashboard")
+    return render(request, "public/login_2fa.html", {"phone_masked": mask_phone(me.user.phone),
+                                                     "sms_mode": me.user.sms_2fa_enabled and not me.user.totp_enabled})
 
 
 @router.post("/login/2fa")
@@ -94,7 +102,11 @@ async def twofa(request: Request, db: Session = Depends(get_db), me: Principal =
     user = db.get(User, me.user.id)
     if not accounts.verify_second_factor(db, user, str(form.get("code", ""))):
         db.commit()
-        return render(request, "public/login_2fa.html", {"error": "error.code_invalid"}, status_code=400)
+        from app.core.security import mask_phone
+
+        return render(request, "public/login_2fa.html", {
+            "error": "error.code_invalid", "phone_masked": mask_phone(user.phone),
+            "sms_mode": user.sms_2fa_enabled and not user.totp_enabled}, status_code=400)
     # SEC-AUT-06: new session id after privilege elevation
     sess = db.merge(me.session)
     accounts.revoke_session(db, sess)
@@ -264,10 +276,16 @@ def health(db: Session = Depends(get_db)):
 
 
 @router.get("/dev/outbox")
-def dev_outbox(request: Request):
-    """Development only: shows SMS/e-mail/Telegram that would have been sent."""
+def dev_outbox(request: Request, me: Principal | None = Depends(get_principal_optional)):
+    """Development/demo only: shows the SMS / e-mail / Telegram messages that would have been sent.
+    Only the signed-in user's own messages are listed: on a public demo the page must not hand out
+    other people's login codes or password-reset links."""
     if not settings.is_dev:
         raise NotFound()
     from app.modules.integrations.adapters import _OutboundAdapter
 
-    return render(request, "public/dev_outbox.html", {"messages": list(reversed(_OutboundAdapter.sent))})
+    mine: list = []
+    if me is not None:
+        targets = {me.user.phone, me.user.email or "", str(me.user.id)} - {""}
+        mine = [m for m in reversed(_OutboundAdapter.sent) if m["to"] in targets]
+    return render(request, "public/dev_outbox.html", {"messages": mine, "anonymous": me is None})

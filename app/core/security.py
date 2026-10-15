@@ -6,6 +6,7 @@ SEC-APP-11 CSPRNG everywhere (the `secrets` module).
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime
 import hmac
 import secrets
 import time
@@ -85,10 +86,18 @@ def totp_uri(secret: str, account: str) -> str:
     return pyotp.TOTP(secret).provisioning_uri(name=account, issuer_name="AbdEX")
 
 
-def verify_totp(secret: str | None, code: str) -> bool:
-    if not secret or not code:
-        return False
-    return pyotp.TOTP(secret).verify(code.strip().replace(" ", ""), valid_window=1)
+def verify_totp(secret: str | None, code: str, *, last_step: int = 0) -> int | None:
+    """Returns the matched time step (to be stored), or None. A step already used is rejected,
+    so an intercepted code cannot be replayed within its validity window."""
+    code = (code or "").strip().replace(" ", "")
+    if not secret or not code.isdigit():
+        return None
+    totp = pyotp.TOTP(secret)
+    now_step = totp.timecode(datetime.now())
+    for step in (now_step - 1, now_step, now_step + 1):
+        if step > last_step and hmac.compare_digest(totp.generate_otp(step), code):
+            return step
+    return None
 
 
 def sign_payload(payload: str, ttl_seconds: int = 300) -> str:
