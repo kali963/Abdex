@@ -7,7 +7,7 @@
 <section class="card"><h2>{{ _("kyc.documents") }}</h2>
 <div class="table-wrap"><table>{% for d in docs %}<tr><td>{{ _("doc." ~ d.doc_type) }}<br><small class="muted">{{ _("kyc.subject_" ~ d.subject_type) }}{% if d.expires_on %} · {{ _("kyc.expires") }} {{ fmt_date(d.expires_on) }}{% endif %}</small></td><td>{{ ui.status(d.status) }}</td><td><a href="{{ file_url(d.file_id) }}" target="_blank" rel="noopener">{{ _("action.open") }}</a></td></tr>{% else %}<tr><td class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</table></div>
 <h3>{{ _("fleet.vehicles") }}</h3><ul>{% for v in vehicles %}<li>{{ v.plate }} · {{ v.vin }} · {{ ui.status(v.status) }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
-<h3>{{ _("fleet.drivers") }}</h3><ul>{% for d in drivers %}<li>{{ d.full_name }} · {{ _("fleet.iin") }} ••••{{ d.iin[-4:] }} · {{ ui.status(d.status) }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+<h3>{{ _("fleet.drivers") }}</h3><ul>{% for d in drivers %}<li>{{ d.full_name }} · {{ _("fleet.iin") }} ••••{{ d.iin[-4:] }} · {{ ui.status(d.status) }}{% set b = bio.get(d.id) %}{% if b %} · <span class="badge {{ 'ok' if b.status == 'passed' else 'warn' }}">{{ _("bio.short") }}: {{ _("bio.st." ~ b.status) }}</span>{% endif %}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
 </section>
 <section class="stack">
 <div class="card"><h2>{{ _("kyc.registry") }}</h2>{% for ch in checks %}<p>{{ ch.source }} · <b>{{ ch.status }}</b> · {{ fmt_dt(ch.created_at) }} · {{ _("kyc.basis") }}: {{ ch.basis }}</p>{% else %}<p class="muted">{{ _("common.empty") }}</p>{% endfor %}</div>

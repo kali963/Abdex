@@ -114,7 +114,7 @@ def seed_demo(db) -> None:
 
 
 def _as(user, company, role):
-    return set_ctx(RequestContext(request_id="demo-seed", ip="127.0.0.1", user_agent="seed", user_id=user.id,
+    return set_ctx(RequestContext(request_id="demo-seed", extra={"rls_bypass": True}, ip="127.0.0.1", user_agent="seed", user_id=user.id,
                                   company_id=company.id if company else None, role=role))
 
 

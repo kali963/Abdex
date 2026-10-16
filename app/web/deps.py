@@ -85,6 +85,9 @@ def get_principal_optional(request: Request, db: Session = Depends(get_db)) -> P
             ctx.timezone = user.timezone or ctx.timezone
             if sess.impersonator_id:
                 ctx.extra["impersonator"] = str(sess.impersonator_id)
+            from app.core import rls
+
+            rls.apply(db)  # NFR-DB-07: the transaction may have begun before the company was known
     request.state.principal = principal
     return principal
 

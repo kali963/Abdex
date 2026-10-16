@@ -67,6 +67,9 @@ def api_caller(request: Request, db: Session = Depends(get_db), x_api_key: str |
         if company is None or company.is_blocked:
             raise Forbidden()
         get_ctx().company_id = company.id
+        from app.core import rls
+
+        rls.apply(db)  # NFR-DB-07
         db.commit()
         return ApiCaller(company=company, scopes=tuple(key.scopes.split(",")),
                          role="owner" if company.kind == "client" else "fleet_owner")

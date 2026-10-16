@@ -72,7 +72,7 @@ def kpi(db: Session, date_from: date | None = None, date_to: date | None = None)
         return db.execute(select(func.count(model.id)).where(model.created_at >= start, model.created_at <= end,
                                                              *conds)).scalar_one()
 
-    drivers = db.execute(select(func.count(func.distinct(Driver.iin))).where(
+    drivers = db.execute(select(func.count(func.distinct(Driver.iin_index))).where(
         Driver.created_at >= start, Driver.created_at <= end, Driver.is_deleted.is_(False))).scalar_one()
     driver_members = db.execute(select(func.count(Membership.id)).where(
         Membership.role == ROLE_DRIVER, Membership.created_at >= start, Membership.created_at <= end)).scalar_one()

@@ -17,14 +17,30 @@ os.environ["SEED_DEMO_DATA"] = "true"
 os.environ["REQUIRE_2FA_PRIVILEGED"] = "false"
 
 if os.environ["DATABASE_URL"].startswith("postgresql"):
-    from alembic import command
-    from alembic.config import Config
+    # Migrations run as the owner in a separate process; the application under test then connects as a
+    # plain role, as in production, so append-only triggers and row-level security policies are in force.
+    import subprocess
+    import sys
+
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.engine import make_url
 
     _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _cfg = Config(os.path.join(_root, "alembic.ini"))
-    _cfg.set_main_option("script_location", os.path.join(_root, "alembic"))
-    command.downgrade(_cfg, "base")
-    command.upgrade(_cfg, "head")
+    _owner_url = os.environ["DATABASE_URL"]
+    for _step in (["downgrade", "base"], ["upgrade", "head"]):
+        subprocess.run([sys.executable, "-m", "alembic", *_step], cwd=_root, check=True,  # noqa: S603
+                       env={**os.environ, "DATABASE_URL": _owner_url})
+    _app_role, _app_pw = "abdex_app_test", "abdex-app-test-pw"  # noqa: S105 — throwaway role of the test database
+    _eng = create_engine(_owner_url)
+    with _eng.begin() as _c:
+        _c.execute(text(f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{_app_role}') THEN "  # noqa: S608 — fixed test role name
+                        f"CREATE ROLE {_app_role} LOGIN PASSWORD '{_app_pw}' NOSUPERUSER NOBYPASSRLS; END IF; END $$"))
+        _c.execute(text(f"GRANT USAGE ON SCHEMA public TO {_app_role}"))
+        _c.execute(text(f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {_app_role}"))
+        _c.execute(text(f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {_app_role}"))
+    _eng.dispose()
+    os.environ["DATABASE_URL"] = make_url(_owner_url).set(username=_app_role, password=_app_pw).render_as_string(
+        hide_password=False)
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

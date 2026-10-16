@@ -11,3 +11,4 @@ from app.modules.notifications import models as notifications  # noqa: F401
 from app.modules.billing import models as billing  # noqa: F401
 from app.modules.rating import models as rating  # noqa: F401
 from app.modules.webhooks import models as webhooks  # noqa: F401
+import app.core.rls  # noqa: F401,E402 — registers the row-level security hook (NFR-DB-07)

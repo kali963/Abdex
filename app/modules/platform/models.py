@@ -230,3 +230,21 @@ class ProductEvent(Model):
     name: Mapped[str] = mapped_column(String(40), index=True)
     anon_id: Mapped[str] = mapped_column(String(16), index=True)
     role: Mapped[str] = mapped_column(String(20), default="")
+
+
+class ProcessingRecord(Model):
+    """SEC-DAT-10/11: register of personal data processing, recipients and cross-border transfers."""
+
+    __tablename__ = "processing_records"
+
+    code: Mapped[str] = mapped_column(String(40), unique=True)
+    purpose: Mapped[str] = mapped_column(String(300))
+    data_categories: Mapped[str] = mapped_column(String(500))
+    legal_basis: Mapped[str] = mapped_column(String(300))
+    recipient: Mapped[str] = mapped_column(String(200), default="")      # third party or processor; "" = AbdEX only
+    cross_border: Mapped[bool] = mapped_column(Boolean, default=False)
+    countries: Mapped[str] = mapped_column(String(200), default="")      # ISO codes for cross-border transfers
+    safeguards: Mapped[str] = mapped_column(String(500), default="")
+    retention: Mapped[str] = mapped_column(String(200), default="")
+    adapter: Mapped[str] = mapped_column(String(40), default="")         # integration adapter that sends the data
+    active: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -5,9 +5,9 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text, Uuid
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, validates
 
-from app.db import AppendOnly, AwareDateTime, Model
+from app.db import AppendOnly, AwareDateTime, Encrypted, Model
 
 LEVEL_NAMES = {0: "L0", 1: "L1", 2: "L2", 3: "L3"}
 
@@ -36,13 +36,22 @@ class Driver(Model):
     company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
     user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id"), index=True)
     full_name: Mapped[str] = mapped_column(String(200))
-    iin: Mapped[str] = mapped_column(String(12), index=True)
-    phone: Mapped[str] = mapped_column(String(20), default="")
-    license_number: Mapped[str] = mapped_column(String(30), default="")
+    # NFR-DB-08: personal data encrypted in the application; lookups go through the blind index
+    iin: Mapped[str] = mapped_column(Encrypted("drivers.iin"), default="")
+    iin_index: Mapped[str] = mapped_column(String(40), default="", index=True)
+    phone: Mapped[str] = mapped_column(Encrypted("drivers.phone"), default="")
+    license_number: Mapped[str] = mapped_column(Encrypted("drivers.license_number"), default="")
     license_categories: Mapped[str] = mapped_column(String(30), default="C,CE")
     license_until: Mapped[date | None] = mapped_column(Date)
     adr_permit: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(20), default="pending")
+
+    @validates("iin")
+    def _index_iin(self, key, value):
+        from app.core.crypto import blind_index
+
+        self.iin_index = blind_index(value, "iin")
+        return value
 
 
 class VerificationDocument(Model):
@@ -88,3 +97,22 @@ class RegistryCheck(AppendOnly, Model):
     status: Mapped[str] = mapped_column(String(20))  # match / mismatch / not_found / unavailable
     result: Mapped[str] = mapped_column(Text, default="{}")
     valid_until: Mapped[datetime | None] = mapped_column(AwareDateTime)
+
+
+class BiometricCheck(Model):
+    """FR-KYC-08, SEC-DAT-10: only the result is kept; source images are deleted after a short period."""
+
+    __tablename__ = "biometric_checks"
+
+    driver_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("drivers.id"), index=True)
+    company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(40))
+    match: Mapped[bool] = mapped_column(Boolean, default=False)
+    liveness: Mapped[bool] = mapped_column(Boolean, default=False)
+    score: Mapped[int] = mapped_column(Integer, default=0)  # 0..100
+    status: Mapped[str] = mapped_column(String(20), default="passed")  # passed / failed / unavailable
+    selfie_file_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("stored_files.id"))
+    document_file_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("stored_files.id"))
+    images_delete_after: Mapped[datetime | None] = mapped_column(AwareDateTime)
+    images_deleted_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+    valid_until: Mapped[date | None] = mapped_column(Date)

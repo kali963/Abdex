@@ -276,7 +276,9 @@ async def consent_toggle(purpose: str, request: Request, db: Session = Depends(g
     else:
         accounts.revoke_consent(db, me.user.id, purpose)
     db.commit()
-    return redirect("/account/consents", flash=("success", "msg.saved"))
+    from app.web.deps import safe_next
+
+    return redirect(safe_next(str(form.get("next", "")), "/account/consents"), flash=("success", "msg.saved"))
 
 
 @router.get("/account/notifications")

@@ -542,6 +542,10 @@ def revoke_consent(db: Session, user_id, purpose: str) -> None:
     for c in db.execute(select(Consent).where(Consent.user_id == user_id, Consent.purpose == purpose,
                                               Consent.revoked_at.is_(None))).scalars():
         c.revoked_at = utcnow()
+    if purpose == "biometrics":  # SEC-DAT-10: images still kept are deleted together with the consent
+        from app.modules.fleet.biometrics import purge_images
+
+        purge_images(db, user_id=user_id)
     audit(db, "consent.revoked", object_type="consent", object_id=purpose, user_id=user_id)
 
 

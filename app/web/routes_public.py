@@ -236,8 +236,12 @@ def legal(page: str, request: Request, db: Session = Depends(get_db),
           me: Principal | None = Depends(get_principal_optional)):
     if page not in ("privacy", "terms", "security"):
         raise NotFound()
-    return render(request, f"public/legal_{page}.html",
-                  {"role_text": localized_setting(db, "platform.role_explanation")})
+    ctx = {"role_text": localized_setting(db, "platform.role_explanation")}
+    if page == "privacy":  # SEC-DAT-11: recipients and cross-border transfers are public
+        from app.modules.platform.processing import records
+
+        ctx["processing"] = records(db, active_only=True)
+    return render(request, f"public/legal_{page}.html", ctx)
 
 
 @router.get("/help")

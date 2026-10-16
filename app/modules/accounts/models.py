@@ -5,9 +5,9 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, validates
 
-from app.db import AppendOnly, AwareDateTime, Model
+from app.db import AppendOnly, AwareDateTime, Encrypted, Model
 
 # Account type (what kind of market participant) ------------------------------------------
 COMPANY_CLIENT = "client"
@@ -164,12 +164,20 @@ class BankAccount(Model):
     __tablename__ = "bank_accounts"
 
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
-    iban: Mapped[str] = mapped_column(String(34), index=True)
+    iban: Mapped[str] = mapped_column(Encrypted("bank_accounts.iban"))  # NFR-DB-08
+    iban_index: Mapped[str] = mapped_column(String(40), default="", index=True)
     bank_name: Mapped[str] = mapped_column(String(200), default="")
     bik: Mapped[str] = mapped_column(String(11), default="")
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending / active / superseded
     confirmed_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
     effective_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+
+    @validates("iban")
+    def _index_iban(self, key, value):
+        from app.core.crypto import blind_index
+
+        self.iban_index = blind_index(value, "iban")
+        return value
 
 
 class AuditLog(AppendOnly, Model):

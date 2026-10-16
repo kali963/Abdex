@@ -13,7 +13,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Uuid, create_engine, event
+from sqlalchemy import Boolean, DateTime, Text, Uuid, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 from sqlalchemy.types import TypeDecorator
 
@@ -56,6 +56,27 @@ class AwareDateTime(TypeDecorator):
         if value is not None and value.tzinfo is None:
             value = value.replace(tzinfo=timezone.utc)
         return value
+
+
+class Encrypted(TypeDecorator):
+    """Field encrypted at the application level (SEC-DAT-02, NFR-DB-08). `column` is bound as associated data."""
+
+    impl = Text
+    cache_ok = True
+
+    def __init__(self, column: str, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.column = column
+
+    def process_bind_param(self, value, dialect):
+        from app.core.crypto import encrypt
+
+        return encrypt(value, self.column)
+
+    def process_result_value(self, value, dialect):
+        from app.core.crypto import decrypt
+
+        return decrypt(value, self.column)
 
 
 class Model(Base):

@@ -75,8 +75,13 @@ class CircuitBreaker:
             self.opened_at = time.monotonic()
 
 
+class NotRegistered(IntegrationUnavailable):
+    """SEC-DAT-11: the transfer of personal data to this recipient is not in the processing register."""
+
+
 class Adapter:
     name = "base"
+    personal_data = False  # True: works only while the processing register has an active record for it
     timeout = 5.0
     retries = 2
     cache_ttl = 300.0
@@ -92,6 +97,12 @@ class Adapter:
             ts, value = self._cache[cache_key]
             if time.monotonic() - ts < self.cache_ttl:
                 return value
+        if self.personal_data:
+            from app.modules.platform.processing import registered_adapters
+
+            if self.name not in registered_adapters():
+                self._journal(operation, "not_registered", 0, basis, initiator, summary)
+                raise NotRegistered(self.name)
         if self.breaker.is_open:
             self._journal(operation, "circuit_open", 0, basis, initiator, summary)
             raise IntegrationUnavailable(self.name)
