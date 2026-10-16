@@ -52,7 +52,9 @@ def tick() -> dict:
         _run(name, job, stats)
     if time.time() - _last_hourly > 600:
         _last_hourly = time.time()
-        for name, job in (("digests", process_digests), ("series", generate_due)):
+        from app.modules.billing.subscriptions import renew_due
+
+        for name, job in (("digests", process_digests), ("series", generate_due), ("subscriptions", renew_due)):
             _run(name, job, stats)
     if time.time() - _last_daily > 6 * 3600:
         _last_daily = time.time()

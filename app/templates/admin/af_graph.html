@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("graph.title") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("graph.title") }}</h1><a class="btn small" href="/admin/antifraud">{{ _("admin.antifraud") }}</a></div>
+<p class="muted">{{ _("graph.text") }}</p>
+<form class="card row" method="get" action="/admin/antifraud/graph">
+  {{ ui.field("q", _("graph.search"), q, hint=_("graph.search_hint")) }}
+  {{ ui.select("depth", _("graph.depth"), [(1, "1"), (2, "2"), (3, "3")], depth) }}
+  <button class="btn primary">{{ _("graph.build") }}</button>
+</form>
+{% if found and not graph %}
+<div class="card"><ul>{% for c in found %}<li><a href="/admin/antifraud/graph?company={{ c.id }}&depth={{ depth }}">{{ c.name }}</a> <small class="muted">{{ c.bin_iin }}</small></li>{% else %}<li class="empty">{{ _("common.empty") }}</li>{% endfor %}</ul></div>
+{% endif %}
+{% if graph %}
+<section class="card">
+  <div class="page-head"><h2>{{ graph.center.name }}</h2><span class="muted">{{ _("graph.stats", nodes=graph.nodes|length - 1, edges=view.edges|length) }}</span></div>
+  {% if graph.truncated %}<div class="alert warn">{{ _("graph.truncated") }}</div>{% endif %}
+  {% if view.edges %}
+  <div class="graph-wrap">
+  <svg class="link-graph" width="{{ view.size }}" height="{{ view.size }}" viewBox="0 0 {{ view.size }} {{ view.size }}" role="img" aria-label="{{ _('graph.title') }}">
+    {% for e in view.edges %}
+    <g class="edge {{ 'strong' if e.strong }}"><line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}"></line>
+      <text x="{{ e.mx }}" y="{{ e.my }}" text-anchor="middle">{% for k in e.kinds %}{{ _("graph.k_" ~ k) }}{{ ", " if not loop.last }}{% endfor %}</text></g>
+    {% endfor %}
+    {% for n in view.nodes %}
+    <a href="/admin/antifraud/graph?company={{ n.id }}&depth={{ depth }}"><g class="node {{ n.kind }} {{ 'center' if n.center }} {{ 'blocked' if n.blocked }}">
+      <circle cx="{{ n.x }}" cy="{{ n.y }}" r="{{ 16 if n.center else 11 }}"></circle>
+      <text x="{{ n.x }}" y="{{ n.y + (30 if n.center else 24) }}" text-anchor="middle">{{ n.name|truncate(26, true, "…") }}</text>
+      <title>{{ n.name }}</title></g></a>
+    {% endfor %}
+  </svg>
+  </div>
+  <p class="row muted"><span class="legend client">●</span> {{ _("company.kind_client") }} <span class="legend carrier">●</span> {{ _("company.kind_carrier") }} <span class="legend strong">━</span> {{ _("graph.strong") }}</p>
+  {% else %}
+  <p>{{ _("graph.no_links") }}</p>
+  {% endif %}
+  <h3>{{ _("graph.links") }}</h3>
+  <div class="table-wrap"><table><thead><tr><th>{{ _("pool.company") }}</th><th>{{ _("pool.company") }}</th><th>{{ _("graph.kinds") }}</th></tr></thead>
+  <tbody>{% for e in view.edges %}<tr><td>{% if me.can("admin.users") %}<a href="/admin/companies/{{ e.a }}">{{ graph.nodes[e.a].name }}</a>{% else %}{{ graph.nodes[e.a].name }}{% endif %}</td>
+  <td>{% if me.can("admin.users") %}<a href="/admin/companies/{{ e.b }}">{{ graph.nodes[e.b].name }}</a>{% else %}{{ graph.nodes[e.b].name }}{% endif %}</td>
+  <td>{% for k in e.kinds %}<span class="badge {{ 'err' if e.strong and k in ('iban', 'iin', 'device', 'vehicle') }}">{{ _("graph.k_" ~ k) }}</span> {% endfor %}</td></tr>
+  {% else %}<tr><td colspan="3" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endif %}
+{% endblock %}

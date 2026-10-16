@@ -115,3 +115,85 @@ def _save(db: Session, kind: str, inputs: dict, result: dict) -> None:
     clean = {k: v for k, v in inputs.items() if k != "csrf_token"}
     db.add(CalcResult(company_id=ctx.company_id, user_id=ctx.user_id, kind=kind, methodology_version=METHODOLOGY_VERSION,
                       inputs=json.dumps(clean, ensure_ascii=False), result=json.dumps(result)))
+
+
+# ------------------------------------------------------------------ FR-CALC-06 forecast
+
+
+def _norm_city(text: str) -> str:
+    return " ".join((text or "").replace("ё", "е").replace("Ё", "Е").split()).casefold()
+
+
+def _quantile(values: list[int], q: float) -> int:
+    s = sorted(values)
+    if not s:
+        return 0
+    pos = (len(s) - 1) * q
+    lo, hi = int(pos), min(int(pos) + 1, len(s) - 1)
+    return round(s[lo] + (s[hi] - s[lo]) * (pos - lo))
+
+
+def forecast(db: Session, form: dict) -> dict:
+    """FR-CALC-06: cost forecast for a direction from the accumulated deals of the platform.
+
+    Only aggregates are shown, and only when the sample is large enough and comes from several clients
+    (settings ``calc.forecast_min_deals`` / ``calc.forecast_min_companies``), so no single company's price can be
+    read from the result. Cancelled orders and other currencies are excluded; the trend compares the median
+    of the last 90 days with the earlier period."""
+    from datetime import timedelta
+
+    from sqlalchemy import select
+
+    from app.core import rls
+    from app.db import utcnow
+    from app.modules.deals.models import Deal
+    from app.modules.orders import flow
+    from app.modules.orders.models import Order
+
+    errors: dict = {}
+    origin, dest = _norm_city(form.get("from_city", "")), _norm_city(form.get("to_city", ""))
+    if not origin:
+        errors["from_city"] = "error.required"
+    if not dest:
+        errors["to_city"] = "error.required"
+    distance = _num(form, "distance_km", errors)
+    if errors:
+        raise ValidationFailed(errors)
+    body = (form.get("body_type") or "").strip()
+    currency = "KZT"
+    window = int(get_setting(db, "calc.forecast_window_days", 365))
+    min_deals = int(get_setting(db, "calc.forecast_min_deals", 3))
+    min_companies = int(get_setting(db, "calc.forecast_min_companies", 2))
+    now = utcnow()
+    since = now - timedelta(days=window)
+    with rls.system(db):  # aggregates over the whole market; only statistics leave this function
+        rows = db.execute(select(Deal, Order).join(Order, Order.id == Deal.order_id)
+                          .where(Deal.created_at >= since, Deal.currency == currency,
+                                 Order.status != flow.CANCELLED)
+                          .order_by(Deal.created_at.desc()).limit(5000)).all()
+        sample = [(d, o) for d, o in rows if o.origin and o.destination
+                  and _norm_city(o.origin.city) == origin and _norm_city(o.destination.city) == dest]
+    by_body = [(d, o) for d, o in sample if body and o.body_type == body]
+    used_body = bool(body) and len(by_body) >= min_deals and len({d.client_company_id for d, _ in by_body}) >= min_companies
+    if used_body:
+        sample = by_body
+    companies = len({d.client_company_id for d, _ in sample})
+    result: dict = {"count": len(sample), "window_days": window, "by_body": used_body, "currency": currency,
+                    "enough": len(sample) >= min_deals and companies >= min_companies,
+                    "min_deals": min_deals}
+    if not result["enough"]:
+        return result
+    prices = [d.price_minor for d, _ in sample]
+    result.update(median=_quantile(prices, 0.5), p25=_quantile(prices, 0.25), p75=_quantile(prices, 0.75))
+    per_km = [round(d.price_minor / o.distance_km) for d, o in sample if o.distance_km > 0]
+    if len(per_km) >= min_deals:
+        result["per_km"] = _quantile(per_km, 0.5)
+        if distance > 0:
+            result["estimate"] = round_minor(Decimal(result["per_km"]) * distance)
+    recent_edge = now - timedelta(days=90)
+    recent = [d.price_minor for d, _ in sample if d.created_at >= recent_edge]
+    earlier = [d.price_minor for d, _ in sample if d.created_at < recent_edge]
+    if len(recent) >= 2 and len(earlier) >= 2:
+        r, e = _quantile(recent, 0.5), _quantile(earlier, 0.5)
+        result["trend_pct"] = float(round((r - e) * 100 / e, 1)) if e else 0.0
+    return result

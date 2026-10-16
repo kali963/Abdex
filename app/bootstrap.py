@@ -152,6 +152,9 @@ SETTINGS = {
     "security.thresholds": ({"failed_logins": 5, "bulk_exports_per_hour": 5, "access_denied_per_hour": 20,
                              "work_from": 8, "work_to": 20, "timezone": "Asia/Almaty"},
                             "SEC-LOG-06: пороги корреляции событий безопасности"),
+    "calc.forecast_window_days": (365, "FR-CALC-06: за сколько дней брать сделки для прогноза"),
+    "calc.forecast_min_deals": (3, "FR-CALC-06: минимум сделок по направлению для показа прогноза"),
+    "calc.forecast_min_companies": (2, "FR-CALC-06: минимум разных заказчиков в выборке (цена одной компании не раскрывается)"),
     "security.vuln_status": ("CI: pip-audit, bandit, gitleaks — без замечаний высокого уровня",
                              "SEC-LOG-08: статус уязвимостей для ежемесячного отчета"),
 }
@@ -166,6 +169,16 @@ FLAGS = [
     ("qualified_signature", "Подписание ЭЦП НУЦ РК", False),
     ("online_payments", "Онлайн-оплата счетов через платежного провайдера", False),
     ("gov.etd", "Регистрация электронных транспортных документов в госсистеме", False),
+    ("auth.eds_login", "Вход через ЭЦП НУЦ РК (FR-AUTH-09)", False),
+    ("calc.forecast", "Прогноз стоимости по направлению — включается подпиской на модуль (FR-CALC-06)", False),
+]
+
+# FR-BIL-08: modules on sale; prices and terms are edited in /admin/modules. Sales are opened by the
+# "digital_modules" / "subscriptions" flags (pilot not before month 17, FR-PVD-07).
+MODULES = [
+    {"code": "forecast", "name": "Прогноз стоимости по направлениям", "flag_key": "calc.forecast",
+     "description": "Медиана и диапазон цен по накопленным сделкам площадки, ставка за км, тренд за 90 дней.",
+     "price_minor": 500_000, "period_days": 30, "income_type": "digital_modules", "audience": "any"},
 ]
 
 TEMPLATES = {
@@ -274,6 +287,19 @@ ${vat_note}
 Срок оплаты: до ${due_date}
 
 Основание: оформленная на площадке сделка № ${deal_number}."""),
+    ("module_invoice", "ru"): (
+        "Счет на оплату № ${number} от ${date}",
+        """Поставщик: AbdEX — оператор онлайн-площадки
+Покупатель: ${client_name}, БИН ${client_bin}
+
+## Предмет
+${subject}
+
+Сумма к оплате: ${amount}
+${vat_note}
+Срок оплаты: до ${due_date}
+
+Основание: подключение цифрового модуля «${module}» на период ${period}."""),
     ("fee_act", "ru"): (
         "Акт оказанных услуг № ${number} от ${date}",
         """Исполнитель: AbdEX — оператор онлайн-площадки
@@ -373,6 +399,12 @@ def seed_reference(db) -> None:
         if not found:
             db.add(DocumentTemplate(doc_type=doc_type, locale=locale, version=1, title=title, body=body,
                                     valid_from=date(2026, 1, 1)))
+    from app.modules.billing.models import DigitalModule
+
+    have = set(db.execute(select(DigitalModule.code)).scalars())
+    for m in MODULES:
+        if m["code"] not in have:
+            db.add(DigitalModule(**m))
     from app.modules.accounts.acl import seed as seed_acl
 
     seed_acl(db)

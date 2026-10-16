@@ -24,7 +24,9 @@ router = APIRouter(dependencies=[Depends(csrf_protect)])
 
 @router.get("/finance")
 def finance(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("finance.view"))):
-    ctx = {"ledger": billing.ledger(db, me.company.id)} if me.company.kind == "client" else {}
+    ledger = billing.ledger(db, me.company.id)
+    # carriers are billed only for paid modules (FR-BIL-08): their ledger appears once there is an invoice
+    ctx = {"ledger": ledger} if me.company.kind == "client" or ledger["invoices"] else {}
     if me.company.kind == "carrier":
         ctx["carrier"] = analytics.carrier_analytics(db, me.company.id)
     else:
@@ -92,6 +94,62 @@ async def calc_run(request: Request, db: Session = Depends(get_db), me: Principa
         return render(request, "finance/calc.html", ctx, status_code=422)
     db.commit()
     return render(request, "finance/calc.html", ctx)
+
+
+# ------------------------------------------------------------------ FR-CALC-06 forecast
+
+
+@router.get("/calc/forecast")
+def calc_forecast(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("calc.use"))):
+    from app.modules.platform.service import flag_enabled
+
+    ctx = {"body_types": dictionary(db, "body_types"), "form": dict(request.query_params),
+           "available": flag_enabled(db, "calc.forecast", me.company.id)}
+    if ctx["available"] and request.query_params.get("from_city"):
+        ratelimit.hit("forecast", str(me.user.id))
+        try:
+            ctx["forecast"] = calc.forecast(db, dict(request.query_params))
+        except ValidationFailed as exc:
+            ctx["errors"] = exc.fields
+            return render(request, "finance/forecast.html", ctx, status_code=422)
+        audit(db, "calc.forecast", object_type="company", object_id=me.company.id,
+              details={"count": ctx["forecast"]["count"]})
+        db.commit()
+    return render(request, "finance/forecast.html", ctx)
+
+
+# ------------------------------------------------------------------ FR-BIL-08 modules and subscriptions
+
+
+@router.get("/modules")
+def modules_page(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("finance.view"))):
+    from app.modules.billing import subscriptions
+
+    from app.modules.platform.service import flag_enabled
+
+    on_sale = flag_enabled(db, "digital_modules", me.company.id) or flag_enabled(db, "subscriptions", me.company.id)
+    return render(request, "finance/modules.html", {"items": subscriptions.catalog(db, me.company), "on_sale": on_sale,
+                                                    "is_active": subscriptions.is_active})
+
+
+@router.post("/modules/{mid}/subscribe")
+def module_subscribe(mid: str, db: Session = Depends(get_db), me: Principal = Depends(require("company.manage"))):
+    from app.modules.billing import subscriptions
+
+    subscriptions.subscribe(db, me.company, parse_uuid(mid))
+    db.commit()
+    return redirect("/modules", flash=("success", "module.subscribed"))
+
+
+@router.post("/modules/subscriptions/{sid}/auto-renew")
+async def module_auto_renew(sid: str, request: Request, db: Session = Depends(get_db),
+                            me: Principal = Depends(require("company.manage"))):
+    from app.modules.billing import subscriptions
+
+    on = (await request.form()).get("on") == "1"
+    subscriptions.set_auto_renew(db, me.company, parse_uuid(sid), on)
+    db.commit()
+    return redirect("/modules", flash=("success", "module.renew_on" if on else "module.renew_off"))
 
 
 @router.get("/support")

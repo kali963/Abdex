@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("module.admin_title") }}{% endblock %}
+{% block content %}
+<h1>{{ _("module.admin_title") }}</h1>
+<p class="muted">{{ _("module.admin_text") }}</p>
+<div class="table-wrap"><table><thead><tr><th>{{ _("module.name") }}</th><th>{{ _("module.flag") }}</th><th class="num">{{ _("module.price") }}</th><th>{{ _("module.income") }}</th><th>{{ _("module.subscribers") }}</th><th>{{ _("common.status") }}</th></tr></thead>
+<tbody>{% for m in items %}{% set st = stats.get(m.id, {}) %}<tr><td><b>{{ m.name }}</b><br><small class="muted"><code>{{ m.code }}</code> · {{ _("module.audience_" ~ m.audience) }}</small></td>
+<td><code>{{ m.flag_key }}</code></td><td class="num">{{ money(m.price_minor, m.currency) }}<br><small class="muted">{{ _("module.per_period", days=m.period_days) }}</small></td>
+<td>{{ _("income." ~ m.income_type) }}</td>
+<td>{{ _("module.active") }}: {{ st.get("active", 0) + st.get("cancelled", 0) }} · {{ _("module.expired") }}: {{ st.get("expired", 0) }}</td>
+<td><span class="badge {{ 'ok' if m.active }}">{{ _("promo.on") if m.active else _("promo.off") }}</span></td></tr>
+<tr><td colspan="6"><details><summary class="muted">{{ _("action.edit") }}</summary>
+<form method="post" action="/admin/modules/{{ m.id }}" class="stack">{{ ui.csrf() }}
+  <div class="form-grid">
+  {{ ui.field("name", _("module.name"), m.name, required=true, id="f-name-" ~ m.id) }}
+  {{ ui.field("flag_key", _("module.flag"), m.flag_key, required=true, id="f-flag-" ~ m.id) }}
+  {{ ui.field("price", _("module.price"), "%.2f"|format(m.price_minor / 100), required=true, id="f-price-" ~ m.id, attrs='inputmode="decimal"') }}
+  {{ ui.field("period_days", _("module.period"), m.period_days, id="f-period-" ~ m.id, attrs='inputmode="numeric"') }}
+  </div>
+  {{ ui.field("description", _("module.description"), m.description, id="f-desc-" ~ m.id) }}
+  <input type="hidden" name="income_type" value="{{ m.income_type }}"><input type="hidden" name="audience" value="{{ m.audience }}">
+  <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if m.active }}> {{ _("promo.on") }}</label>
+  <button class="btn small primary">{{ _("action.save") }}</button>
+</form></details></td></tr>
+{% else %}<tr><td colspan="6" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+<form method="post" action="/admin/modules" class="card stack">{{ ui.csrf() }}
+  <h2>{{ _("module.new") }}</h2>
+  <div class="form-grid">
+  {{ ui.field("code", _("module.code"), "", required=true) }}
+  {{ ui.field("name", _("module.name"), "", required=true) }}
+  {{ ui.field("flag_key", _("module.flag"), "", required=true, hint=_("module.flag_hint")) }}
+  {{ ui.field("price", _("module.price"), "", required=true, attrs='inputmode="decimal"') }}
+  {{ ui.field("period_days", _("module.period"), "30", attrs='inputmode="numeric"') }}
+  {{ ui.select("income_type", _("module.income"), [("digital_modules", _("income.digital_modules")), ("subscription", _("income.subscription"))], "digital_modules") }}
+  {{ ui.select("audience", _("module.audience"), [("any", _("module.audience_any")), ("client", _("module.audience_client")), ("carrier", _("module.audience_carrier"))], "any") }}
+  </div>
+  {{ ui.field("description", _("module.description"), "") }}
+  <input type="hidden" name="active" value="1">
+  <button class="btn primary">{{ _("promo.create") }}</button>
+</form>
+{% endblock %}

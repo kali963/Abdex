@@ -55,6 +55,17 @@ class User(Model):
     locked_until: Mapped[datetime | None] = mapped_column(AwareDateTime)
     last_login_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
     anonymized_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+    # FR-AUTH-09: IIN taken from a verified qualified certificate when the user binds the EDS login
+    iin: Mapped[str] = mapped_column(Encrypted("users.iin"), default="")  # NFR-DB-08
+    iin_index: Mapped[str] = mapped_column(String(40), default="", index=True)
+    eds_linked_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+
+    @validates("iin")
+    def _index_iin(self, key, value):
+        from app.core.crypto import blind_index
+
+        self.iin_index = blind_index(value, "iin") if value else ""
+        return value
 
     @property
     def is_staff(self) -> bool:

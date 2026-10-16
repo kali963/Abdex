@@ -99,6 +99,10 @@ def flag_enabled(db: Session, key: str, company_id=None) -> bool:
             return True
         if flag.percent and (zlib.crc32(f"{key}:{company_id}".encode()) % 100) < flag.percent:
             return True
+        from app.modules.billing.subscriptions import flag_from_subscription
+
+        if flag_from_subscription(db, key, company_id):  # FR-BIL-08: a paid module switches its flag on
+            return True
     return False
 
 

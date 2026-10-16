@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0a3d7a">
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}{{ _("app.name") }}{% endblock %} — AbdEX</title>
-  <link rel="stylesheet" href="/static/css/app.css?v=3">
+  <link rel="stylesheet" href="/static/css/app.css?v=4">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icons/icon.svg">
@@ -24,7 +24,7 @@
     {% if me.can("admin.antifraud") %}{% set _n = nav.append(("/admin/antifraud", "admin.antifraud", "alert", p.startswith("/admin/antifraud"))) %}{% endif %}
     {% if me.can("admin.disputes") %}{% set _n = nav.append(("/admin/disputes", "admin.disputes", "deal", p.startswith("/admin/disputes"))) %}{% endif %}
     {% if me.can("admin.users") %}{% set _n = nav.append(("/admin/companies", "admin.companies", "building", p.startswith("/admin/companies"))) %}{% set _n = nav.append(("/admin/users", "admin.users", "user", p.startswith("/admin/users"))) %}{% endif %}
-    {% if me.can("admin.finance") %}{% set _n = nav.append(("/admin/finance", "admin.finance", "wallet", p.startswith("/admin/finance"))) %}{% set _n = nav.append(("/admin/reports/pvd", "admin.pvd", "chart", p.startswith("/admin/reports"))) %}{% endif %}
+    {% if me.can("admin.finance") %}{% set _n = nav.append(("/admin/finance", "admin.finance", "wallet", p.startswith("/admin/finance"))) %}{% set _n = nav.append(("/admin/reports/pvd", "admin.pvd", "chart", p.startswith("/admin/reports"))) %}{% set _n = nav.append(("/admin/modules", "module.admin_title", "wallet", p.startswith("/admin/modules"))) %}{% endif %}
     {% if me.can("admin.kpi") %}{% set _n = nav.append(("/admin/kpi", "admin.kpi", "chart", p.startswith("/admin/kpi"))) %}{% endif %}
     {% if me.can("admin.support") %}{% set _n = nav.append(("/admin/support", "admin.support", "help", p.startswith("/admin/support"))) %}{% endif %}
     {% if me.can("admin.dictionaries") %}{% set _n = nav.append(("/admin/dictionaries", "admin.dictionaries", "list", p.startswith("/admin/dictionaries"))) %}{% set _n = nav.append(("/admin/templates", "admin.templates", "deal", p.startswith("/admin/templates"))) %}{% endif %}

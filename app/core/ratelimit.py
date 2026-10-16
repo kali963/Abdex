@@ -30,6 +30,8 @@ LIMITS = {
     "invite": (50, 3600),
     "impersonate": (10, 3600),
     "webhook_test": (10, 600),
+    "forecast": (60, 3600),       # FR-CALC-06: market statistics, no scraping
+    "eds_challenge": (30, 600),   # FR-AUTH-09 challenges per IP
 }
 
 

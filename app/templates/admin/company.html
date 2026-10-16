@@ -2,7 +2,7 @@
 {% import "components.html" as ui with context %}
 {% block title %}{{ c.name }}{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>{{ c.name }}</h1>{{ ui.level(c.verification_level) }} <span class="badge">{{ _("company.kind_" ~ c.kind) }}</span>{% if c.is_blocked %} <span class="badge err">{{ _("company.blocked") }}</span>{% endif %}</div></div>
+<div class="page-head"><div><h1>{{ c.name }}</h1>{{ ui.level(c.verification_level) }} <span class="badge">{{ _("company.kind_" ~ c.kind) }}</span>{% if c.is_blocked %} <span class="badge err">{{ _("company.blocked") }}</span>{% endif %}</div>{% if me.can("admin.antifraud") %}<a class="btn small" href="/admin/antifraud/graph?company={{ c.id }}">🕸 {{ _("graph.title") }}</a>{% endif %}</div>
 <div class="grid two">
 <section class="card"><h2>{{ _("company.requisites") }}</h2>
 <dl class="kv"><dt>{{ _("auth.bin_iin") }}</dt><dd>{{ c.bin_iin }}</dd><dt>{{ _("company.legal_address") }}</dt><dd>{{ c.legal_address or "—" }}</dd>

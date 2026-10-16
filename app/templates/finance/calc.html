@@ -2,7 +2,7 @@
 {% import "components.html" as ui with context %}
 {% block title %}{{ _("nav.calc") }}{% endblock %}
 {% block content %}
-<h1>{{ _("calc.title") }}</h1>
+<div class="page-head"><h1>{{ _("calc.title") }}</h1><a class="btn small" href="/calc/forecast">📈 {{ _("fc.title") }}</a></div>
 <p class="muted">{{ _("calc.text") }}</p>
 <div class="grid two">
 <form class="card stack" method="post" action="/calc">{{ ui.csrf() }}<input type="hidden" name="kind" value="trip_cost">

@@ -36,6 +36,22 @@
       <button class="btn primary">{{ _("account.2fa_enable") }}</button></form>
   {% endif %}
 </section>
+{% if eds_login %}
+<section class="card panel-3d" id="eds">
+  <h2>🔐 {{ _("eds.login_title") }}</h2>
+  <p class="muted">{{ _("eds.login_text") }}</p>
+  {% if me.user.eds_linked_at %}
+    <p><span class="badge ok">{{ _("eds.linked_since", date=fmt_date(me.user.eds_linked_at)) }}</span></p>
+    <form method="post" action="/account/eds/unlink">{{ ui.csrf() }}<button class="btn danger">{{ _("eds.unlink") }}</button></form>
+  {% else %}
+    <p><span class="badge">{{ _("account.2fa_off") }}</span></p>
+    <div class="eds stack">
+      <button type="button" class="btn primary" data-eds-auth data-mode="{{ eds_mode }}" data-challenge="/login/eds/challenge" data-action="/account/eds/link" {% if eds_mode == "dev" %}data-cert="/dev/eds/login-certificate"{% endif %} data-wait="{{ _('eds.wait') }}" data-fail="{{ _('eds.fail') }}">{{ _("eds.link") }}</button>
+      <small class="muted" data-eds-status>{{ _("eds.note_dev") if eds_mode == "dev" else _("eds.note") }}</small>
+    </div>
+  {% endif %}
+</section>
+{% endif %}
 <section class="card panel-3d" id="support">
   <h2>🛟 {{ _("support.access_title") }}</h2>
   <p class="muted">{{ _("support.access_text") }}</p>
@@ -62,3 +78,4 @@
 </section>
 </div>
 {% endblock %}
+{% block scripts %}{% if eds_login %}<script src="/static/js/eds.js?v=2" defer></script>{% endif %}{% endblock %}

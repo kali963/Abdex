@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 from datetime import date, datetime, time, timezone
 from xml.etree import ElementTree as ET  # noqa: S405 — only builds XML, never parses untrusted input
@@ -104,7 +105,10 @@ def esf_xml(db: Session, inv: Invoice, *, kind: str = "invoice") -> bytes:
     _party(customers, "customer", name=buyer.name, tin=buyer.bin_iin, address=buyer.legal_address)
     products = ET.SubElement(root, "productSet", {"currencyCode": inv.currency})
     prod = ET.SubElement(products, "product")
-    ET.SubElement(prod, "description").text = SUBJECT.format(deal=deal.number if deal else inv.number)
+    acc = _accrual(db, inv)
+    own_subject = json.loads(acc.calculation or "{}").get("subject", "") if acc is not None and not deal else ""
+    ET.SubElement(prod, "description").text = (own_subject[:1].upper() + own_subject[1:] if own_subject  # FR-BIL-08 modules
+                                               else SUBJECT.format(deal=deal.number if deal else inv.number))
     ET.SubElement(prod, "unitNomenclature").text = "услуга"
     ET.SubElement(prod, "quantity").text = "1"
     ET.SubElement(prod, "unitPrice").text = f"{amount:.2f}"
@@ -113,7 +117,6 @@ def esf_xml(db: Session, inv: Invoice, *, kind: str = "invoice") -> bytes:
     ET.SubElement(prod, "priceWithTax").text = f"{amount:.2f}"
     totals = ET.SubElement(products, "totals")
     ET.SubElement(totals, "totalPriceWithTax").text = f"{amount:.2f}"
-    acc = _accrual(db, inv)
     if acc is not None:
         ET.SubElement(root, "incomeType").text = acc.income_type  # FR-PVD-01: kept for the ПВД report
     ET.indent(root)

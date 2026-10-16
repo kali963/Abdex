@@ -125,3 +125,38 @@ class PaymentIntent(Model):
     status: Mapped[str] = mapped_column(String(10), default="created", index=True)  # created / paid / failed
     checkout_url: Mapped[str] = mapped_column(String(500), default="")
     paid_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+
+
+class DigitalModule(Model):
+    """FR-PVD-07, FR-BIL-08: a paid digital module or subscription. Connecting it switches on the feature flag
+    ``flag_key`` for the company while the subscription is active; its income is accounted separately."""
+
+    __tablename__ = "digital_modules"
+
+    code: Mapped[str] = mapped_column(String(40), unique=True)
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(String(500), default="")
+    flag_key: Mapped[str] = mapped_column(String(60))
+    price_minor: Mapped[int] = mapped_column(BigInteger)
+    currency: Mapped[str] = mapped_column(String(3), default="KZT")
+    period_days: Mapped[int] = mapped_column(Integer, default=30)
+    income_type: Mapped[str] = mapped_column(String(30), default=INCOME_DIGITAL_MODULES)
+    audience: Mapped[str] = mapped_column(String(10), default="any")  # any / client / carrier
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class Subscription(Model):
+    """One row per company and module; a period is paid by an accrual and an invoice of its own."""
+
+    __tablename__ = "subscriptions"
+    __table_args__ = (UniqueConstraint("company_id", "module_id", name="uq_subscription_company_module"),)
+
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
+    module_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("digital_modules.id"), index=True)
+    status: Mapped[str] = mapped_column(String(12), default="active", index=True)  # active / cancelled / expired
+    auto_renew: Mapped[bool] = mapped_column(Boolean, default=True)
+    started_at: Mapped[datetime] = mapped_column(AwareDateTime)
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date, index=True)  # last day of the paid period
+    periods: Mapped[int] = mapped_column(Integer, default=1)
+    cancelled_at: Mapped[datetime | None] = mapped_column(AwareDateTime)

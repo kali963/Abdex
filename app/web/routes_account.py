@@ -26,7 +26,7 @@ from app.modules.fleet import service as fleet
 from app.modules.fleet.models import RegistryCheck, VerificationDocument, VerificationRequest
 from app.modules.notifications.models import ChannelLink, Notification
 from app.modules.platform.service import dictionary
-from app.web.deps import Principal, csrf_protect, get_principal, parse_uuid, redirect, render, require
+from app.web.deps import Principal, csrf_protect, get_principal, parse_uuid, redirect, render, require, set_flash
 
 router = APIRouter(dependencies=[Depends(csrf_protect)])
 
@@ -144,7 +144,66 @@ def security(request: Request, db: Session = Depends(get_db), me: Principal = De
         import segno
 
         ctx["qr"] = segno.make(ctx["uri"], error="m").svg_data_uri(scale=4, border=2)
+    from app.modules.accounts import eds_login
+    from app.modules.documents.eds import is_dev_signer
+
+    ctx["eds_login"] = eds_login.enabled(db)
+    ctx["eds_mode"] = "dev" if is_dev_signer() else "ncalayer"
     return render(request, "account/security.html", ctx)
+
+
+@router.post("/account/eds/link")
+async def eds_link(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    """FR-AUTH-09: bind the EDS for login (the IIN comes from the verified certificate)."""
+    from app.modules.accounts import eds_login
+
+    if me.session.impersonator_id:
+        raise Forbidden("impersonation_forbidden")
+    form = await request.form()
+    user = db.get(User, me.user.id)
+    try:
+        eds_login.link(db, user, str(form.get("package", "")), str(form.get("challenge", "")))
+    except AppError as exc:
+        db.commit()
+        resp = redirect("/account/security#eds")
+        set_flash(resp, "error", exc.message_key, **exc.params)
+        return resp
+    db.commit()
+    return redirect("/account/security#eds", flash=("success", "eds.linked"))
+
+
+@router.post("/account/eds/unlink")
+def eds_unlink(db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    from app.modules.accounts import eds_login
+
+    if me.session.impersonator_id:
+        raise Forbidden("impersonation_forbidden")
+    eds_login.unlink(db, db.get(User, me.user.id))
+    db.commit()
+    return redirect("/account/security#eds", flash=("success", "eds.unlinked"))
+
+
+@router.post("/dev/eds/login-certificate")
+async def dev_login_certificate(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    """Development only: a TEST personal certificate for a browser-generated key (kept in the browser)."""
+    from fastapi.responses import JSONResponse
+
+    from app.core import ratelimit
+    from app.modules.accounts import eds_login
+    from app.modules.documents import eds
+
+    if not eds.is_dev_signer() or me.session.impersonator_id:
+        raise NotFound()
+    form = await request.form()
+    ratelimit.hit("otp_send", f"devcert:{me.user.id}")
+    try:
+        pem = eds.dev_issue(str(form.get("public_key", "")), full_name=me.user.full_name, iin=eds_login.dev_iin(me.user),
+                            bin_iin=me.company.bin_iin if me.company else "")
+    except ValueError:
+        raise ValidationFailed({"public_key": "error.invalid_value"})
+    audit(db, "eds.dev_certificate_issued", object_type="user", object_id=me.user.id)
+    db.commit()
+    return JSONResponse({"certificate": pem})
 
 
 @router.post("/account/password")
