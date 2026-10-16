@@ -108,3 +108,20 @@ class PromoRedemption(Model):
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
     free_until: Mapped[date | None] = mapped_column(Date)
     deals_used: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class PaymentIntent(Model):
+    """FR-BIL-06: an online payment of a platform invoice through the provider's hosted page.
+    Card data is entered only on the provider's side and never reaches the platform."""
+
+    __tablename__ = "payment_intents"
+
+    invoice_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("invoices.id"), index=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(40))
+    provider_ref: Mapped[str] = mapped_column(String(80), unique=True)
+    amount_minor: Mapped[int] = mapped_column(BigInteger)
+    currency: Mapped[str] = mapped_column(String(3), default="KZT")
+    status: Mapped[str] = mapped_column(String(10), default="created", index=True)  # created / paid / failed
+    checkout_url: Mapped[str] = mapped_column(String(500), default="")
+    paid_at: Mapped[datetime | None] = mapped_column(AwareDateTime)

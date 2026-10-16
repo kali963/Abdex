@@ -136,6 +136,11 @@ SETTINGS = {
                                "FR-BID-08: порог срывов и срок ограничения подачи предложений"),
     "matching.weights": ({"body": 25, "geo": 20, "history": 15, "rating": 20, "level": 10, "load": 10},
                          "FR-BID-04: веса скоринга автоподбора перевозчиков"),
+    "platform.requisites": ({"name": "ТОО «AbdEX»", "bin": "000000000000", "address": "г. Алматы",
+                             "iik": "KZ000000000000000000", "bank": "", "bik": "", "vat_payer": False},
+                            "FR-BIL-07: реквизиты оператора площадки для счетов, актов и ЭСФ"),
+    "transport_docs.rules": ({"domestic": ["e_waybill"], "international": ["cmr_form", "e_waybill"]},
+                             "GOV-TR-04: какие транспортные документы формируются по направлению перевозки"),
     "biometrics.image_ttl_hours": (24, "SEC-DAT-10: срок хранения исходных изображений биометрии, ч"),
     "impersonation.minutes": (30, "FR-ADM-05: длительность сеанса работы от имени пользователя, мин"),
     "ratelimit.limits": ({"bid": [60, 3600], "order_create": [100, 3600], "export": [20, 3600], "login": [10, 300]},
@@ -159,6 +164,8 @@ FLAGS = [
     ("integration.telegram", "Telegram-бот", True),
     ("gov.services", "Государственные сервисы через ШЭП/Smart Bridge", False),
     ("qualified_signature", "Подписание ЭЦП НУЦ РК", False),
+    ("online_payments", "Онлайн-оплата счетов через платежного провайдера", False),
+    ("gov.etd", "Регистрация электронных транспортных документов в госсистеме", False),
 ]
 
 TEMPLATES = {
@@ -206,6 +213,54 @@ TEMPLATES = {
 ## Құны
 Тасымалдау құны: ${price}. Төлем шарттары: ${payment_terms}.
 Шарттар хеші: ${snapshot_hash}."""),
+    ("e_waybill", "ru"): (
+        "Товарно-транспортная накладная № ${number}",
+        """Дата составления: ${date}. Сделка ${deal_number} (заявка ${order_number}).
+
+## Грузоотправитель
+${shipper_name}, БИН ${shipper_bin}, ${shipper_address}
+
+## Грузополучатель
+${consignee}
+
+## Перевозчик
+${carrier_name}, БИН/ИИН ${carrier_bin}
+Транспортное средство: ${vehicle}${trailer}. Водитель: ${driver}, ВУ ${driver_license}
+
+## Маршрут
+Пункт погрузки: ${load_point}, дата ${load_date}
+Пункт разгрузки: ${unload_point}, срок ${unload_date}
+
+## Груз
+Наименование: ${cargo}. Упаковка: ${packaging}. Мест: ${places}. Вес брутто: ${weight} кг. Объем: ${volume} м³.
+Опасный груз: ${adr}
+
+## Отметки
+Груз сдал: ____________   Груз принял к перевозке: ____________   Груз получил: ____________
+Электронная регистрация: ${registration}"""),
+    ("cmr_form", "ru"): (
+        "Международная товарно-транспортная накладная CMR № ${number}",
+        """Дата: ${date}. Сделка ${deal_number}. Перевозка по Конвенции КДПГ (CMR).
+
+## 1. Отправитель
+${shipper_name}, ${shipper_address}, ${shipper_country}
+
+## 2. Получатель
+${consignee}
+
+## 3–4. Место разгрузки / место и дата погрузки
+${unload_point} / ${load_point}, ${load_date}
+
+## 6–12. Груз
+${cargo}; упаковка ${packaging}; мест ${places}; вес брутто ${weight} кг; объем ${volume} м³; ADR: ${adr}
+
+## 16. Перевозчик
+${carrier_name}, БИН/ИИН ${carrier_bin}; ТС ${vehicle}${trailer}; водитель ${driver}
+
+## 18. Пункт пропуска
+${border}
+
+Подписи и печати: отправитель ________  перевозчик ________  получатель ________"""),
     ("fee_invoice", "ru"): (
         "Счет на оплату № ${number} от ${date}",
         """Поставщик: AbdEX — оператор онлайн-площадки

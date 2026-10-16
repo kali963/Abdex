@@ -2,7 +2,9 @@
 {% import "components.html" as ui with context %}
 {% block title %}{{ _("admin.finance") }}{% endblock %}
 {% block content %}
-<h1>{{ _("admin.finance") }}</h1>
+<div class="page-head"><h1>{{ _("admin.finance") }}</h1>
+  <form method="get" class="row" action="/admin/finance/export.xlsx"><label for="ad1">{{ _("common.from") }}</label><input id="ad1" type="date" name="date_from" required><label for="ad2">{{ _("common.to") }}</label><input id="ad2" type="date" name="date_to" required>
+    <button class="btn small">{{ _("acc.export") }}</button><button class="btn small" formaction="/admin/finance/esf.zip">{{ _("acc.esf") }}</button></form></div>
 <div class="grid two">
 <section class="card"><h2>{{ _("fin.tariffs") }}</h2>
 <div class="table-wrap"><table><thead><tr><th>{{ _("fin.tariff") }}</th><th>{{ _("fin.model") }}</th><th>{{ _("fin.params") }}</th><th>{{ _("fin.period") }}</th></tr></thead>

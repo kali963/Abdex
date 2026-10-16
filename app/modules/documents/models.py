@@ -83,3 +83,42 @@ class Signature(AppendOnly, Model):
     signed_at: Mapped[datetime] = mapped_column(AwareDateTime)
     ip: Mapped[str] = mapped_column(String(64), default="")
     document_hash: Mapped[str] = mapped_column(String(64))
+
+
+class QualifiedSignature(AppendOnly, Model):
+    """GOV-DS-04: the signature, the hash of the signed document and the server-side verification result are
+    kept together as an immutable set (the document file itself is never rewritten)."""
+
+    __tablename__ = "qualified_signatures"
+
+    signature_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("signatures.id"), unique=True)
+    document_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("documents.id"), index=True)
+    package: Mapped[str] = mapped_column(Text)  # CMS (base64) or the development signer package (JSON)
+    provider: Mapped[str] = mapped_column(String(40))
+    document_hash: Mapped[str] = mapped_column(String(64))
+    signer_iin: Mapped[str] = mapped_column(String(12), default="")
+    signer_bin: Mapped[str] = mapped_column(String(12), default="")
+    signer_name: Mapped[str] = mapped_column(String(300), default="")
+    cert_serial: Mapped[str] = mapped_column(String(80), default="")
+    cert_issuer: Mapped[str] = mapped_column(String(300), default="")
+    cert_not_after: Mapped[datetime | None] = mapped_column(AwareDateTime)
+    tsp_time: Mapped[datetime] = mapped_column(AwareDateTime)
+    verify_result: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class TransportDocRegistration(Model):
+    """GOV-TR-03/05: registration of an electronic transport document in the state system, with statuses and
+    errors; a paper document (no connection) is entered later without breaking the deal history."""
+
+    __tablename__ = "transport_doc_registrations"
+
+    document_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("documents.id"), unique=True)
+    deal_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("deals.id"), index=True)
+    mode: Mapped[str] = mapped_column(String(10), default="electronic")  # electronic / paper
+    paper_number: Mapped[str] = mapped_column(String(40), default="")
+    status: Mapped[str] = mapped_column(String(12), default="pending", index=True)  # pending/registered/error/paper
+    external_number: Mapped[str] = mapped_column(String(60), default="")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str] = mapped_column(String(300), default="")
+    registered_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+    data: Mapped[str] = mapped_column(Text, default="{}")  # the data set sent (GOV-TR-02), kept for audit

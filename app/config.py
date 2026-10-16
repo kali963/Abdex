@@ -78,6 +78,13 @@ class Settings:
     # Secret Telegram sends in X-Telegram-Bot-Api-Secret-Token (set via setWebhook secret_token)
     telegram_webhook_secret: str = field(default_factory=lambda: os.getenv("TELEGRAM_WEBHOOK_SECRET", ""))
     metrics_token: str = field(default_factory=lambda: os.getenv("METRICS_TOKEN", ""))  # NFR-OBS-01
+    # GOV-DS-02: server-side verification of NCA RK signatures (NCANode); empty = development signer
+    eds_ncanode_url: str = field(default_factory=lambda: os.getenv("EDS_NCANODE_URL", ""))
+    # FR-BIL-06: hosted-checkout payment provider; empty URL = development simulator
+    payment_provider_url: str = field(default_factory=lambda: os.getenv("PAYMENT_PROVIDER_URL", ""))
+    payment_provider_key: str = field(default_factory=lambda: os.getenv("PAYMENT_PROVIDER_KEY", ""))
+    payment_webhook_secret: str = field(default_factory=lambda: os.getenv("PAYMENT_WEBHOOK_SECRET", ""))
+    public_base_url: str = field(default_factory=lambda: os.getenv("PUBLIC_BASE_URL", "http://localhost:8000"))
 
     @property
     def is_production(self) -> bool:
@@ -104,6 +111,10 @@ def load_settings() -> Settings:
                 ("abdex-demo:" + os.environ["VERCEL_PROJECT_ID"]).encode()).hexdigest())
         else:
             object.__setattr__(s, "secret_key", secrets.token_urlsafe(48))
+    for name in ("eds_ncanode_url", "payment_provider_url"):  # external endpoints: http(s) only
+        value = getattr(s, name)
+        if value and not value.startswith(("https://", "http://")):
+            raise RuntimeError(f"{name.upper()} must be an http(s) URL")
     if s.is_production:
         # Hard rules that cannot be relaxed in production.
         object.__setattr__(s, "require_2fa_privileged", True)

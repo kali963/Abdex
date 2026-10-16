@@ -10,6 +10,7 @@ PUBLIC = {
     "/legal/{page}", "/help", "/manifest.webmanifest", "/sw.js", "/healthz", "/dev/outbox", "/logout",
     "/hooks/telegram",  # authenticated by Telegram's secret token header, not by a session
     "/metrics",  # bearer token from METRICS_TOKEN, 404 without it
+    "/hooks/payments",  # HMAC signature of the payment provider
 }
 POLICY_DEPS = {"get_principal", "api_caller"}
 

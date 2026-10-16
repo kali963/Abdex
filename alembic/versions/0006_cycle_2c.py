@@ -18,6 +18,10 @@ branch_labels = None
 depends_on = None
 
 ENCRYPTED = {"drivers": ("iin", "phone", "license_number"), "bank_accounts": ("iban",)}
+# frozen list: later migrations add policies for their own tables
+RLS_TABLES = ("bank_accounts", "invoices", "payments", "promo_redemptions", "order_templates", "saved_searches",
+              "shipment_plans", "shipment_plan_lines", "webhook_endpoints", "webhook_deliveries",
+              "verification_documents", "documents")
 INDEX = {"drivers": ("iin", "iin_index", "iin"), "bank_accounts": ("iban", "iban_index", "iban")}
 
 
@@ -107,18 +111,18 @@ def upgrade() -> None:
         batch.create_index('ix_drivers_iin_index', ['iin_index'], unique=False)
     _rewrite(encrypt=True)
     if op.get_bind().dialect.name == "postgresql":
-        from app.core.rls import POLICIES, policy_sql
+        from app.core.rls import policy_sql
 
-        for table in POLICIES:
+        for table in RLS_TABLES:
             for stmt in policy_sql(table):
                 op.execute(stmt)
 
 
 def downgrade() -> None:
     if op.get_bind().dialect.name == "postgresql":
-        from app.core.rls import POLICIES, drop_sql
+        from app.core.rls import drop_sql
 
-        for table in POLICIES:
+        for table in RLS_TABLES:
             for stmt in drop_sql(table):
                 op.execute(stmt)
     _rewrite(encrypt=False)

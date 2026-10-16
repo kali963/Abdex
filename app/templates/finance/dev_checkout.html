@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("pay.dev_title") }}{% endblock %}
+{% block content %}
+<section class="card panel-3d narrow">
+  <span class="badge warn">{{ _("pay.dev_badge") }}</span>
+  <h1>{{ _("pay.dev_title") }}</h1>
+  <p class="muted">{{ _("pay.dev_text") }}</p>
+  <p class="big">{{ money(intent.amount_minor, intent.currency) }}</p>
+  <form method="post" class="row">{{ ui.csrf() }}<button class="btn ok" name="decision" value="pay">{{ _("pay.dev_pay") }}</button><button class="btn" name="decision" value="decline">{{ _("pay.dev_decline") }}</button></form>
+</section>
+{% endblock %}

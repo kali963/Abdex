@@ -6,6 +6,7 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -318,3 +319,90 @@ async def biometrics_run(request: Request, db: Session = Depends(get_db), me: Pr
     check = biometrics.run_check(db, db.get(User, me.user.id), **data)
     db.commit()
     return redirect("/trips/biometrics", flash=("success" if check.status == "passed" else "error", f"bio.{check.status}"))
+
+
+# ------------------------------------------------------------------ development signer (never in production)
+
+
+@router.post("/dev/eds/certificate")
+async def dev_eds_certificate(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("deal.sign"))):
+    """Issues a TEST certificate for a public key generated in the browser (the private key stays there)."""
+    from fastapi.responses import JSONResponse
+
+    from app.modules.documents import eds
+
+    if not eds.is_dev_signer():
+        raise NotFound()
+    form = await request.form()
+    ratelimit.hit("otp_send", f"devcert:{me.user.id}")
+    iin = me.company.bin_iin if me.company.legal_form == "ИП" else "000000000000"
+    try:
+        pem = eds.dev_issue(str(form.get("public_key", "")), full_name=me.user.full_name, iin=iin,
+                            bin_iin=me.company.bin_iin)
+    except ValueError:
+        raise ValidationFailed({"public_key": "error.invalid_value"})
+    audit(db, "eds.dev_certificate_issued", object_type="user", object_id=me.user.id)
+    db.commit()
+    return JSONResponse({"certificate": pem})
+
+
+# ------------------------------------------------------------------ online payment (FR-BIL-06)
+
+
+@router.post("/finance/invoices/{iid}/pay")
+def invoice_pay(iid: str, db: Session = Depends(get_db), me: Principal = Depends(require("finance.view"))):
+    from app.modules.billing import payments
+    from app.modules.billing.models import Invoice
+
+    invoice = db.get(Invoice, parse_uuid(iid))
+    if invoice is None:
+        raise NotFound()
+    ratelimit.hit("export", f"pay:{me.company.id}")
+    intent = payments.start(db, invoice, me.company.id)
+    db.commit()
+    return redirect(intent.checkout_url, status_code=303)
+
+
+@router.api_route("/dev/pay/{ref}", methods=["GET", "POST"])
+async def dev_checkout(ref: str, request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    """Simulated hosted checkout of the payment provider (development only, no card fields at all)."""
+    from app.modules.billing import payments
+    from app.modules.billing.models import PaymentIntent
+
+    if settings.payment_provider_url or settings.is_production:
+        raise NotFound()
+    intent = db.execute(select(PaymentIntent).where(PaymentIntent.provider_ref == ref)).scalar_one_or_none()
+    if intent is None or (me.company is None or intent.company_id != me.company.id):
+        raise NotFound()
+    if request.method == "POST":
+        form = await request.form()
+        result = payments.simulate(db, ref, succeed=form.get("decision") == "pay")
+        db.commit()
+        return redirect(f"/finance?payment={intent.id}", flash=("success" if result == "ok" else "error", f"pay.{result}"))
+    return render(request, "finance/dev_checkout.html", {"intent": intent})
+
+
+# ------------------------------------------------------------------ accounting export (FR-BIL-07)
+
+
+def _acc_labels() -> dict:
+    labels = {k: translate(f"acc.col.{k}") for k in ("date", "invoice", "deal", "buyer", "bin", "amount", "currency",
+                                                       "status", "paid", "due")}
+    labels.update({f"st.{s}": translate(f"status.{s}") for s in ("issued", "paid", "cancelled")})
+    return labels
+
+
+@router.get("/finance/export.xlsx")
+def finance_export(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("finance.view"))):
+    from app.modules.billing import accounting
+
+    today = utcnow().date()
+    d1 = _parse_day(request.query_params.get("date_from"), today.replace(day=1))
+    d2 = _parse_day(request.query_params.get("date_to"), today)
+    ratelimit.hit("export", str(me.user.id))
+    data = accounting.register_xlsx(accounting.rows(db, d1, d2, company_id=me.company.id), _acc_labels())
+    audit(db, "export.accounting", object_type="company", object_id=me.company.id,
+          details={"from": d1.isoformat(), "to": d2.isoformat()})
+    db.commit()
+    return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="abdex-invoices-{d1:%Y%m%d}-{d2:%Y%m%d}.xlsx"'})

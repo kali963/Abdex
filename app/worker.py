@@ -43,11 +43,12 @@ def tick() -> dict:
     from app.modules.webhooks.service import process as process_webhooks
 
     stats = {"journal": flush_journal()}
+    from app.modules.documents.transport import process as process_etd
     from app.modules.platform.retention import run as retention
     from app.modules.platform.security import scan as security_scan
 
     for name, job in (("outbox", process_outbox), ("bidding", expire_bidding), ("sla", escalate_overdue),
-                      ("webhooks", process_webhooks), ("security", security_scan)):
+                      ("webhooks", process_webhooks), ("security", security_scan), ("etd", process_etd)):
         _run(name, job, stats)
     if time.time() - _last_hourly > 600:
         _last_hourly = time.time()

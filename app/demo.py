@@ -53,6 +53,12 @@ def seed_demo(db) -> None:
     if db.execute(select(User.id).where(User.email == "admin@abdex.kz")).first():
         return
     log.info("seeding demo data")
+    from app.modules.platform.models import FeatureFlag
+
+    for key in ("qualified_signature", "online_payments"):  # demo: show the integrations with their simulators
+        flag = db.execute(select(FeatureFlag).where(FeatureFlag.key == key)).scalar_one_or_none()
+        if flag is not None:
+            flag.enabled = True
     staff = {}
     for role, email, name in (("admin", "admin@abdex.kz", "Администратор платформы"),
                               ("manager", "manager@abdex.kz", "Айгерим Менеджер"),
