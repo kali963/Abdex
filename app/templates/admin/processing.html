@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.processing") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.processing") }}</h1>
+<p class="muted">{{ _("proc.text") }}</p>
+<div class="table-wrap"><table><thead><tr><th>{{ _("proc.purpose") }}</th><th>{{ _("proc.categories") }}</th><th>{{ _("proc.basis") }}</th><th>{{ _("proc.recipient") }}</th><th>{{ _("proc.cross_border") }}</th><th>{{ _("proc.adapter") }}</th><th></th></tr></thead><tbody>
+{% for r in items %}<tr class="{{ '' if r.active else 'muted' }}"><td><b>{{ r.purpose }}</b><br><small class="muted"><code>{{ r.code }}</code> · {{ r.retention }}</small></td><td>{{ r.data_categories }}</td><td>{{ r.legal_basis }}</td><td>{{ r.recipient or "AbdEX" }}</td>
+<td>{% if r.cross_border %}<span class="badge warn">{{ r.countries }}</span><br><small>{{ r.safeguards }}</small>{% else %}—{% endif %}</td><td>{% if r.adapter %}<code>{{ r.adapter }}</code>{% endif %}</td>
+<td><span class="badge {{ 'ok' if r.active else '' }}">{{ _("proc.on") if r.active else _("proc.off") }}</span><form method="post" action="/admin/processing/{{ r.id }}/toggle" data-confirm="{{ _('proc.toggle_confirm') }}">{{ ui.csrf() }}<button class="btn small">{{ _("proc.disable") if r.active else _("proc.enable") }}</button></form></td></tr>{% endfor %}
+</tbody></table></div>
+<form method="post" action="/admin/processing" class="card stack">{{ ui.csrf() }}
+  <h2>{{ _("proc.add") }}</h2>
+  <div class="form-grid">
+    {{ ui.field("code", _("proc.code"), "", required=true, hint=_("proc.code_hint")) }}
+    {{ ui.field("purpose", _("proc.purpose"), "", required=true) }}
+    {{ ui.field("data_categories", _("proc.categories"), "", required=true) }}
+    {{ ui.field("legal_basis", _("proc.basis"), "", required=true) }}
+    {{ ui.field("recipient", _("proc.recipient"), "") }}
+    {{ ui.field("adapter", _("proc.adapter"), "", hint=_("proc.adapter_hint")) }}
+    {{ ui.field("countries", _("proc.countries"), "") }}
+    {{ ui.field("safeguards", _("proc.safeguards"), "") }}
+    {{ ui.field("retention", _("proc.retention"), "") }}
+  </div>
+  {{ ui.checkbox("cross_border", _("proc.cross_border")) }}
+  <div><button class="btn primary">{{ _("action.save") }}</button></div>
+</form>
+{% endblock %}

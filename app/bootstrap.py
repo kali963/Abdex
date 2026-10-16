@@ -136,6 +136,7 @@ SETTINGS = {
                                "FR-BID-08: порог срывов и срок ограничения подачи предложений"),
     "matching.weights": ({"body": 25, "geo": 20, "history": 15, "rating": 20, "level": 10, "load": 10},
                          "FR-BID-04: веса скоринга автоподбора перевозчиков"),
+    "biometrics.image_ttl_hours": (24, "SEC-DAT-10: срок хранения исходных изображений биометрии, ч"),
     "impersonation.minutes": (30, "FR-ADM-05: длительность сеанса работы от имени пользователя, мин"),
     "ratelimit.limits": ({"bid": [60, 3600], "order_create": [100, 3600], "export": [20, 3600], "login": [10, 300]},
                          "SEC-APP-07: лимиты действий {корзина: [число, окно в секундах]}"),
@@ -279,6 +280,9 @@ def init_db() -> None:
     db = SessionLocal()
     try:
         seed_reference(db)
+        from app.cli import check_data_origin
+
+        check_data_origin(db)  # SEC-DAT-09
         db.commit()
         if settings.seed_demo_data:
             from app.demo import seed_demo
@@ -320,6 +324,9 @@ def seed_reference(db) -> None:
     from app.modules.platform.antifraud import seed as seed_antifraud
 
     seed_antifraud(db)
+    from app.modules.platform.processing import seed as seed_processing
+
+    seed_processing(db)
     if not db.execute(select(Tariff.id).where(Tariff.company_id.is_(None))).first():
         db.add(Tariff(name="Базовый: фиксированное вознаграждение", model="fixed", fixed_minor=3_500_000,
                       valid_from=date(2026, 1, 1)))

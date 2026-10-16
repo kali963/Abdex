@@ -164,6 +164,13 @@ def deliveries(db: Session, endpoint_id, limit: int = 50) -> list[WebhookDeliver
 
 
 def enqueue(db: Session, company_ids, event: str, data: dict) -> int:
+    from app.core import rls
+
+    with rls.system(db):  # deal events fan out to both participants' endpoints
+        return _enqueue(db, company_ids, event, data)
+
+
+def _enqueue(db: Session, company_ids, event: str, data: dict) -> int:
     event_id = str(uuid7())
     payload = json.dumps({"id": event_id, "type": event, "created_at": utcnow().isoformat(), "data": data},
                          ensure_ascii=False, default=str, separators=(",", ":"))

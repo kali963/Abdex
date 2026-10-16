@@ -26,6 +26,7 @@ from app.modules.deals.models import Deal, Dispute
 from app.modules.documents import service as documents
 from app.modules.documents.models import DocumentTemplate
 from app.modules.fleet import service as fleet
+from app.modules.fleet.biometrics import latest as biometrics_latest
 from app.modules.fleet.models import VerificationDocument, VerificationRequest
 from app.modules.notifications.models import OutboxMessage
 from app.modules.orders import flow
@@ -230,6 +231,8 @@ def moderation_item(rid: str, request: Request, db: Session = Depends(get_db),
     return render(request, "admin/moderation_item.html", {
         "req": req, "company": company, "docs": docs, "checks": checks, "alerts": alerts,
         "vehicles": fleet.company_vehicles(db, company.id), "drivers": fleet.company_drivers(db, company.id),
+        "bio": {d.id: biometrics_latest(db, d.id)
+                for d in fleet.company_drivers(db, company.id)},
         "reasons": dictionary(db, "verification_reject_reasons")})
 
 

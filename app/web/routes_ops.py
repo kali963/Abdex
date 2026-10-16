@@ -290,3 +290,31 @@ def plan_delete(pid: str, db: Session = Depends(get_db), me: Principal = Depends
     audit(db, "plan.deleted", object_type="shipment_plan", object_id=p.id)
     db.commit()
     return redirect("/plan/periods", flash=("success", "msg.saved"))
+
+
+# ------------------------------------------------------------------ driver biometrics (FR-KYC-08, SEC-DAT-10)
+
+
+@router.get("/trips/biometrics")
+def biometrics_page(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("trip.execute"))):
+    from app.modules.accounts.service import has_consent
+    from app.modules.fleet import biometrics
+
+    driver = biometrics.driver_of(db, me.user)
+    return render(request, "deals/biometrics.html", {"check": biometrics.latest(db, driver.id),
+                                                     "consent": has_consent(db, me.user.id, "biometrics")})
+
+
+@router.post("/trips/biometrics")
+async def biometrics_run(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("trip.execute"))):
+    from app.modules.fleet import biometrics
+
+    form = await request.form()
+    ratelimit.hit("upload", str(me.user.id))
+    data = {}
+    for name in ("selfie", "selfie2", "document"):
+        f = form.get(name)
+        data[name] = await f.read() if f is not None and getattr(f, "filename", "") else b""
+    check = biometrics.run_check(db, db.get(User, me.user.id), **data)
+    db.commit()
+    return redirect("/trips/biometrics", flash=("success" if check.status == "passed" else "error", f"bio.{check.status}"))

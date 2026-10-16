@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import audit
 from app.core.context import get_ctx
+from app.core.crypto import blind_index
 from app.core.errors import AppError, NotFound, ValidationFailed
 from app.db import utcnow
 from app.modules.accounts.models import BankAccount, Company, Membership, User
@@ -83,9 +84,10 @@ def detect_duplicates(db: Session, *, company_id, bin_iin: str = "", iin: str = 
         ids = db.execute(select(Vehicle.company_id).where(Vehicle.plate == plate, Vehicle.is_deleted.is_(False))).scalars()
         checks.append(("duplicate_vehicle_plate", _other_companies(db, company_id, ids), {"plate": plate}))
     if iin:
-        ids = db.execute(select(Driver.company_id).where(Driver.iin == iin, Driver.is_deleted.is_(False))).scalars()
+        idx = blind_index(iin, "iin")
+        ids = db.execute(select(Driver.company_id).where(Driver.iin_index == idx, Driver.is_deleted.is_(False))).scalars()
         # a driver legitimately exists in his own self-employed profile and in a fleet he joined
-        own_user_ids = set(db.execute(select(Driver.user_id).where(Driver.iin == iin, Driver.user_id.is_not(None))).scalars())
+        own_user_ids = set(db.execute(select(Driver.user_id).where(Driver.iin_index == idx, Driver.user_id.is_not(None))).scalars())
         others = _other_companies(db, company_id, ids)
         if len(own_user_ids) == 1 and others:
             uid = next(iter(own_user_ids))
@@ -93,7 +95,7 @@ def detect_duplicates(db: Session, *, company_id, bin_iin: str = "", iin: str = 
             others -= linked
         checks.append(("duplicate_driver_iin", others, {"iin_tail": iin[-4:]}))
     if iban:
-        ids = db.execute(select(BankAccount.company_id).where(BankAccount.iban == iban,
+        ids = db.execute(select(BankAccount.company_id).where(BankAccount.iban_index == blind_index(iban, "iban"),
                                                               BankAccount.status == "active")).scalars()
         checks.append(("duplicate_iban", _other_companies(db, company_id, ids), {"iban_tail": iban[-4:]}))
     if bin_iin:

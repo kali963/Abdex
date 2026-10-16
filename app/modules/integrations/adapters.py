@@ -61,6 +61,7 @@ class RegistryAdapter(Adapter):
     Switching the source (commercial -> ГБД ЮЛ via ШЭП) = new adapter + config switch."""
 
     name = "registry"
+    personal_data = True
     source = "commercial-sim"
 
     def check_company(self, bin_iin: str, *, basis: str, initiator=None) -> dict:
@@ -91,6 +92,7 @@ def _mask(recipient: str) -> str:
 class _OutboundAdapter(Adapter):
     """Dev transports write to the log and to an in-memory outbox visible at /dev/outbox."""
 
+    personal_data = True  # recipients (phone, e-mail, chat id) are personal data: SEC-DAT-11
     sent: list[dict] = []
 
     def send(self, recipient: str, body: str) -> None:
@@ -146,11 +148,50 @@ class PushAdapter(_OutboundAdapter):
     name = "push"
 
 
+class BiometricsAdapter(Adapter):
+    """FR-KYC-08: face match of a selfie against the document photo plus a liveness check.
+
+    The simulator stands in for a licensed provider (INT-GEN-07): the face "matches" when both images are valid
+    and differ from each other; liveness passes when the two selfie frames (the user is asked to turn the head)
+    are valid and not the same picture. A real provider replaces `_compare` only.
+    """
+
+    name = "biometrics"
+    personal_data = True
+    retries = 0
+    provider = "biometrics-sim-v1"
+
+    def compare(self, selfie: bytes, selfie2: bytes, document: bytes, *, initiator=None) -> dict:
+        return self.call("compare", lambda: self._compare(selfie, selfie2, document), basis="consent",
+                         initiator=initiator, summary="face-match")
+
+    def _compare(self, selfie: bytes, selfie2: bytes, document: bytes) -> dict:
+        import hashlib
+        import io
+
+        from PIL import Image
+
+        def ok(data: bytes) -> bool:
+            try:
+                with Image.open(io.BytesIO(data)) as im:
+                    im.verify()
+                return True
+            except Exception:  # noqa: BLE001 — anything unreadable is simply not a face
+                return False
+
+        h = [hashlib.sha256(x).hexdigest() for x in (selfie, selfie2, document)]
+        liveness = ok(selfie) and ok(selfie2) and h[0] != h[1]
+        match = ok(selfie) and ok(document) and h[0] != h[2]
+        score = (70 + int(h[0][:2], 16) % 30) if match else int(h[0][:2], 16) % 30
+        return {"match": match, "liveness": liveness, "score": score, "provider": self.provider}
+
+
 routing = RoutingAdapter()
 registry = RegistryAdapter()
 sms = SmsAdapter()
 email = EmailAdapter()
 telegram = TelegramAdapter()
 push = PushAdapter()
+biometrics = BiometricsAdapter()
 
 CHANNELS = {"sms": sms, "email": email, "telegram": telegram, "push": push}

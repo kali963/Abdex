@@ -136,7 +136,10 @@ def _on_status(db: Session, order, frm, to, **_):
     deal = db.execute(select(Deal).where(Deal.order_id == order.id)).scalar_one_or_none()
     if deal is None:
         return
-    accrual = accrue_for_deal(db, deal)
+    from app.core import rls
+
+    with rls.system(db):  # the client's invoice is created by a deal event, possibly on the carrier's request
+        accrual = accrue_for_deal(db, deal)
     if accrual is not None:
         flow.transition(db, order, flow.FEE_INVOICED, actor=flow.SYSTEM, reason="platform fee accrued")
         from app.modules.notifications.service import notify_event

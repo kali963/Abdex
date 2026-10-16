@@ -282,3 +282,66 @@ def funnels_page(request: Request, date_from: str = "", date_to: str = "", db: S
     except ValueError:
         pass
     return render(request, "admin/funnels.html", {"funnels": product.funnels(db, d1, d2), "d1": d1, "d2": d2})
+
+
+# ------------------------------------------------------------------ processing register (SEC-DAT-10/11)
+
+
+@router.get("/processing")
+def processing_page(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("admin.settings"))):
+    from app.modules.platform.processing import records
+
+    return render(request, "admin/processing.html", {"items": records(db)})
+
+
+@router.post("/processing")
+async def processing_save(request: Request, db: Session = Depends(get_db),
+                          me: Principal = Depends(require("admin.settings"))):
+    import re
+
+    from app.core.audit import audit
+    from app.modules.platform.models import ProcessingRecord
+    from app.modules.platform.processing import invalidate
+
+    form = await request.form()
+    f = {k: str(form.get(k, "")).strip() for k in ("code", "purpose", "data_categories", "legal_basis", "recipient",
+                                                   "countries", "safeguards", "retention", "adapter")}
+    errors = {}
+    if not re.fullmatch(r"[a-z][a-z0-9_]{2,39}", f["code"]):
+        errors["code"] = "error.role_code"
+    for k in ("purpose", "data_categories", "legal_basis"):
+        if not f[k]:
+            errors[k] = "error.required"
+    cross = bool(form.get("cross_border"))
+    if cross and (not f["countries"] or not f["safeguards"]):
+        errors["countries"] = "error.cross_border_basis"  # SEC-DAT-11: no transfer abroad without basis
+    if errors:
+        raise ValidationFailed(errors)
+    rec = db.execute(select(ProcessingRecord).where(ProcessingRecord.code == f["code"])).scalar_one_or_none()
+    if rec is None:
+        rec = ProcessingRecord(code=f["code"], created_by=me.user.id)
+        db.add(rec)
+    rec.purpose, rec.data_categories, rec.legal_basis = f["purpose"][:300], f["data_categories"][:500], f["legal_basis"][:300]
+    rec.recipient, rec.countries, rec.safeguards = f["recipient"][:200], f["countries"][:200], f["safeguards"][:500]
+    rec.retention, rec.adapter, rec.cross_border, rec.updated_by = f["retention"][:200], f["adapter"][:40], cross, me.user.id
+    audit(db, "privacy.processing_saved", object_type="processing", object_id=f["code"],
+          details={"recipient": rec.recipient, "cross_border": cross, "countries": rec.countries})
+    db.commit()
+    invalidate()
+    return redirect("/admin/processing", flash=("success", "msg.saved"))
+
+
+@router.post("/processing/{rid}/toggle")
+def processing_toggle(rid: str, db: Session = Depends(get_db), me: Principal = Depends(require("admin.settings"))):
+    from app.core.audit import audit
+    from app.modules.platform.models import ProcessingRecord
+    from app.modules.platform.processing import invalidate
+
+    rec = db.get(ProcessingRecord, parse_uuid(rid))
+    if rec is None:
+        raise NotFound()
+    rec.active = not rec.active
+    audit(db, "privacy.processing_toggled", object_type="processing", object_id=rec.code, details={"active": rec.active})
+    db.commit()
+    invalidate()
+    return redirect("/admin/processing", flash=("success", "msg.saved"))

@@ -2,7 +2,7 @@
 {% import "components.html" as ui with context %}
 {% block title %}{{ _("nav.trips") }}{% endblock %}
 {% block content %}
-<h1>{{ _("nav.trips") }}</h1>
+<div class="page-head"><h1>{{ _("nav.trips") }}</h1><a class="btn small" href="/trips/biometrics">{{ _("bio.title") }}</a></div>
 {% set active = rows|selectattr("1.status", "in", ["assigned", "docs_signed", "loading", "in_transit", "unloaded", "dispute"])|list %}
 {% if active %}
 <div class="stack">

@@ -68,6 +68,9 @@ def run(db: Session) -> dict[str, int]:
             SupportAccessGrant.revoked_at.is_not(None), and_(SupportAccessGrant.valid_until < now))),
     }
     counts: dict[str, int] = {}
+    from app.modules.fleet.biometrics import purge_images
+
+    counts["biometric_images"] = purge_images(db, now=now)  # SEC-DAT-10: own short period, in hours
     for category, days in p.items():
         if not days:
             continue
