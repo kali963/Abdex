@@ -16,6 +16,9 @@ from app.modules.billing.models import Invoice
 from app.modules.chat import service as chat
 from app.modules.deals import service as deals
 from app.modules.deals.tracking import trip_map
+from app.modules.documents import transport
+from app.modules.documents.eds import is_dev_signer
+from app.modules.platform.service import flag_enabled
 from app.modules.deals.models import Dispute, ExecutorChange, Incident, Rating, Supplement
 from app.modules.documents import service as documents
 from app.modules.documents.models import Document
@@ -79,6 +82,10 @@ def deal_card(did: str, request: Request, db: Session = Depends(get_db), me: Pri
         "show_finance": show_finance,
         "next_checkpoints": _next_checkpoints(o.status, deals.checkpoints(db, d.id)),
         "trip_map": trip_map(d, o, deals.checkpoints(db, d.id)),
+        "transport_regs": transport.registrations(db, d.id),
+        "transport_types": transport.required_types(db, o),
+        "eds_enabled": bool(me.company) and flag_enabled(db, "qualified_signature", me.company.id),
+        "eds_mode": "dev" if is_dev_signer() else "ncalayer",
         "can_dispute": acc.side in ("client", "carrier") and o.status in (flow.ASSIGNED, flow.IN_TRANSIT, flow.UNLOADED),
         "my_vehicles": company_vehicles(db, carrier.id) if acc.side == "carrier" else [],
         "my_drivers": company_drivers(db, carrier.id) if acc.side == "carrier" else [],
@@ -131,6 +138,83 @@ async def sign(did: str, doc_id: str, request: Request, db: Session = Depends(ge
     deals.on_document_signed(db, acc.deal)
     db.commit()
     return redirect(f"/deals/{did}#docs", flash=("success", "msg.signed"))
+
+
+@router.post("/deals/{did}/docs/{doc_id}/sign-eds")
+async def sign_eds(did: str, doc_id: str, request: Request, db: Session = Depends(get_db),
+                   me: Principal = Depends(require("deal.sign"))):
+    """FR-DOC-07: the browser sends the signature only; verification and the signed status happen here."""
+    form = await request.form()
+    acc = deal_access(db, me, parse_uuid(did))
+    _ctx_side(acc, "client", "carrier")
+    doc = db.get(Document, parse_uuid(doc_id))
+    if doc is None or doc.deal_id != acc.deal.id:
+        raise NotFound()
+    documents.sign_qualified(db, doc, user=db.get(User, me.user.id), company=me.company,
+                             package=str(form.get("package", "")))
+    deals.on_document_signed(db, acc.deal)
+    db.commit()
+    return redirect(f"/deals/{did}/docs/{doc.id}/signatures", flash=("success", "msg.signed_eds"))
+
+
+@router.api_route("/deals/{did}/docs/{doc_id}/signatures", methods=["GET", "POST"])
+async def doc_signatures(did: str, doc_id: str, request: Request, db: Session = Depends(get_db),
+                         me: Principal = Depends(get_principal)):
+    """GOV-DS-04/05: the signature set and a fresh server-side re-check at any time (POST)."""
+    acc = deal_access(db, me, parse_uuid(did), staff=request.url.path.startswith("/admin/"))
+    doc = db.get(Document, parse_uuid(doc_id))
+    if doc is None or doc.deal_id != acc.deal.id:
+        raise NotFound()
+    recheck = documents.reverify_qualified(db, doc) if request.method == "POST" else None
+    db.commit()
+    import json as _json
+
+    return render(request, "deals/signatures.html", {
+        "deal": acc.deal, "doc": doc, "sigs": documents.signatures(db, doc.id),
+        "qsigs": documents.qualified_signatures(db, doc.id), "recheck": recheck, "json_loads": _json.loads})
+
+
+@router.post("/deals/{did}/transport-docs")
+async def transport_docs(did: str, request: Request, db: Session = Depends(get_db),
+                         me: Principal = Depends(require("deal.manage"))):
+    """GOV-TR-02/04/05: form the consignment note (and CMR abroad) from the deal data."""
+    from app.modules.documents import transport
+
+    form = await request.form()
+    acc = deal_access(db, me, parse_uuid(did))
+    _ctx_side(acc, "client", "carrier")
+    transport.form_documents(db, acc.deal, mode=str(form.get("mode", "electronic")),
+                             paper_number=str(form.get("paper_number", "")))
+    db.commit()
+    return redirect(f"/deals/{did}#transport", flash=("success", "etd.formed"))
+
+
+@router.post("/deals/{did}/transport-docs/{rid}/submit")
+def transport_submit(did: str, rid: str, db: Session = Depends(get_db), me: Principal = Depends(require("deal.manage"))):
+    from app.modules.documents import transport
+
+    acc = deal_access(db, me, parse_uuid(did))
+    _ctx_side(acc, "client", "carrier")
+    _, reg = transport.get_registration(db, acc.deal.id, parse_uuid(rid))
+    transport.submit_paper(db, reg)
+    db.commit()
+    return redirect(f"/deals/{did}#transport", flash=("success", "etd.submitted"))
+
+
+@router.get("/deals/{did}/transport-docs/{rid}.xml")
+def transport_xml(did: str, rid: str, request: Request, db: Session = Depends(get_db),
+                  me: Principal = Depends(get_principal)):
+    from urllib.parse import quote
+
+    from fastapi.responses import Response
+
+    from app.modules.documents import transport
+
+    acc = deal_access(db, me, parse_uuid(did), staff=request.url.path.startswith("/admin/"))
+    doc, reg = transport.get_registration(db, acc.deal.id, parse_uuid(rid))
+    return Response(transport.xml_export(reg, doc), media_type="application/xml",
+                    headers={"Content-Disposition": "attachment; filename=\"transport-document.xml\"; "
+                             f"filename*=UTF-8''{quote(doc.doc_type + '-' + doc.number + '.xml')}"})
 
 
 @router.post("/deals/{did}/docs/upload")

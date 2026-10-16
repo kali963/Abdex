@@ -27,6 +27,8 @@ FONT_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "fonts"
 
 DOC_PREFIX = {
     "contract_order": "ДЗ",      # договор-заявка
+    "e_waybill": "ТТН",          # товарно-транспортная накладная (GOV-TR-02)
+    "cmr_form": "CMR",           # международная накладная
     "transport_request": "ЗП",   # заявка на перевозку
     "power_of_attorney": "ДВ",
     "work_act": "АВР",
@@ -278,3 +280,85 @@ def period_zip(db: Session, company_id, date_from: date, date_to: date, labels: 
                         f.sha256, name])
         z.writestr("inventory.csv", "﻿" + inventory.getvalue())
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------- qualified signature (FR-DOC-07, GOV-DS)
+
+
+def sign_qualified(db: Session, doc: Document, *, user, company, package: str):
+    """Verified on the server; only a valid signature gives the document the signed status (GOV-DS-02)."""
+    import json as _json
+
+    from app.modules.documents import eds
+    from app.modules.documents.models import QualifiedSignature
+    from app.modules.platform.service import flag_enabled, get_setting
+
+    if not flag_enabled(db, "qualified_signature", company.id):
+        raise AppError("qualified_signature_off", status_code=403)
+    if not doc.requires_signatures:
+        raise Conflict("not_signable")
+    if any(s.company_id == company.id for s in signatures(db, doc.id)):
+        raise Conflict("already_signed")
+    if not package or len(package) > 200_000:
+        raise ValidationFailed({"package": "error.required"})
+    f = db.get(StoredFile, doc.file_id)
+    data = storage.get(f.storage_key)
+    current_hash = sha256_hex(data)
+    if current_hash != doc.sha256:
+        raise AppError("document_integrity_failed", status_code=409)
+    now = utcnow()
+    revoked = set(get_setting(db, "eds.revoked_serials", []) or [])
+    result = eds.verifier().verify(package, data, signed_at=now, expected_bin=company.bin_iin, revoked=revoked)
+    audit(db, "document.eds_verified", object_type="document", object_id=doc.id,
+          result="ok" if result.valid else "denied", details={"checks": result.checks, "provider": result.provider})
+    if not result.valid:
+        failed = [k for k, v in result.checks.items() if not v] or [result.error or "invalid"]
+        raise AppError("eds_invalid", status_code=422, checks=", ".join(failed))
+    sig = Signature(document_id=doc.id, user_id=user.id, company_id=company.id, kind="qualified",
+                    signed_at=result.signed_at or now, ip=get_ctx().ip, document_hash=current_hash, created_by=user.id)
+    db.add(sig)
+    db.flush()
+    s = result.signer
+    not_after = None
+    if s.get("not_after"):
+        from datetime import datetime as _dt
+
+        not_after = _dt.fromisoformat(str(s["not_after"]).replace("Z", "+00:00"))
+    db.add(QualifiedSignature(signature_id=sig.id, document_id=doc.id, package=package, provider=result.provider,
+                              document_hash=current_hash, signer_iin=str(s.get("iin", ""))[:12],
+                              signer_bin=str(s.get("bin", ""))[:12], signer_name=str(s.get("name", ""))[:300],
+                              cert_serial=str(s.get("serial", ""))[:80], cert_issuer=str(s.get("issuer", ""))[:300],
+                              cert_not_after=not_after, tsp_time=result.signed_at or now,
+                              verify_result=_json.dumps(result.as_dict(), ensure_ascii=False), created_by=user.id))
+    db.flush()
+    audit(db, "document.signed", object_type="document", object_id=doc.id, details={"kind": "qualified"})
+    return sig
+
+
+def reverify_qualified(db: Session, doc: Document) -> list[dict]:
+    """GOV-DS-05: repeat the check at any time; validity is judged at the stored signing time."""
+    from app.modules.documents import eds
+    from app.modules.documents.models import QualifiedSignature
+    from app.modules.platform.service import get_setting
+
+    f = db.get(StoredFile, doc.file_id)
+    data = storage.get(f.storage_key)
+    revoked = set(get_setting(db, "eds.revoked_serials", []) or [])
+    out = []
+    for q in db.execute(select(QualifiedSignature).where(QualifiedSignature.document_id == doc.id)).scalars():
+        sig = db.get(Signature, q.signature_id)
+        from app.modules.accounts.models import Company
+
+        company = db.get(Company, sig.company_id)
+        res = eds.verifier().verify(q.package, data, signed_at=q.tsp_time, expected_bin=company.bin_iin, revoked=revoked)
+        out.append({"company": company.name, "valid": res.valid, "checks": res.checks, "signer": q.signer_name,
+                    "signed_at": q.tsp_time, "not_after": q.cert_not_after})
+        audit(db, "document.eds_reverified", object_type="document", object_id=doc.id,
+              result="ok" if res.valid else "denied", details={"checks": res.checks})
+    return out
+
+
+def qualified_signatures(db: Session, document_id) -> list:
+    from app.modules.documents.models import QualifiedSignature
+
+    return list(db.execute(select(QualifiedSignature).where(QualifiedSignature.document_id == document_id)).scalars())

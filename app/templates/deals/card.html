@@ -126,6 +126,31 @@
   {% endif %}
 </section>
 
+{# ---------------- transport documents (section 51) ---------------- #}
+{% if transport_types and side in ("client", "carrier", "driver", "staff") %}
+<section class="card" id="transport">
+  <h2>{{ _("etd.title") }}</h2>
+  <p class="muted"><small>{{ _("etd.rule_" ~ ("international" if order.is_international else "domestic")) }}: {% for t in transport_types %}{{ _("doc." ~ t) }}{{ ", " if not loop.last }}{% endfor %}</small></p>
+  {% if transport_regs %}
+  <div class="table-wrap"><table><thead><tr><th>{{ _("doc.title") }}</th><th>{{ _("etd.mode") }}</th><th>{{ _("etd.registration") }}</th><th></th></tr></thead><tbody>
+  {% for d, r in transport_regs %}<tr><td><b>{{ _("doc." ~ d.doc_type) }}</b> № {{ d.number }}</td><td>{{ _("etd.mode." ~ r.mode) }}{% if r.paper_number %}<br><small>№ {{ r.paper_number }}</small>{% endif %}</td>
+    <td><span class="badge {{ {'registered': 'ok', 'error': 'err', 'pending': 'warn', 'paper': 'info'}.get(r.status, '') }}">{{ _("etd.st." ~ r.status) }}</span>{% if r.external_number %}<br><small>{{ r.external_number }}</small>{% endif %}{% if r.last_error %}<br><small class="muted">{{ r.last_error }}</small>{% endif %}</td>
+    <td><a class="btn small" href="{{ file_url(d.file_id) }}" target="_blank" rel="noopener">PDF</a> <a class="btn small" href="{{ ('/admin' if side == 'staff' else '') }}/deals/{{ deal.id }}/transport-docs/{{ r.id }}.xml">XML</a>
+      {% if r.status in ("paper", "local", "error") and side in ("client", "carrier") and me.can("deal.manage") %}<form method="post" action="/deals/{{ deal.id }}/transport-docs/{{ r.id }}/submit" class="inline">{{ ui.csrf() }}<button class="btn small primary">{{ _("etd.submit") }}</button></form>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% endif %}
+  {% if side in ("client", "carrier") and me.can("deal.manage") and order.status in ("assigned", "docs_signed", "loading", "in_transit") and (transport_regs|length) < (transport_types|length) %}
+  <form method="post" action="/deals/{{ deal.id }}/transport-docs" class="stack">{{ ui.csrf() }}
+    <div class="form-grid">
+      {{ ui.select("mode", _("etd.mode"), [("electronic", _("etd.mode.electronic")), ("paper", _("etd.mode.paper"))], "electronic", hint=_("etd.paper_hint")) }}
+      {{ ui.field("paper_number", _("etd.paper_number"), "") }}
+    </div>
+    <div><button class="btn primary">{{ _("etd.form") }}</button></div>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+
 {# ---------------- documents ---------------- #}
 <section class="card" id="docs">
   <h2>{{ _("deal.documents") }}</h2>
@@ -139,12 +164,14 @@
         {% if sign_doc == doc.id|string %}
         <form method="post" action="/deals/{{ deal.id }}/docs/{{ doc.id }}/sign" class="row">{{ ui.csrf() }}<input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="{{ _('auth.code') }}" aria-label="{{ _('auth.code') }}" required><button class="btn small ok">{{ _("sign.sign") }}</button></form>
         {% else %}<form method="post" action="/deals/{{ deal.id }}/docs/{{ doc.id }}/sign-code">{{ ui.csrf() }}<button class="btn small primary">{{ _("sign.start") }}</button></form>{% endif %}
+        {% if eds_enabled %}<div class="eds"><button type="button" class="btn small ok" data-eds-sign data-mode="{{ eds_mode }}" data-file="{{ file_url(doc.file_id) }}" data-action="/deals/{{ deal.id }}/docs/{{ doc.id }}/sign-eds" data-cert="/dev/eds/certificate" data-wait="{{ _('eds.wait') }}" data-fail="{{ _('eds.fail') }}">{{ _("eds.sign") }}{% if eds_mode == "dev" %} ({{ _("eds.test") }}){% endif %}</button><small class="muted" data-eds-status role="status"></small></div>{% endif %}
       {% endif %}
+      {% if sigs[doc.id] %}<a class="btn small link" href="/deals/{{ deal.id }}/docs/{{ doc.id }}/signatures">{{ _("eds.details") }}</a>{% endif %}
       {% if not doc.is_generated and side in ("client", "carrier") and me.company and doc.company_id != me.company.id and doc.status == "uploaded" %}
         <form method="post" action="/deals/{{ deal.id }}/docs/{{ doc.id }}/review" class="row">{{ ui.csrf() }}<button class="btn small" name="status" value="checked">{{ _("doc.accept") }}</button><input type="text" name="reason" placeholder="{{ _('doc.reject_reason') }}" aria-label="{{ _('doc.reject_reason') }}"><button class="btn small danger" name="status" value="rejected">{{ _("doc.reject") }}</button></form>{% endif %}
     </td></tr>{% else %}<tr><td colspan="4" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}
   </tbody></table></div>
-  <p class="muted"><small>{{ _("sign.simple_note") }}</small></p>
+  <p class="muted"><small>{{ _("sign.simple_note") }}{% if eds_enabled %} {{ _("eds.note") }}{% endif %}</small></p>
   {% if side in ("client", "carrier", "driver") and order.status not in ("cancelled",) %}
   <form method="post" action="/deals/{{ deal.id }}/docs/upload" enctype="multipart/form-data" class="form-grid">{{ ui.csrf() }}
     <div class="field"><label for="f-dtype">{{ _("doc.type") }}</label><select id="f-dtype" name="doc_type">{% for t in upload_types %}<option value="{{ t }}">{{ _("doc." ~ t) }}</option>{% endfor %}</select></div>
@@ -203,3 +230,4 @@
 </aside>
 </div>
 {% endblock %}
+{% block scripts %}{% if eds_enabled %}<script src="/static/js/eds.js?v=1" defer></script>{% endif %}{% endblock %}

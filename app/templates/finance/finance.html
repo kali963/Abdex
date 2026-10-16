@@ -9,11 +9,13 @@
   <div class="card stat"><b>{{ money(ledger.paid) }}</b><span>{{ _("fin.paid") }}</span></div>
   <div class="card stat"><b>{{ money(ledger.debt) }}</b><span>{{ _("fin.debt") }}</span></div>
 </div>
-<p class="muted">{{ _("fin.fee_note") }}</p>
+<p class="muted">{{ _("fin.fee_note") }}{% if online_payments %} {{ _("pay.note") }}{% endif %}</p>
+<p class="row"><a class="btn small" href="/finance/export.xlsx?date_from={{ month_start.isoformat() }}&date_to={{ today.isoformat() }}">{{ _("acc.export") }}</a></p>
 <h2>{{ _("fin.invoices") }}</h2>
 <div class="table-wrap"><table><thead><tr><th>№</th><th>{{ _("common.date") }}</th><th class="num">{{ _("fin.amount") }}</th><th>{{ _("fin.due") }}</th><th>{{ _("common.status") }}</th><th>{{ _("fin.documents") }}</th></tr></thead>
 <tbody>{% for i in ledger.invoices %}<tr><td>{{ i.number }}</td><td>{{ fmt_dt(i.created_at, false) }}</td><td class="num">{{ money(i.amount_minor, i.currency) }}</td><td>{{ fmt_date(i.due_date) }}</td><td>{{ ui.status(i.status) }}</td>
-<td>{% if i.deal_id %}<a href="/deals/{{ i.deal_id }}#docs">{{ _("fin.invoice_and_act") }}</a>{% endif %}</td></tr>
+<td>{% if i.deal_id %}<a href="/deals/{{ i.deal_id }}#docs">{{ _("fin.invoice_and_act") }}</a>{% endif %}
+  {% if online_payments and i.status == "issued" and i.amount_minor > 0 %}<form method="post" action="/finance/invoices/{{ i.id }}/pay" class="inline">{{ ui.csrf() }}<button class="btn small ok">{{ _("pay.online") }}</button></form>{% endif %}</td></tr>
 {% else %}<tr><td colspan="6" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
 <h2>{{ _("fin.payments") }}</h2>
 <div class="table-wrap"><table><thead><tr><th>{{ _("common.date") }}</th><th class="num">{{ _("fin.amount") }}</th><th>{{ _("fin.source") }}</th><th>{{ _("fin.reference") }}</th></tr></thead>

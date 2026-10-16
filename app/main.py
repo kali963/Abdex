@@ -43,7 +43,7 @@ def _setup_logging() -> None:
 _REQUEST_ID_RE = re.compile(r"[^A-Za-z0-9._-]")
 
 CSP = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; "
-       "connect-src 'self'; font-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; "
+       "connect-src 'self' wss://127.0.0.1:13579; font-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; "
        "object-src 'none'; manifest-src 'self'; worker-src 'self'")
 
 

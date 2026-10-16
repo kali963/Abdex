@@ -30,7 +30,10 @@ def finance(request: Request, db: Session = Depends(get_db), me: Principal = Dep
     else:
         ctx["promos"] = billing.company_promos(db, me.company.id)
     today = utcnow().date()
-    ctx.update(today=today, month_start=today.replace(day=1))
+    from app.modules.platform.service import flag_enabled
+
+    ctx.update(today=today, month_start=today.replace(day=1),
+               online_payments=flag_enabled(db, "online_payments", me.company.id))
     return render(request, "finance/finance.html", ctx)
 
 

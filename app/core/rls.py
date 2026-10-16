@@ -37,6 +37,8 @@ POLICIES: dict[str, str] = {
     "webhook_deliveries": f"endpoint_id IN (SELECT w.id FROM webhook_endpoints w WHERE w.company_id = {CUR})",  # noqa: S608
     "verification_documents": f"company_id = {CUR}",
     "documents": f"company_id = {CUR} OR deal_id IN {_DEALS}",
+    "payment_intents": f"company_id = {CUR}",
+    "transport_doc_registrations": f"deal_id IN {_DEALS}",
 }
 
 

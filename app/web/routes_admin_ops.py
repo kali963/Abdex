@@ -345,3 +345,51 @@ def processing_toggle(rid: str, db: Session = Depends(get_db), me: Principal = D
     db.commit()
     invalidate()
     return redirect("/admin/processing", flash=("success", "msg.saved"))
+
+
+# ------------------------------------------------------------------ accounting / ESF (FR-BIL-07)
+
+
+def _period(request: Request):
+    from datetime import date
+
+    from app.db import utcnow
+
+    today = utcnow().date()
+    try:
+        d1 = date.fromisoformat(request.query_params.get("date_from") or today.replace(day=1).isoformat())
+        d2 = date.fromisoformat(request.query_params.get("date_to") or today.isoformat())
+    except ValueError:
+        d1, d2 = today.replace(day=1), today
+    return d1, d2
+
+
+@router.get("/finance/export.xlsx")
+def admin_finance_export(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("admin.finance"))):
+    from fastapi.responses import Response
+
+    from app.core.audit import audit
+    from app.modules.billing import accounting
+    from app.web.routes_ops import _acc_labels
+
+    d1, d2 = _period(request)
+    data = accounting.register_xlsx(accounting.rows(db, d1, d2), _acc_labels())
+    audit(db, "export.accounting", object_type="platform", object_id="all", details={"from": d1.isoformat()})
+    db.commit()
+    return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="abdex-register-{d1:%Y%m%d}-{d2:%Y%m%d}.xlsx"'})
+
+
+@router.get("/finance/esf.zip")
+def admin_esf_zip(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("admin.finance"))):
+    from fastapi.responses import Response
+
+    from app.core.audit import audit
+    from app.modules.billing import accounting
+
+    d1, d2 = _period(request)
+    data = accounting.esf_zip(db, accounting.rows(db, d1, d2))
+    audit(db, "export.esf", object_type="platform", object_id="all", details={"from": d1.isoformat(), "to": d2.isoformat()})
+    db.commit()
+    return Response(data, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="abdex-esf-{d1:%Y%m%d}-{d2:%Y%m%d}.zip"'})

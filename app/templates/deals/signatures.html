@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("eds.set_title") }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ _("eds.set_title") }}</h1><p class="muted">{{ _("doc." ~ doc.doc_type) }} № {{ doc.number }} · SHA-256 <code class="break">{{ doc.sha256 }}</code></p></div>
+  <a class="btn" href="{{ ('/admin' if request.url.path.startswith('/admin') else '') }}/deals/{{ deal.id }}#docs">{{ _("action.back") }}</a></div>
+<p class="muted">{{ _("eds.set_text") }}</p>
+{% if recheck is not none %}
+<section class="card {{ 'warn' if recheck|rejectattr('valid')|list }}">
+  <h2>{{ _("eds.recheck_result") }}</h2>
+  {% for r in recheck %}<p><span class="badge {{ 'ok' if r.valid else 'err' }}">{{ _("eds.valid") if r.valid else _("eds.invalid") }}</span> {{ r.company }} · {{ r.signer }} · {{ fmt_dt(r.signed_at) }}</p>
+  <ul class="plain-list">{% for k, v in r.checks.items() %}<li>{{ "✓" if v else "✗" }} {{ _("eds.check." ~ k) }}</li>{% endfor %}</ul>
+  {% else %}<p class="muted">{{ _("eds.no_qualified") }}</p>{% endfor %}
+</section>
+{% endif %}
+<div class="table-wrap"><table><thead><tr><th>{{ _("eds.kind") }}</th><th>{{ _("common.date") }}</th><th>IP</th><th>SHA-256</th></tr></thead><tbody>
+{% for s in sigs %}<tr><td><span class="badge {{ 'ok' if s.kind == 'qualified' else 'info' }}">{{ _("sign." ~ s.kind) }}</span></td><td>{{ fmt_dt(s.signed_at) }}</td><td>{{ s.ip }}</td><td><code class="break">{{ s.document_hash }}</code></td></tr>{% endfor %}
+</tbody></table></div>
+{% for q in qsigs %}{% set r = json_loads(q.verify_result) %}
+<section class="card">
+  <h3>{{ _("sign.qualified") }}: {{ q.signer_name }}</h3>
+  <dl class="kv">
+    <dt>{{ _("eds.iin_bin") }}</dt><dd>{{ q.signer_iin or "—" }} / {{ q.signer_bin or "—" }}</dd>
+    <dt>{{ _("eds.serial") }}</dt><dd><code>{{ q.cert_serial }}</code></dd>
+    <dt>{{ _("eds.issuer") }}</dt><dd>{{ q.cert_issuer }}</dd>
+    <dt>{{ _("eds.cert_until") }}</dt><dd>{{ fmt_dt(q.cert_not_after) if q.cert_not_after else "—" }}</dd>
+    <dt>{{ _("eds.tsp") }}</dt><dd>{{ fmt_dt(q.tsp_time) }} · {{ q.provider }}</dd>
+    <dt>{{ _("eds.checks") }}</dt><dd>{% for k, v in r.get("checks", {}).items() %}<span class="badge {{ 'ok' if v else 'err' }}">{{ _("eds.check." ~ k) }}</span> {% endfor %}</dd>
+  </dl>
+</section>
+{% endfor %}
+{% if qsigs %}<form method="post" class="actions">{{ ui.csrf() }}<button class="btn primary">{{ _("eds.recheck") }}</button></form>{% endif %}
+{% endblock %}

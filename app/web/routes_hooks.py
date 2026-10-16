@@ -79,3 +79,16 @@ def metrics(request: Request, db: Session = Depends(get_db)):
     if not settings.metrics_token or not hmac.compare_digest(sent, settings.metrics_token):
         raise NotFound()
     return PlainTextResponse(render(db), media_type="text/plain; version=0.0.4")
+
+
+@router.post("/hooks/payments")
+async def payment_callback(request: Request, db: Session = Depends(get_db),
+                           x_abdex_pay_signature: str = Header(default="")):
+    """FR-BIL-06, SEC-APP-12: provider callback, authenticated by HMAC signature with a time stamp."""
+    from app.modules.billing import payments
+
+    ratelimit.hit("api", "payment-hook")
+    body = await request.body()
+    status = payments.handle_callback(db, body, x_abdex_pay_signature)
+    db.commit()
+    return {"ok": True, "status": status}
