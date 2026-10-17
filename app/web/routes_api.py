@@ -7,6 +7,7 @@
 - strict schemas: unknown fields are rejected (no mass assignment)
 - money = integer minor units + currency; timestamps = ISO 8601 with timezone
 - auth: company API key (X-API-Key) with scopes, expiry, revocation; or the browser session
+- FR-API-05: test keys (abxtest_…) work against the sandbox with test data; public docs at /developers
 """
 from __future__ import annotations
 
@@ -31,6 +32,7 @@ from app.modules.accounts.permissions import company_can
 from app.modules.bids import service as bids
 from app.modules.orders import service as orders
 from app.modules.orders.models import Order
+from app.modules.platform import sandbox
 from app.modules.platform.models import ApiKey
 from app.modules.platform.service import dictionary, idempotent_lookup, idempotent_store
 from app.web.deps import Principal, csrf_protect, get_principal_optional, parse_uuid, redirect, render, require
@@ -48,19 +50,24 @@ class ApiCaller(BaseModel):
     user_id: object | None = None
     scopes: tuple[str, ...]
     role: str | None = None
+    sandbox: bool = False
+
+
+KEY_PREFIX = {"live": "abx", "test": "abxtest"}
 
 
 def api_caller(request: Request, db: Session = Depends(get_db), x_api_key: str | None = Header(default=None),
                principal: Principal | None = Depends(get_principal_optional)) -> ApiCaller:
     ip = get_ctx().ip or "local"
     if x_api_key:
-        ratelimit.hit("api", f"key:{x_api_key[:12]}")
         parts = x_api_key.split("_")
-        if len(parts) != 3 or parts[0] != "abx":
+        if len(parts) != 3 or parts[0] not in KEY_PREFIX.values():
             raise AppError("unauthorized", status_code=401)
+        sandbox = parts[0] == KEY_PREFIX["test"]
+        ratelimit.hit("api_sandbox" if sandbox else "api", f"key:{parts[1]}")
         key = db.execute(select(ApiKey).where(ApiKey.prefix == parts[1])).scalar_one_or_none()
         if (key is None or not hmac.compare_digest(key.key_hash, hash_token(x_api_key)) or key.revoked_at
-                or (key.expires_at and key.expires_at < utcnow())):
+                or (key.expires_at and key.expires_at < utcnow()) or KEY_PREFIX.get(key.environment) != parts[0]):
             raise AppError("unauthorized", status_code=401)
         key.last_used_at = utcnow()
         company = db.get(Company, key.company_id)
@@ -71,7 +78,7 @@ def api_caller(request: Request, db: Session = Depends(get_db), x_api_key: str |
 
         rls.apply(db)  # NFR-DB-07
         db.commit()
-        return ApiCaller(company=company, scopes=tuple(key.scopes.split(",")),
+        return ApiCaller(company=company, scopes=tuple(key.scopes.split(",")), sandbox=sandbox,
                          role="owner" if company.kind == "client" else "fleet_owner")
     ratelimit.hit("api", f"ip:{ip}")
     if principal is None or principal.company is None or not principal.session.mfa_passed:
@@ -154,6 +161,25 @@ class BidOut(BaseModel):
     status: str
     price_minor: int
     currency: str
+    created_at: datetime | None = None
+
+
+class BidList(BaseModel):
+    items: list[BidOut]
+
+
+class DealOut(BaseModel):
+    id: str
+    number: str
+    status: str
+    order_id: str
+    price_minor: int
+    currency: str
+
+
+class AdvanceIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    to: str = Field(min_length=1, max_length=20)
 
 
 def _order_out(o: Order, *, hide_addresses: bool = False) -> OrderOut:
@@ -179,6 +205,10 @@ def list_orders(cursor: str | None = None, limit: int = 50, status: str | None =
                 caller: ApiCaller = Depends(api_caller)):
     need(caller, "orders:read", "order.view")
     limit = max(1, min(limit, MAX_PAGE))
+    if caller.sandbox:
+        items, nxt = sandbox.list_orders(db, caller.company.id, cursor=parse_uuid(cursor) if cursor else None,
+                                         limit=limit, status=status)
+        return Page(items=[OrderOut(**o) for o in items], next_cursor=nxt)
     stmt = select(Order).where(Order.client_company_id == caller.company.id, Order.is_deleted.is_(False))
     if status:
         stmt = stmt.where(Order.status == status)
@@ -194,7 +224,16 @@ def create_order(body: OrderIn, db: Session = Depends(get_db), caller: ApiCaller
                  idempotency_key: str | None = Header(default=None)):
     need(caller, "orders:write", "order.create")
     owner = caller.user_id or caller.company.id
-    prev = idempotent_lookup(db, owner, idempotency_key, "api.order.create")
+    prev = None if caller.sandbox else idempotent_lookup(db, owner, idempotency_key, "api.order.create")
+    if caller.sandbox:
+        scope = "api.sandbox.order.create"
+        prev = idempotent_lookup(db, owner, idempotency_key, scope)
+        if prev:
+            return OrderOut(**sandbox.get_order(db, caller.company.id, parse_uuid(prev)))
+        o = sandbox.create_order(db, caller.company.id, body)
+        idempotent_store(db, owner, idempotency_key, scope, o["id"])
+        db.commit()
+        return OrderOut(**o)
     if prev:
         return _order_out(db.get(Order, parse_uuid(prev)))
     from app.core.i18n import to_local_input
@@ -219,13 +258,62 @@ def create_order(body: OrderIn, db: Session = Depends(get_db), caller: ApiCaller
 @router.get("/orders/{oid}", response_model=OrderOut)
 def get_order(oid: str, db: Session = Depends(get_db), caller: ApiCaller = Depends(api_caller)):
     need(caller, "orders:read", "order.view")
+    if caller.sandbox:
+        return OrderOut(**sandbox.get_order(db, caller.company.id, parse_uuid(oid)))
     return _order_out(orders.get_for_client(db, parse_uuid(oid), caller.company.id))
+
+
+@router.get("/orders/{oid}/bids", response_model=BidList)
+def list_bids(oid: str, db: Session = Depends(get_db), caller: ApiCaller = Depends(api_caller)):
+    """Bids on the client's own order (carrier names are not disclosed before acceptance)."""
+    need(caller, "orders:read", "order.view")
+    if caller.sandbox:
+        return BidList(items=[BidOut(**b) for b in sandbox.order_bids(db, caller.company.id, parse_uuid(oid))])
+    order = orders.get_for_client(db, parse_uuid(oid), caller.company.id)
+    return BidList(items=[BidOut(id=str(b.id), status=b.status, price_minor=b.price_minor, currency=b.currency,
+                                 created_at=b.created_at) for b in bids.order_bids(db, order.id)])
+
+
+@router.post("/orders/{oid}/bids/{bid_id}/accept", response_model=DealOut, status_code=201)
+def accept_bid(oid: str, bid_id: str, db: Session = Depends(get_db), caller: ApiCaller = Depends(api_caller),
+               idempotency_key: str | None = Header(default=None)):
+    """FR-BID-06/07 through the API: atomic, idempotent acceptance creates the deal."""
+    need(caller, "orders:write", "bid.accept")
+    owner = caller.user_id or caller.company.id
+    scope = "api.sandbox.bid.accept" if caller.sandbox else "api.bid.accept"
+    prev = idempotent_lookup(db, owner, idempotency_key, scope)
+    if caller.sandbox:
+        if prev:
+            from app.modules.platform.models import SandboxObject
+
+            return DealOut(**sandbox.out(db.get(SandboxObject, parse_uuid(prev))))
+        d = sandbox.accept(db, caller.company.id, parse_uuid(oid), parse_uuid(bid_id))
+        idempotent_store(db, owner, idempotency_key, scope, d["id"])
+        db.commit()
+        return DealOut(**d)
+    from app.modules.deals.models import Deal
+
+    if prev:
+        deal = db.get(Deal, parse_uuid(prev))
+    else:
+        order = orders.get_for_client(db, parse_uuid(oid), caller.company.id)
+        bid = db.get(bids.Bid, parse_uuid(bid_id))
+        if bid is None or bid.order_id != order.id:
+            raise NotFound()
+        deal = bids.accept(db, bid.id, caller.company)
+        idempotent_store(db, owner, idempotency_key, scope, str(deal.id))
+        db.commit()
+    order = db.get(Order, deal.order_id)
+    return DealOut(id=str(deal.id), number=deal.number, status=order.status, order_id=str(order.id),
+                   price_minor=deal.price_minor, currency=deal.currency)
 
 
 @router.get("/market", response_model=Page)
 def market(from_city: str = "", to_city: str = "", body_type: str = "", limit: int = 50, db: Session = Depends(get_db),
            caller: ApiCaller = Depends(api_caller)):
     need(caller, "market:read", "market.view")
+    if caller.sandbox:
+        return Page(items=[OrderOut(**o) for o in sandbox.market()], next_cursor=None)
     items = orders.marketplace(db, caller.company, {"from_city": from_city, "to_city": to_city, "body_type": body_type},
                                limit=max(1, min(limit, MAX_PAGE)))
     # FR-ACL-02 / SEC-AZ-04: exact addresses are never sent to carriers before acceptance
@@ -235,11 +323,43 @@ def market(from_city: str = "", to_city: str = "", body_type: str = "", limit: i
 @router.post("/orders/{oid}/bids", response_model=BidOut, status_code=201)
 def create_bid(oid: str, body: BidIn, db: Session = Depends(get_db), caller: ApiCaller = Depends(api_caller)):
     need(caller, "bids:write", "bid.create")
+    if caller.sandbox:
+        b = sandbox.place_bid(db, caller.company.id, oid, body.price_minor, body.comment)
+        db.commit()
+        return BidOut(**b)
     form = {"price": str(from_minor(body.price_minor)), "comment": body.comment,
             "vehicle_id": body.vehicle_id or "", "driver_id": body.driver_id or ""}
     bid = bids.place_bid(db, parse_uuid(oid), caller.company, form)
     db.commit()
-    return BidOut(id=str(bid.id), status=bid.status, price_minor=bid.price_minor, currency=bid.currency)
+    return BidOut(id=str(bid.id), status=bid.status, price_minor=bid.price_minor, currency=bid.currency,
+                  created_at=bid.created_at)
+
+
+# ------------------------------------------------------------------ sandbox controls (FR-API-05)
+
+
+def _sandbox_only(caller: ApiCaller) -> None:
+    if not caller.sandbox:
+        raise NotFound()
+
+
+@router.post("/sandbox/orders/{oid}/advance", response_model=DealOut, tags=["sandbox"])
+def sandbox_advance(oid: str, body: AdvanceIn, db: Session = Depends(get_db), caller: ApiCaller = Depends(api_caller)):
+    """Test keys only: move the test deal to a later status; a webhook event is sent for every step."""
+    _sandbox_only(caller)
+    need(caller, "orders:write", "order.view")
+    d = sandbox.advance(db, caller.company.id, parse_uuid(oid), body.to)
+    db.commit()
+    return DealOut(**d)
+
+
+@router.post("/sandbox/reset", tags=["sandbox"])
+def sandbox_reset(db: Session = Depends(get_db), caller: ApiCaller = Depends(api_caller)):
+    """Test keys only: delete all test data of the company."""
+    _sandbox_only(caller)
+    n = sandbox.reset(db, caller.company.id)
+    db.commit()
+    return {"deleted": n}
 
 
 # ------------------------------------------------------------------ key management (HTML)
@@ -257,15 +377,16 @@ def keys_page(request: Request, db: Session = Depends(get_db), me: Principal = D
 async def keys_create(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("company.manage"))):
     form = await request.form()
     scopes = [s for s in form.getlist("scopes") if s in SCOPES] or ["orders:read"]
+    env = "test" if form.get("environment") == "test" else "live"
     prefix = token(6)[:8].replace("_", "x").replace("-", "y")
     secret = token(24).replace("_", "x")
-    raw = f"abx_{prefix}_{secret}"
+    raw = f"{KEY_PREFIX[env]}_{prefix}_{secret}"
     days = int(form.get("days") or 365)
     key = ApiKey(company_id=me.company.id, name=str(form.get("name", "API"))[:100], prefix=prefix,
-                 key_hash=hash_token(raw), scopes=",".join(scopes),
+                 key_hash=hash_token(raw), scopes=",".join(scopes), environment=env,
                  expires_at=utcnow() + timedelta(days=max(1, min(days, 730))), created_by=me.user.id)
     db.add(key)
-    audit(db, "company.api_key_created", object_type="api_key", object_id=prefix)
+    audit(db, "company.api_key_created", object_type="api_key", object_id=prefix, details={"environment": env})
     db.commit()
     resp = render(request, "company/api_keys.html", {"keys": list(db.execute(select(ApiKey).where(
         ApiKey.company_id == me.company.id).order_by(ApiKey.created_at.desc())).scalars()), "scopes": SCOPES,
@@ -283,3 +404,72 @@ def keys_revoke(kid: str, db: Session = Depends(get_db), me: Principal = Depends
     db.commit()
     return redirect("/company/api-keys", flash=("success", "msg.saved"))
 
+
+
+# ------------------------------------------------------------------ public developer docs (FR-API-05, NFR-API-02)
+
+
+def _schema_name(ref: dict | None) -> str:
+    if not ref:
+        return ""
+    if "$ref" in ref:
+        return ref["$ref"].rsplit("/", 1)[-1]
+    if ref.get("type") == "array" and ref.get("items"):
+        return _schema_name(ref["items"]) + "[]"
+    return ref.get("type", "")
+
+
+def _type_of(prop: dict) -> str:
+    if "anyOf" in prop:
+        return " | ".join(_type_of(p) for p in prop["anyOf"])
+    if "$ref" in prop:
+        return prop["$ref"].rsplit("/", 1)[-1]
+    if prop.get("type") == "array":
+        return _type_of(prop.get("items", {})) + "[]"
+    t = prop.get("type", "")
+    if prop.get("format"):
+        t += f" ({prop['format']})"
+    if prop.get("enum"):
+        t += ": " + " | ".join(map(str, prop["enum"]))
+    return t
+
+
+def api_reference(request: Request) -> dict:
+    """The method reference is built from the OpenAPI document generated from code, so it never drifts."""
+    spec = request.app.openapi()
+    methods = []
+    for path, ops in spec.get("paths", {}).items():
+        if not path.startswith("/api/v1/") or path.endswith("openapi.json"):
+            continue
+        for verb, op in ops.items():
+            body = (op.get("requestBody") or {}).get("content", {}).get("application/json", {}).get("schema")
+            ok = next((r for c, r in op.get("responses", {}).items() if c.startswith("2")), {})
+            resp = (ok.get("content") or {}).get("application/json", {}).get("schema")
+            params = [{"name": p["name"], "in": p["in"], "required": p.get("required", False),
+                       "type": _type_of(p.get("schema", {}))}
+                      for p in op.get("parameters", []) if p["name"] not in ("x-api-key",)]
+            methods.append({"verb": verb.upper(), "path": path, "summary": op.get("summary", ""),
+                            "doc": (op.get("description") or "").strip(), "params": params,
+                            "body": _schema_name(body), "response": _schema_name(resp),
+                            "sandbox_only": "sandbox" in op.get("tags", [])})
+    schemas = {}
+    for name, sch in spec.get("components", {}).get("schemas", {}).items():
+        if name in ("HTTPValidationError", "ValidationError"):
+            continue
+        req = set(sch.get("required", []))
+        schemas[name] = [{"name": k, "type": _type_of(v), "required": k in req}
+                         for k, v in sch.get("properties", {}).items()]
+    return {"methods": methods, "schemas": schemas, "version": spec.get("info", {}).get("version", "")}
+
+
+@html.get("/developers")
+def developers(request: Request):
+    import os
+
+    from app.modules.webhooks.service import EVENTS
+
+    base = (os.getenv("PUBLIC_BASE_URL") or str(request.base_url)).rstrip("/")
+    return render(request, "public/developers.html", {**api_reference(request), "base": base, "scopes": SCOPES,
+                                                      "events": EVENTS, "max_page": MAX_PAGE,
+                                                      "limits": {"live": ratelimit.LIMITS["api"],
+                                                                 "test": ratelimit.LIMITS["api_sandbox"]}})

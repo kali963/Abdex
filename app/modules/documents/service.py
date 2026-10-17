@@ -35,6 +35,7 @@ DOC_PREFIX = {
     "fee_invoice": "СЧ",
     "fee_act": "АКТ",
     "module_invoice": "СЧ",
+    "customs_info": "ТС",         # сведения для таможенного оформления (GOV-TR-06)
     "reconciliation_act": "АС",
     "dossier": "ДС",
     "waybill": "ТТН",
@@ -43,7 +44,10 @@ FINANCIAL_DOC_TYPES = ("fee_invoice", "fee_act", "module_invoice", "reconciliati
 FORBIDDEN_FINANCIAL_PHRASES = ("услуги перевозки", "экспедирован", "доставка груза", "транспортные услуги",
                                "тасымалдау қызмет")
 CLOSING_DOC_TYPES = ("waybill", "cmr", "unload_act")
-UPLOAD_DOC_TYPES = ("waybill", "cmr", "unload_act", "seal_photo", "invoice_carrier", "other")
+UPLOAD_DOC_TYPES = ("waybill", "cmr", "unload_act", "seal_photo", "invoice_carrier",
+                    # GOV-TR-06: documents for customs procedures on international trips
+                    "commercial_invoice", "packing_list", "origin_certificate", "tir_carnet", "transit_declaration",
+                    "other")
 
 
 def validate_template_body(doc_type: str, body: str) -> None:

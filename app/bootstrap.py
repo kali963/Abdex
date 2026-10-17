@@ -155,6 +155,25 @@ SETTINGS = {
     "calc.forecast_window_days": (365, "FR-CALC-06: за сколько дней брать сделки для прогноза"),
     "calc.forecast_min_deals": (3, "FR-CALC-06: минимум сделок по направлению для показа прогноза"),
     "calc.forecast_min_companies": (2, "FR-CALC-06: минимум разных заказчиков в выборке (цена одной компании не раскрывается)"),
+    "customs.rules": ({"groups": {"eaeu": ["RU", "BY", "KG", "AM"], "china": ["CN"],
+                                  "cis": ["UZ", "TJ", "TM", "AZ", "GE", "MD"]},
+                       "eaeu": {"customs": False,
+                                "fields": ["goods_description", "gross_kg", "places", "invoice_number", "invoice_value",
+                                           "invoice_currency", "consignee_name", "consignee_country"],
+                                "documents": ["cmr", "commercial_invoice"]},
+                       "china": {"customs": True,
+                                 "fields": ["hs_code", "goods_description", "gross_kg", "net_kg", "places",
+                                            "invoice_number", "invoice_date", "invoice_value", "invoice_currency",
+                                            "origin_country", "consignee_name", "consignee_address", "consignee_country",
+                                            "transit_mode", "border_crossing"],
+                                 "documents": ["cmr", "commercial_invoice", "packing_list", "origin_certificate"]},
+                       "cis": {"customs": True,
+                               "fields": ["hs_code", "goods_description", "gross_kg", "net_kg", "places",
+                                          "invoice_number", "invoice_date", "invoice_value", "invoice_currency",
+                                          "origin_country", "consignee_name", "consignee_address", "consignee_country",
+                                          "transit_mode", "border_crossing"],
+                               "documents": ["cmr", "commercial_invoice", "packing_list", "origin_certificate"]}},
+                      "GOV-TR-06: состав таможенных сведений и документов по группам стран назначения"),
     "security.vuln_status": ("CI: pip-audit, bandit, gitleaks — без замечаний высокого уровня",
                              "SEC-LOG-08: статус уязвимостей для ежемесячного отчета"),
 }
@@ -287,6 +306,29 @@ ${vat_note}
 Срок оплаты: до ${due_date}
 
 Основание: оформленная на площадке сделка № ${deal_number}."""),
+    ("customs_info", "ru"): (
+        "Сведения для таможенного оформления № ${number} от ${date}",
+        """Сделка ${deal_number} (заявка ${order_number}); маршрут: ${route}
+
+## Отправитель
+${shipper_name}, БИН ${shipper_bin}
+
+## Получатель
+${consignee_name}; ${consignee_address}; страна ${consignee_country}; налоговый номер ${consignee_tax_id}
+
+## Товар
+Код ТН ВЭД ЕАЭС: ${hs_code}
+Наименование: ${goods_description}
+Вес брутто ${gross_kg} кг, нетто ${net_kg} кг; мест ${places}; упаковка ${packaging}
+Страна происхождения: ${origin_country}
+
+## Инвойс
+№ ${invoice_number} от ${invoice_date}; стоимость ${invoice_value} ${invoice_currency}
+
+## Транспорт
+Перевозчик ${carrier_name}, БИН ${carrier_bin}; прицеп ${trailer_plate}
+Транзит: ${transit_mode}; книжка МДП ${tir_carnet}; транзитная декларация ${transit_declaration}
+Пункт пропуска: ${border_crossing}"""),
     ("module_invoice", "ru"): (
         "Счет на оплату № ${number} от ${date}",
         """Поставщик: AbdEX — оператор онлайн-площадки

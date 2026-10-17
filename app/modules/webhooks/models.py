@@ -19,6 +19,7 @@ class WebhookEndpoint(Model):
     events: Mapped[str] = mapped_column(String(300), default="*")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     failures_in_row: Mapped[int] = mapped_column(Integer, default=0)
+    sandbox: Mapped[bool] = mapped_column(Boolean, default=False)  # FR-API-05: receives test events only
 
 
 class WebhookDelivery(Model):

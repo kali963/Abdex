@@ -512,3 +512,17 @@ form.af-rule .inline-num input { width: 5.5rem; }
 .link-graph .node.blocked circle { fill: #9ca3af; }
 .link-graph .node text { font-size: 11px; fill: var(--text, #222); paint-order: stroke; stroke: var(--bg, #fff); stroke-width: 3px; }
 .legend.client { color: #3b82f6; } .legend.carrier { color: #f59e0b; } .legend.strong { color: #d64545; }
+
+/* FR-API-05 developer docs */
+.dev-toc { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.dev-method { border-top: 1px solid var(--border); padding: .8rem 0; }
+.dev-method h3 { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; font-size: 1rem; margin: 0 0 .3rem; }
+.dev-method code, #schemas code { word-break: break-all; }
+.badge.verb { font-family: ui-monospace, monospace; min-width: 3.4rem; justify-content: center; }
+.badge.verb.get { background: #dbeafe; color: #1e40af; } .badge.verb.post { background: #dcfce7; color: #166534; }
+pre.code { overflow-x: auto; white-space: pre; }
+/* GOV-TR-06 checklist */
+.checklist { list-style: none; padding: 0; margin: 0 0 .6rem; columns: 2; }
+.checklist li { padding: .15rem 0; break-inside: avoid; }
+.checklist .done { color: var(--ok, #15803d); } .checklist .missing { color: var(--muted); }
+@media (max-width: 640px) { .checklist { columns: 1; } }

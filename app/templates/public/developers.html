@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}{{ _("dev.title") }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ _("dev.title") }}</h1><p class="muted">{{ _("dev.lead") }}</p></div>
+<a class="btn small" href="/api/v1/openapi.json">OpenAPI JSON</a></div>
+
+<nav class="card dev-toc"><b>{{ _("dev.contents") }}</b>
+<a href="#start">{{ _("dev.start") }}</a> · <a href="#sandbox">{{ _("dev.sandbox") }}</a> · <a href="#conventions">{{ _("dev.conventions") }}</a> ·
+<a href="#errors">{{ _("dev.errors") }}</a> · <a href="#webhooks">{{ _("dev.webhooks") }}</a> · <a href="#examples">{{ _("dev.examples") }}</a> ·
+<a href="#reference">{{ _("dev.reference") }}</a> · <a href="#schemas">{{ _("dev.schemas") }}</a></nav>
+
+<section class="card" id="start"><h2>{{ _("dev.start") }}</h2>
+<ol>
+  <li>{{ _("dev.start_1") }}</li>
+  <li>{{ _("dev.start_2") }}</li>
+  <li>{{ _("dev.start_3") }}</li>
+</ol>
+<pre class="code">curl {{ base }}/api/v1/dictionaries/body_types \
+  -H "X-API-Key: abxtest_XXXXXXXX_..."</pre>
+<div class="table-wrap"><table><thead><tr><th>{{ _("dev.scope") }}</th><th>{{ _("dev.scope_gives") }}</th></tr></thead>
+<tbody>{% for s in scopes %}<tr><td><code>{{ s }}</code></td><td>{{ _("dev.scope." ~ s) }}</td></tr>{% endfor %}</tbody></table></div>
+</section>
+
+<section class="card" id="sandbox"><h2>{{ _("dev.sandbox") }}</h2>
+<p>{{ _("dev.sandbox_text") }}</p>
+<div class="table-wrap"><table><thead><tr><th></th><th>{{ _("api.env_live") }}</th><th>{{ _("api.env_test") }}</th></tr></thead><tbody>
+<tr><td>{{ _("dev.key_format") }}</td><td><code>abx_…</code></td><td><code>abxtest_…</code></td></tr>
+<tr><td>{{ _("dev.data") }}</td><td>{{ _("dev.data_live") }}</td><td>{{ _("dev.data_test") }}</td></tr>
+<tr><td>{{ _("dev.limit") }}</td><td>{{ limits.live[0] }} / {{ limits.live[1] }} {{ _("dev.sec") }}</td><td>{{ limits.test[0] }} / {{ limits.test[1] }} {{ _("dev.sec") }}</td></tr>
+<tr><td>{{ _("dev.webhooks") }}</td><td>{{ _("dev.wh_live") }}</td><td>{{ _("dev.wh_test") }}</td></tr>
+</tbody></table></div>
+<ul>
+  <li>{{ _("dev.sandbox_market") }}</li>
+  <li>{{ _("dev.sandbox_bids") }}</li>
+  <li>{{ _("dev.sandbox_advance") }}</li>
+  <li>{{ _("dev.sandbox_reset") }}</li>
+</ul>
+</section>
+
+<section class="card" id="conventions"><h2>{{ _("dev.conventions") }}</h2>
+<ul>
+  <li>{{ _("dev.conv_version") }}</li>
+  <li>{{ _("dev.conv_money") }}</li>
+  <li>{{ _("dev.conv_time") }}</li>
+  <li>{{ _("dev.conv_idem") }}</li>
+  <li>{{ _("dev.conv_pages", n=max_page) }}</li>
+  <li>{{ _("dev.conv_strict") }}</li>
+  <li>{{ _("dev.conv_request_id") }}</li>
+</ul></section>
+
+<section class="card" id="errors"><h2>{{ _("dev.errors") }}</h2>
+<p>{{ _("dev.errors_text") }}</p>
+<pre class="code">HTTP/1.1 422
+{"error": {"code": "validation_failed", "message": "Проверьте поля формы",
+           "fields": {"body.weight_kg": "Input should be greater than 0"},
+           "request_id": "01a1459e…"}}</pre>
+<div class="table-wrap"><table><tbody>
+{% for code in (400, 401, 403, 404, 409, 422, 429) %}<tr><td><code>{{ code }}</code></td><td>{{ _("dev.http_" ~ code) }}</td></tr>{% endfor %}
+</tbody></table></div></section>
+
+<section class="card" id="webhooks"><h2>{{ _("dev.webhooks") }}</h2>
+<p>{{ _("dev.webhooks_text") }}</p>
+<p>{% for e in events %}<code>{{ e }}</code> {% endfor %}</p>
+<pre class="code">import hmac, hashlib, time
+
+def verify(secret: str, raw_body: bytes, header: str) -> bool:
+    # header X-AbdEX-Signature: "t=1760600000,v1=&lt;hex&gt;"
+    parts = dict(p.split("=", 1) for p in header.split(","))
+    ts = int(parts["t"])
+    expected = hmac.new(secret.encode(), f"{ts}.".encode() + raw_body, hashlib.sha256).hexdigest()
+    return abs(time.time() - ts) &lt; 300 and hmac.compare_digest(expected, parts["v1"])</pre>
+</section>
+
+<section class="card" id="examples"><h2>{{ _("dev.examples") }}</h2>
+<h3>{{ _("dev.ex_client") }}</h3>
+<pre class="code"># 1. {{ _("dev.ex_create") }}
+curl -X POST {{ base }}/api/v1/orders \
+  -H "X-API-Key: $ABDEX_KEY" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: erp-order-1001" \
+  -d '{"cargo_name": "Мука в мешках", "weight_kg": 20000, "body_type": "tent",
+       "load_from": "2026-11-20T09:00:00+05:00", "desired_rate_minor": 45000000, "currency": "KZT",
+       "points": [{"kind": "load", "city": "Костанай", "address": "ул. Элеваторная, 1"},
+                  {"kind": "unload", "city": "Алматы", "address": "ул. Складская, 5"}],
+       "publish": true}'
+
+# 2. {{ _("dev.ex_bids") }}
+curl {{ base }}/api/v1/orders/$ORDER_ID/bids -H "X-API-Key: $ABDEX_KEY"
+
+# 3. {{ _("dev.ex_accept") }}
+curl -X POST {{ base }}/api/v1/orders/$ORDER_ID/bids/$BID_ID/accept \
+  -H "X-API-Key: $ABDEX_KEY" -H "Idempotency-Key: accept-1001"
+
+# 4. {{ _("dev.ex_advance") }}
+curl -X POST {{ base }}/api/v1/sandbox/orders/$ORDER_ID/advance \
+  -H "X-API-Key: $ABDEX_KEY" -H "Content-Type: application/json" -d '{"to": "completed"}'</pre>
+<h3>{{ _("dev.ex_carrier") }}</h3>
+<pre class="code">import requests
+
+API = "{{ base }}/api/v1"
+s = requests.Session()
+s.headers["X-API-Key"] = "abxtest_..."
+
+market = s.get(f"{API}/market", params={"from_city": "Костанай"}).json()["items"]
+for order in market:
+    r = s.post(f"{API}/orders/{order['id']}/bids", json={"price_minor": order["desired_rate_minor"]})
+    if r.status_code == 201:
+        print("bid", r.json()["id"])
+    else:
+        err = r.json()["error"]
+        print(err["code"], err["message"], err["request_id"])</pre>
+</section>
+
+<section class="card" id="reference"><h2>{{ _("dev.reference") }}</h2>
+{% for m in methods %}
+<article class="dev-method" id="m-{{ loop.index }}">
+  <h3><span class="badge verb {{ m.verb|lower }}">{{ m.verb }}</span> <code>{{ m.path }}</code>{% if m.sandbox_only %} <span class="badge warn">{{ _("dev.sandbox_only") }}</span>{% endif %}</h3>
+  {% if m.summary %}<p><b>{{ m.summary }}</b></p>{% endif %}
+  {% if m.doc %}<p class="muted">{{ m.doc }}</p>{% endif %}
+  {% if m.params %}<p>{{ _("dev.params") }}: {% for p in m.params %}<code>{{ p.name }}</code> <small class="muted">({{ p.in }}{{ ", " ~ _("dev.required") if p.required }}; {{ p.type }})</small>{{ ", " if not loop.last }}{% endfor %}</p>{% endif %}
+  {% if m.body %}<p>{{ _("dev.body") }}: <a href="#s-{{ m.body }}"><code>{{ m.body }}</code></a></p>{% endif %}
+  {% if m.response %}<p>{{ _("dev.response") }}: <a href="#s-{{ m.response|replace('[]', '') }}"><code>{{ m.response }}</code></a></p>{% endif %}
+</article>
+{% endfor %}
+</section>
+
+<section class="card" id="schemas"><h2>{{ _("dev.schemas") }}</h2>
+{% for name, fields in schemas.items() %}
+<h3 id="s-{{ name }}"><code>{{ name }}</code></h3>
+<div class="table-wrap"><table><tbody>{% for f in fields %}<tr><td><code>{{ f.name }}</code>{% if f.required %} *{% endif %}</td><td><small>{{ f.type }}</small></td></tr>{% endfor %}</tbody></table></div>
+{% endfor %}
+</section>
+{% endblock %}

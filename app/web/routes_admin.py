@@ -163,6 +163,14 @@ def deal_transport_xml(did: str, rid: str, request: Request, db: Session = Depen
     return transport_xml(did, rid, request, db, me)
 
 
+@router.get("/deals/{did}/customs.xml")
+def deal_customs_xml(did: str, request: Request, db: Session = Depends(get_db),
+                     me: Principal = Depends(require("admin.deal_content"))):
+    from app.web.routes_deals import customs_xml
+
+    return customs_xml(did, request, db, me)
+
+
 @router.api_route("/deals/{did}/docs/{doc_id}/signatures", methods=["GET", "POST"])
 async def deal_doc_signatures(did: str, doc_id: str, request: Request, db: Session = Depends(get_db),
                               me: Principal = Depends(require("admin.deal_content"))):

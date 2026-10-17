@@ -108,6 +108,21 @@ class ApiKey(Model):
     expires_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
     revoked_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
     last_used_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+    environment: Mapped[str] = mapped_column(String(4), default="live")  # FR-API-05: live / test
+
+
+class SandboxObject(Model):
+    """FR-API-05: test data of the API sandbox. Test keys never touch real orders, bids, deals or money;
+    their objects live here, per company, with the same shapes the live API returns."""
+
+    __tablename__ = "sandbox_objects"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(10), index=True)  # order / bid / deal
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
+    number: Mapped[str] = mapped_column(String(30))
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    data: Mapped[str] = mapped_column(Text, default="{}")
 
 
 class IntegrationCall(AppendOnly, Model):

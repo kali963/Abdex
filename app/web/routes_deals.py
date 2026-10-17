@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.audit import audit
 from app.core.errors import Forbidden, NotFound, ValidationFailed
 from app.core.storage import IMAGE_TYPES, save_upload
 from app.db import get_db
@@ -16,7 +17,7 @@ from app.modules.billing.models import Invoice
 from app.modules.chat import service as chat
 from app.modules.deals import service as deals
 from app.modules.deals.tracking import trip_map
-from app.modules.documents import transport
+from app.modules.documents import customs, transport
 from app.modules.documents.eds import is_dev_signer
 from app.modules.platform.service import flag_enabled
 from app.modules.deals.models import Dispute, ExecutorChange, Incident, Rating, Supplement
@@ -25,6 +26,7 @@ from app.modules.documents.models import Document
 from app.modules.fleet.models import Driver, Vehicle
 from app.modules.fleet.service import company_drivers, company_vehicles
 from app.modules.orders import flow
+from app.modules.orders.models import Order
 from app.modules.platform.service import dictionary, dictionary_map
 from app.web.access import deal_access
 from app.web.deps import Principal, _sysmsg as sysmsg, csrf_protect, get_principal, parse_uuid, redirect, render, require
@@ -84,6 +86,9 @@ def deal_card(did: str, request: Request, db: Session = Depends(get_db), me: Pri
         "trip_map": trip_map(d, o, deals.checkpoints(db, d.id)),
         "transport_regs": transport.registrations(db, d.id),
         "transport_types": transport.required_types(db, o),
+        "customs": customs.checklist(db, d, o, customs.get(db, d)) if o.is_international else None,
+        "customs_dossier": customs.get(db, d) if o.is_international else None,
+        "countries": dictionary(db, "countries"), "crossings": dictionary(db, "border_crossings"),
         "eds_enabled": bool(me.company) and flag_enabled(db, "qualified_signature", me.company.id),
         "eds_mode": "dev" if is_dev_signer() else "ncalayer",
         "can_dispute": acc.side in ("client", "carrier") and o.status in (flow.ASSIGNED, flow.IN_TRANSIT, flow.UNLOADED),
@@ -187,6 +192,44 @@ async def transport_docs(did: str, request: Request, db: Session = Depends(get_d
                              paper_number=str(form.get("paper_number", "")))
     db.commit()
     return redirect(f"/deals/{did}#transport", flash=("success", "etd.formed"))
+
+
+# ------------------------------------------------------------------ GOV-TR-06 customs data
+
+
+@router.post("/deals/{did}/customs")
+async def customs_save(did: str, request: Request, db: Session = Depends(get_db),
+                       me: Principal = Depends(require("deal.manage"))):
+    """Each side fills its own part: the shipper the goods and invoice, the carrier the transit data."""
+    form = dict((await request.form()).items())
+    acc = deal_access(db, me, parse_uuid(did))
+    _ctx_side(acc, "client", "carrier")
+    customs.save(db, acc.deal, acc.side, form)
+    db.commit()
+    return redirect(f"/deals/{did}#customs", flash=("success", "msg.saved"))
+
+
+@router.post("/deals/{did}/customs/ready")
+def customs_ready(did: str, db: Session = Depends(get_db), me: Principal = Depends(require("deal.manage"))):
+    acc = deal_access(db, me, parse_uuid(did))
+    _ctx_side(acc, "client", "carrier")
+    customs.mark_ready(db, acc.deal)
+    customs.pdf_summary(db, acc.deal)
+    db.commit()
+    return redirect(f"/deals/{did}#customs", flash=("success", "customs.ready_done"))
+
+
+@router.get("/deals/{did}/customs.xml")
+def customs_xml(did: str, request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    from fastapi.responses import Response
+
+    acc = deal_access(db, me, parse_uuid(did), staff=request.url.path.startswith("/admin/"))
+    if not db.get(Order, acc.deal.order_id).is_international:
+        raise NotFound()
+    audit(db, "customs.exported", object_type="deal", object_id=acc.deal.id)
+    db.commit()
+    return Response(customs.xml_export(db, acc.deal), media_type="application/xml",
+                    headers={"Content-Disposition": 'attachment; filename="customs-preliminary-information.xml"'})
 
 
 @router.post("/deals/{did}/transport-docs/{rid}/submit")
