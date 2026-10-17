@@ -122,3 +122,16 @@ class TransportDocRegistration(Model):
     last_error: Mapped[str] = mapped_column(String(300), default="")
     registered_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
     data: Mapped[str] = mapped_column(Text, default="{}")  # the data set sent (GOV-TR-02), kept for audit
+
+
+class CustomsDossier(Model):
+    """GOV-TR-06: data set for customs procedures on an international deal (Kazakhstan — China — CIS).
+    Filled by both sides; the composition and the documents required depend on the destination
+    (setting ``customs.rules``); exported as XML (preliminary information) and PDF."""
+
+    __tablename__ = "customs_dossiers"
+
+    deal_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("deals.id"), unique=True)
+    status: Mapped[str] = mapped_column(String(10), default="draft")  # draft / ready
+    data: Mapped[str] = mapped_column(Text, default="{}")
+    ready_at: Mapped[datetime | None] = mapped_column(AwareDateTime)

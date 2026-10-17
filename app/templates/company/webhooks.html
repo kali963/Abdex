@@ -11,7 +11,7 @@
 {% for ep in endpoints %}
 <section class="card">
   <div class="page-head"><div><h3 class="break">{{ ep.url }}</h3><small class="muted">{{ ep.events.replace(",", ", ") }}</small></div>
-    <span class="badge {{ 'ok' if ep.active else 'err' }}">{{ _("webhook.active") if ep.active else _("webhook.disabled") }}</span></div>
+    <span>{% if ep.sandbox %}<span class="badge warn">{{ _("api.env_test") }}</span> {% endif %}<span class="badge {{ 'ok' if ep.active else 'err' }}">{{ _("webhook.active") if ep.active else _("webhook.disabled") }}</span></span></div>
   <div class="row">
     <form method="post" action="/company/webhooks/{{ ep.id }}/test">{{ ui.csrf() }}<button class="btn small">{{ _("webhook.test") }}</button></form>
     {% if not ep.active %}<form method="post" action="/company/webhooks/{{ ep.id }}/enable">{{ ui.csrf() }}<button class="btn small ok">{{ _("webhook.enable") }}</button></form>{% endif %}
@@ -29,6 +29,7 @@
   <h3>{{ _("webhook.add") }}</h3>
   {{ ui.field("url", _("webhook.url"), "", type="url", required=true, hint=_("webhook.url_hint"), attrs='placeholder="https://"') }}
   <fieldset class="plain"><legend>{{ _("webhook.events") }}</legend>{% for e in events %}<label class="check"><input type="checkbox" name="events" value="{{ e }}" checked> <code>{{ e }}</code></label>{% endfor %}</fieldset>
+  {{ ui.checkbox("sandbox", _("webhook.sandbox")) }}
   <button class="btn primary">{{ _("webhook.create") }}</button>
 </form>
 <section class="card"><h3>{{ _("webhook.verify_title") }}</h3><p class="muted"><small>{{ _("webhook.verify_text") }}</small></p>

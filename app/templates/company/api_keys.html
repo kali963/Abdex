@@ -4,15 +4,16 @@
 {% block content %}
 <h1>{{ _("company.api") }}</h1>
 {% include "company/_tabs.html" %}
-<p class="muted">{{ _("api.text") }} <a href="/api/docs">OpenAPI</a></p>
+<p class="muted">{{ _("api.text") }} <a href="/developers">{{ _("dev.title") }}</a></p>
 {% if new_key %}<div class="alert success">{{ _("api.new_key") }}<div class="secret">{{ new_key }}</div></div>{% endif %}
 <form method="post" action="/company/api-keys" class="card stack">{{ ui.csrf() }}
-  <div class="form-grid">{{ ui.field("name", _("api.name"), "Integration", required=true) }}{{ ui.field("days", _("api.days"), "365", type="number") }}</div>
+  <div class="form-grid">{{ ui.field("name", _("api.name"), "Integration", required=true) }}{{ ui.field("days", _("api.days"), "365", type="number") }}
+  {{ ui.select("environment", _("api.environment"), [("live", _("api.env_live")), ("test", _("api.env_test"))], "live", hint=_("api.env_hint")) }}</div>
   <div class="row">{% for s in scopes %}<label class="check"><input type="checkbox" name="scopes" value="{{ s }}" {{ 'checked' if s.endswith(':read') }}> <code>{{ s }}</code></label>{% endfor %}</div>
   <div><button class="btn primary">{{ _("api.create") }}</button></div>
 </form>
 <div class="table-wrap"><table><thead><tr><th>{{ _("api.name") }}</th><th>{{ _("api.prefix") }}</th><th>{{ _("api.scopes") }}</th><th>{{ _("api.expires") }}</th><th>{{ _("api.last_used") }}</th><th></th></tr></thead>
-<tbody>{% for k in keys %}<tr><td>{{ k.name }}</td><td><code>abx_{{ k.prefix }}_…</code></td><td><small>{{ k.scopes }}</small></td><td>{{ fmt_dt(k.expires_at, false) }}</td><td>{{ fmt_dt(k.last_used_at) if k.last_used_at else "—" }}</td>
+<tbody>{% for k in keys %}<tr><td>{{ k.name }}{% if k.environment == "test" %} <span class="badge warn">{{ _("api.env_test") }}</span>{% endif %}</td><td><code>{{ "abxtest" if k.environment == "test" else "abx" }}_{{ k.prefix }}_…</code></td><td><small>{{ k.scopes }}</small></td><td>{{ fmt_dt(k.expires_at, false) }}</td><td>{{ fmt_dt(k.last_used_at) if k.last_used_at else "—" }}</td>
 <td>{% if k.revoked_at %}<span class="badge">{{ _("api.revoked") }}</span>{% else %}<form method="post" action="/company/api-keys/{{ k.id }}/revoke">{{ ui.csrf() }}<button class="btn small danger">{{ _("company.revoke") }}</button></form>{% endif %}</td></tr>
 {% else %}<tr><td colspan="6" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
 {% endblock %}

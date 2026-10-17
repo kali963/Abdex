@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0a3d7a">
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}{{ _("app.name") }}{% endblock %} — AbdEX</title>
-  <link rel="stylesheet" href="/static/css/app.css?v=4">
+  <link rel="stylesheet" href="/static/css/app.css?v=5">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icons/icon.svg">
@@ -105,7 +105,7 @@
   <a href="/legal/privacy">{{ _("footer.privacy") }}</a>
   <a href="/legal/security">{{ _("footer.security") }}</a>
   <a href="/help">{{ _("footer.help") }}</a>
-  {% if settings.is_dev %}<a href="/dev/outbox">{{ _("footer.dev_outbox") }}</a><a href="/api/docs">API</a>{% endif %}
+  <a href="/developers">API</a>{% if settings.is_dev %}<a href="/dev/outbox">{{ _("footer.dev_outbox") }}</a>{% endif %}
 </div></footer>
 {% if nav %}
 {# Mobile: the first four destinations as a thumb-reachable tab bar, the rest in a sheet #}

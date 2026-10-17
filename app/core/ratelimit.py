@@ -25,6 +25,7 @@ LIMITS = {
     "order_create": (100, 3600),
     "export": (20, 3600),
     "api": (600, 60),
+    "api_sandbox": (120, 60),     # FR-API-05: test keys
     "upload": (60, 600),
     "chat": (120, 600),
     "invite": (50, 3600),

@@ -39,6 +39,8 @@ POLICIES: dict[str, str] = {
     "documents": f"company_id = {CUR} OR deal_id IN {_DEALS}",
     "payment_intents": f"company_id = {CUR}",
     "subscriptions": f"company_id = {CUR}",
+    "sandbox_objects": f"company_id = {CUR}",
+    "customs_dossiers": f"deal_id IN {_DEALS}",
     "transport_doc_registrations": f"deal_id IN {_DEALS}",
 }
 

@@ -130,7 +130,8 @@ def webhooks_page(request: Request, db: Session = Depends(get_db), me: Principal
 async def webhooks_create(request: Request, db: Session = Depends(get_db),
                           me: Principal = Depends(require("company.manage"))):
     form = await request.form()
-    _, secret = webhooks.create_endpoint(db, me.company.id, str(form.get("url", "")), form.getlist("events"))
+    _, secret = webhooks.create_endpoint(db, me.company.id, str(form.get("url", "")), form.getlist("events"),
+                                         sandbox=form.get("sandbox") == "on")
     db.commit()
     resp = redirect("/company/webhooks", flash=("success", "webhook.created"))
     # the signing secret is shown exactly once, right after creation

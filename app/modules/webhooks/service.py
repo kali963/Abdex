@@ -128,13 +128,14 @@ def endpoints(db: Session, company_id) -> list[WebhookEndpoint]:
                            .order_by(WebhookEndpoint.created_at)).scalars())
 
 
-def create_endpoint(db: Session, company_id, url: str, events_list: list[str]) -> tuple[WebhookEndpoint, str]:
+def create_endpoint(db: Session, company_id, url: str, events_list: list[str], *,
+                    sandbox: bool = False) -> tuple[WebhookEndpoint, str]:
     url = validate_url(url)
     chosen = [e for e in events_list if e in EVENTS] or list(EVENTS)
     if len(endpoints(db, company_id)) >= MAX_ENDPOINTS:
         raise ValidationFailed({"url": "error.webhook_limit"})
     secret = secrets.token_hex(32)
-    ep = WebhookEndpoint(company_id=company_id, url=url, secret=secret, events=",".join(chosen),
+    ep = WebhookEndpoint(company_id=company_id, url=url, secret=secret, events=",".join(chosen), sandbox=sandbox,
                          created_by=get_ctx().user_id)
     db.add(ep)
     db.flush()
@@ -170,14 +171,18 @@ def enqueue(db: Session, company_ids, event: str, data: dict) -> int:
         return _enqueue(db, company_ids, event, data)
 
 
-def _enqueue(db: Session, company_ids, event: str, data: dict) -> int:
+def _enqueue(db: Session, company_ids, event: str, data: dict, *, sandbox: bool = False) -> int:
+    """Live events go to live endpoints only; sandbox events (FR-API-05) to sandbox endpoints only."""
     event_id = str(uuid7())
-    payload = json.dumps({"id": event_id, "type": event, "created_at": utcnow().isoformat(), "data": data},
-                         ensure_ascii=False, default=str, separators=(",", ":"))
+    body = {"id": event_id, "type": event, "created_at": utcnow().isoformat(), "data": data}
+    if sandbox:
+        body["livemode"] = False
+    payload = json.dumps(body, ensure_ascii=False, default=str, separators=(",", ":"))
     count = 0
     for cid in {c for c in company_ids if c}:
         for ep in db.execute(select(WebhookEndpoint).where(WebhookEndpoint.company_id == cid,
                                                            WebhookEndpoint.active.is_(True),
+                                                           WebhookEndpoint.sandbox.is_(sandbox),
                                                            WebhookEndpoint.is_deleted.is_(False))).scalars():
             if event not in ep.events.split(","):
                 continue
@@ -185,6 +190,10 @@ def _enqueue(db: Session, company_ids, event: str, data: dict) -> int:
                                    next_attempt_at=utcnow()))
             count += 1
     return count
+
+
+def enqueue_sandbox(db: Session, company_id, event: str, data: dict) -> int:
+    return _enqueue(db, (company_id,), event, data, sandbox=True)
 
 
 def send_test(db: Session, ep: WebhookEndpoint) -> None:

@@ -126,6 +126,63 @@
   {% endif %}
 </section>
 
+{# ---------------- customs data (GOV-TR-06) ---------------- #}
+{% if customs and side in ("client", "carrier", "staff") %}
+{% set cd = customs.data %}
+<section class="card" id="customs">
+  <div class="page-head"><h2>{{ _("customs.title") }}</h2>
+    <span class="badge {{ 'ok' if customs_dossier and customs_dossier.status == 'ready' else ('ok' if customs.complete else 'warn') }}">{{ _("customs.st_ready") if customs_dossier and customs_dossier.status == "ready" else (_("customs.st_complete") if customs.complete else _("customs.st_draft")) }}</span></div>
+  <p class="muted"><small>{% if customs.customs %}{{ _("customs.declaration_needed") }}{% else %}{{ _("customs.eaeu") }}{% endif %} {{ _("customs.integration_note") }}</small></p>
+  <div class="grid two">
+    <div>
+      <h3>{{ _("customs.checklist") }}</h3>
+      <ul class="checklist">
+        {% for f in customs.fields %}<li class="{{ 'missing' if f in customs.missing_fields else 'done' }}">{{ "✗" if f in customs.missing_fields else "✓" }} {{ _("customs.f." ~ f) }}</li>{% endfor %}
+        {% if "tir_carnet" in customs.missing_fields %}<li class="missing">✗ {{ _("customs.f.tir_carnet") }}</li>{% endif %}
+        {% for d in customs.documents %}<li class="{{ 'missing' if d in customs.missing_documents else 'done' }}">{{ "✗" if d in customs.missing_documents else "✓" }} {{ _("doc." ~ d) }}</li>{% endfor %}
+      </ul>
+      {% if customs.missing_documents and side in ("client", "carrier") %}<p class="muted"><small>{{ _("customs.upload_hint") }}</small></p>{% endif %}
+      <div class="row">
+        <a class="btn small" href="{{ ('/admin' if side == 'staff' else '') }}/deals/{{ deal.id }}/customs.xml">XML</a>
+        {% if side in ("client", "carrier") and me.can("deal.manage") and customs.complete and not (customs_dossier and customs_dossier.status == "ready") %}
+        <form method="post" action="/deals/{{ deal.id }}/customs/ready" class="inline">{{ ui.csrf() }}<button class="btn small primary">{{ _("customs.mark_ready") }}</button></form>{% endif %}
+      </div>
+    </div>
+    {% if side in ("client", "carrier") and me.can("deal.manage") %}
+    <form method="post" action="/deals/{{ deal.id }}/customs" class="stack">{{ ui.csrf() }}
+      <h3>{{ _("customs.my_part_" ~ side) }}</h3>
+      <div class="form-grid">
+      {% if side == "client" %}
+        {{ ui.field("hs_code", _("customs.f.hs_code"), cd.hs_code, hint=_("customs.hs_hint"), attrs='inputmode="numeric" maxlength="13"') }}
+        {{ ui.field("goods_description", _("customs.f.goods_description"), cd.goods_description) }}
+        {{ ui.field("gross_kg", _("customs.f.gross_kg"), cd.gross_kg, attrs='inputmode="numeric"') }}
+        {{ ui.field("net_kg", _("customs.f.net_kg"), cd.net_kg, attrs='inputmode="numeric"') }}
+        {{ ui.field("places", _("customs.f.places"), cd.places, attrs='inputmode="numeric"') }}
+        {{ ui.field("packaging", _("customs.f.packaging"), cd.packaging) }}
+        {{ ui.field("invoice_number", _("customs.f.invoice_number"), cd.invoice_number) }}
+        {{ ui.field("invoice_date", _("customs.f.invoice_date"), cd.invoice_date, type="date") }}
+        {{ ui.field("invoice_value", _("customs.f.invoice_value"), cd.invoice_value, attrs='inputmode="decimal"') }}
+        {{ ui.select("invoice_currency", _("customs.f.invoice_currency"), [("KZT", "KZT"), ("USD", "USD"), ("CNY", "CNY"), ("RUB", "RUB"), ("EUR", "EUR")], cd.invoice_currency) }}
+        <div class="field"><label for="f-origin_country">{{ _("customs.f.origin_country") }}</label><select id="f-origin_country" name="origin_country">{% for c in countries %}<option value="{{ c.code }}" {{ 'selected' if cd.origin_country == c.code }}>{{ c.name_ru }}</option>{% endfor %}</select></div>
+        {{ ui.field("consignee_name", _("customs.f.consignee_name"), cd.consignee_name) }}
+        {{ ui.field("consignee_address", _("customs.f.consignee_address"), cd.consignee_address) }}
+        <div class="field"><label for="f-consignee_country">{{ _("customs.f.consignee_country") }}</label><select id="f-consignee_country" name="consignee_country"><option value=""></option>{% for c in countries %}<option value="{{ c.code }}" {{ 'selected' if cd.consignee_country == c.code }}>{{ c.name_ru }}</option>{% endfor %}</select></div>
+        {{ ui.field("consignee_tax_id", _("customs.f.consignee_tax_id"), cd.consignee_tax_id) }}
+      {% else %}
+        {{ ui.select("transit_mode", _("customs.f.transit_mode"), [("tir", _("customs.transit.tir")), ("transit_declaration", _("customs.transit.transit_declaration")), ("none", _("customs.transit.none"))], cd.transit_mode) }}
+        {{ ui.field("tir_carnet", _("customs.f.tir_carnet"), cd.tir_carnet) }}
+        {{ ui.field("transit_declaration", _("customs.f.transit_declaration"), cd.transit_declaration) }}
+        <div class="field"><label for="f-border_crossing">{{ _("customs.f.border_crossing") }}</label><select id="f-border_crossing" name="border_crossing"><option value=""></option>{% for c in crossings %}<option value="{{ c.code }}" {{ 'selected' if cd.border_crossing == c.code }}>{{ c.name_ru }}</option>{% endfor %}</select></div>
+        {{ ui.field("trailer_plate", _("customs.f.trailer_plate"), cd.trailer_plate) }}
+      {% endif %}
+      </div>
+      <div><button class="btn primary">{{ _("action.save") }}</button></div>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
 {# ---------------- transport documents (section 51) ---------------- #}
 {% if transport_types and side in ("client", "carrier", "driver", "staff") %}
 <section class="card" id="transport">
