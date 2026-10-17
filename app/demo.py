@@ -49,6 +49,23 @@ def _company(db, kind, name, bin_prefix, level, **kw) -> Company:
     return c
 
 
+def _make_l3(db, company, vehicles, drivers) -> None:
+    """Demo: the main carrier has everything L3 needs — company EDS, vehicle passports, driver biometrics."""
+    from app.core.storage import save_generated
+    from app.modules.fleet.models import BiometricCheck, VerificationDocument
+
+    for v in vehicles:
+        f = save_generated(db, data=b"%PDF-1.4\n% demo technical passport\n", name=f"tech-passport-{v.plate}.pdf",
+                           content_type="application/pdf", company_id=company.id)
+        db.add(VerificationDocument(company_id=company.id, subject_type="vehicle", subject_id=v.id,
+                                    doc_type="tech_passport", file_id=f.id, status="approved"))
+    for d in drivers:
+        db.add(BiometricCheck(driver_id=d.id, company_id=company.id, provider="demo", match=True, liveness=True,
+                              score=96, status="passed", valid_until=date.today() + timedelta(days=365)))
+    company.eds_confirmed_at, company.eds_cert_serial = utcnow(), "demo"
+    company.verification_level = 3
+
+
 def seed_demo(db) -> None:
     if db.execute(select(User.id).where(User.email == "admin@abdex.kz")).first():
         return
@@ -98,6 +115,8 @@ def seed_demo(db) -> None:
     v4 = Vehicle(company_id=carrier.id, plate="888TNT03", vin="YS2R4X20005123456", body_type="tent", capacity_kg=20000,
                  volume_m3=82, status="approved", insurance_until=date.today() + timedelta(days=300))
     db.add_all([v1, v2, v4, d1, d2])
+    db.flush()
+    _make_l3(db, carrier, (v1, v2, v4), (d1, d2))
 
     carrier2 = _company(db, "carrier", "ИП Сапаров А.К.", "88062030078", 1, form="ИП", phone="+77030000001")
     owner2 = _user(db, "+77030000001", "Айдар Сапаров")

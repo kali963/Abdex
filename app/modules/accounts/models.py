@@ -95,6 +95,9 @@ class Company(Model):
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
     show_finance_to_drivers: Mapped[bool] = mapped_column(Boolean, default=False)  # FR-ACL-03
     is_self_employed_driver: Mapped[bool] = mapped_column(Boolean, default=False)  # FR-AUTH-05
+    # L3 (section 8): the company confirmed itself with a qualified certificate issued to its BIN
+    eds_confirmed_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+    eds_cert_serial: Mapped[str] = mapped_column(String(80), default="")
 
 
 class Membership(Model):

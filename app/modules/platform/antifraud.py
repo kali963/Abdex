@@ -26,6 +26,7 @@ DEFAULT_RULES: dict[str, tuple[str, str, int, int, str]] = {
     "duplicate_driver_iin": ("review", "high", 0, 0, "ИИН водителя у несвязанных компаний"),
     "duplicate_iban": ("review", "high", 0, 0, "IBAN у несвязанных компаний"),
     "duplicate_vehicle_plate": ("review", "high", 0, 0, "Госномер у несвязанных компаний"),
+    "driver_reverify": ("review", "high", 0, 0, "Повторная проверка водителя: новое устройство, география, перерыв"),
     "executor_foreign_driver": ("review", "high", 0, 0, "Водитель другой компании в сделке"),
     "executor_foreign_vehicle": ("review", "high", 0, 0, "ТС другой компании в сделке"),
     "vehicle_parallel_deals": ("review", "high", 0, 0, "ТС в пересекающихся сделках"),

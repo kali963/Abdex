@@ -49,7 +49,7 @@ def new_challenge(db: Session) -> str:
     return challenge
 
 
-def _consume(db: Session, challenge: str) -> None:
+def consume(db: Session, challenge: str) -> None:
     row = db.execute(select(OtpCode).where(OtpCode.target == f"eds:{_hash(challenge or '')[:48]}",
                                            OtpCode.purpose == PURPOSE).with_for_update()).scalar_one_or_none()
     if row is None or row.used_at is not None or row.expires_at < utcnow() or row.code_hash != _hash(challenge):
@@ -65,7 +65,7 @@ def _verify(db: Session, package: str, challenge: str) -> dict:
 
     if not package or len(package) > 200_000:
         raise AppError("eds_invalid", status_code=422, checks="package")
-    _consume(db, challenge)
+    consume(db, challenge)
     revoked = set(get_setting(db, "eds.revoked_serials", []) or [])
     res = eds.verifier().verify(package, challenge.encode(), signed_at=utcnow(), expected_bin="", revoked=revoked)
     checks = {k: v for k, v in res.checks.items() if k != "owner"}

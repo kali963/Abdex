@@ -37,6 +37,9 @@ def place_bid(db: Session, order_id, carrier: Company, form: dict) -> Bid:
         raise NotFound()
     if carrier.verification_level < 1:
         raise Forbidden("verification_required")
+    from app.modules.fleet.level3 import check_bid_allowed
+
+    check_bid_allowed(db, order, carrier)  # section 8: valuable and international cargo need L3
     if carrier.is_blocked:
         raise Forbidden("company_blocked")
     from app.modules.platform.service import has_restriction
@@ -61,6 +64,8 @@ def place_bid(db: Session, order_id, carrier: Company, form: dict) -> Bid:
         errors["vehicle_id"] = "error.invalid_choice"
     if driver_id and (driver is None or driver.company_id != carrier.id):
         errors["driver_id"] = "error.invalid_choice"
+    elif driver is not None and driver.reverify_reason:
+        errors["driver_id"] = "error.driver_reverify_required"  # FR-KYC-09
     if order.adr_class and ((vehicle and not vehicle.adr_allowed) or (driver and not driver.adr_permit)):
         errors["vehicle_id"] = "error.adr_required"
     if not errors and (vehicle or driver):

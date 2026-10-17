@@ -69,6 +69,15 @@ def run_check(db: Session, user: User, *, selfie: bytes, selfie2: bytes, documen
     db.flush()
     audit(db, "kyc.biometric_check", object_type="driver", object_id=driver.id,
           details={"status": check.status, "score": check.score, "provider": check.provider})
+    if check.status == "passed" and driver.reverify_reason:
+        audit(db, "kyc.reverify_passed", object_type="driver", object_id=driver.id,
+              details={"reason": driver.reverify_reason})
+        driver.reverify_reason, driver.reverify_since = "", None  # FR-KYC-09: the repeated check is done
+    if driver.company_id:
+        from app.modules.accounts.models import Company
+        from app.modules.fleet.level3 import evaluate
+
+        evaluate(db, db.get(Company, driver.company_id))  # L3 depends on the drivers' biometrics
     return check
 
 

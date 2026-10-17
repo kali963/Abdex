@@ -283,6 +283,9 @@ def create_session(db: Session, user: User, *, mfa_passed: bool, is_admin: bool 
     from app.modules.platform.antifraud import track
 
     track(db, "login", user_id=user.id, company_id=company_id)  # SEC-FRD-02
+    from app.modules.fleet.reverify import on_login
+
+    on_login(db, user.id, ctx.device_id or "")  # FR-KYC-09: a driver on a new device
     if not known_device and had_sessions and ctx.device_id:
         # SEC-AUT-11 / FR-NTF-05: security notifications cannot be disabled
         from app.modules.notifications.service import notify_user

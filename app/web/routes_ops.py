@@ -303,7 +303,7 @@ def biometrics_page(request: Request, db: Session = Depends(get_db), me: Princip
     from app.modules.fleet import biometrics
 
     driver = biometrics.driver_of(db, me.user)
-    return render(request, "deals/biometrics.html", {"check": biometrics.latest(db, driver.id),
+    return render(request, "deals/biometrics.html", {"check": biometrics.latest(db, driver.id), "driver": driver,
                                                      "consent": has_consent(db, me.user.id, "biometrics")})
 
 

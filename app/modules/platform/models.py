@@ -263,3 +263,16 @@ class ProcessingRecord(Model):
     retention: Mapped[str] = mapped_column(String(200), default="")
     adapter: Mapped[str] = mapped_column(String(40), default="")         # integration adapter that sends the data
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class CurrencyRate(Model):
+    """FR-LOC-04: official exchange rate of a currency to tenge for a date (National Bank of Kazakhstan, or entered
+    by finance staff when the source is unavailable). Stored as decimal text, per one unit of the currency."""
+
+    __tablename__ = "currency_rates"
+    __table_args__ = (UniqueConstraint("on_date", "code", name="uq_currency_rate_day"),)
+
+    on_date: Mapped[date] = mapped_column(Date, index=True)
+    code: Mapped[str] = mapped_column(String(3))
+    rate: Mapped[str] = mapped_column(String(24))
+    source: Mapped[str] = mapped_column(String(20), default="nbrk")  # nbrk / manual / sim

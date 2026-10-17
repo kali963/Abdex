@@ -45,6 +45,9 @@ class Driver(Model):
     license_until: Mapped[date | None] = mapped_column(Date)
     adr_permit: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(20), default="pending")
+    # FR-KYC-09: suspicious signs require a repeated identity check before new trips
+    reverify_reason: Mapped[str] = mapped_column(String(40), default="")
+    reverify_since: Mapped[datetime | None] = mapped_column(AwareDateTime)
 
     @validates("iin")
     def _index_iin(self, key, value):

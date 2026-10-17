@@ -58,7 +58,10 @@ def tick() -> dict:
             _run(name, job, stats)
     if time.time() - _last_daily > 6 * 3600:
         _last_daily = time.time()
-        for name, job in (("doc_expiry", check_document_expiry), ("debt", enforce_debt_limits),
+        from app.modules.fleet.level3 import evaluate_all as evaluate_l3
+        from app.modules.platform.fx import load as load_fx
+
+        for name, job in (("doc_expiry", check_document_expiry), ("debt", enforce_debt_limits), ("l3", evaluate_l3), ("fx", load_fx),
                           ("retention", retention)):
             _run(name, job, stats)
     return stats

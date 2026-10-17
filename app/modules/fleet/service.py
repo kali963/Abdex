@@ -200,6 +200,9 @@ def decide_verification(db: Session, req: VerificationRequest, *, approve: bool,
             company.deal_limit_minor = int(get_setting(db, "kyc.l1_deal_limit_minor", 300_000_000))
         if company.verification_level >= 2:
             company.deal_limit_minor = None
+            from app.modules.fleet.level3 import evaluate
+
+            evaluate(db, company)  # L3 when the strengthened checks are already in place
         for doc in db.execute(select(VerificationDocument).where(VerificationDocument.company_id == company.id,
                                                                  VerificationDocument.status == "uploaded")).scalars():
             doc.status = "approved"

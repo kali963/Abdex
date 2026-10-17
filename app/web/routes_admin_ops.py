@@ -453,3 +453,35 @@ async def admin_module_save(mid: str, request: Request, db: Session = Depends(ge
     subscriptions.save_module(db, await request.form(), m)
     db.commit()
     return redirect("/admin/modules", flash=("success", "msg.saved"))
+
+
+# ------------------------------------------------------------------ exchange rates (FR-LOC-04)
+
+
+@router.get("/fx")
+def admin_fx(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("admin.finance"))):
+    from app.modules.platform import fx
+
+    from app.db import utcnow
+
+    return render(request, "admin/fx.html", {"rates": fx.latest(db), "currencies": fx.CURRENCIES, "today": utcnow().date(),
+                                             "source": fx.source().provider if fx.source() else "manual"})
+
+
+@router.post("/fx")
+async def admin_fx_save(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("admin.finance"))):
+    from datetime import date as _date
+
+    from app.modules.platform import fx
+
+    form = await request.form()
+    if form.get("action") == "load":
+        n = fx.load(db)
+        return redirect("/admin/fx", flash=("success" if n else "error", "fx.loaded" if n else "fx.load_failed"))
+    try:
+        on = _date.fromisoformat(str(form.get("on_date", "")))
+    except ValueError:
+        raise ValidationFailed({"on_date": "error.date"})
+    fx.set_manual(db, on, str(form.get("code", "")), str(form.get("rate", "")))
+    db.commit()
+    return redirect("/admin/fx", flash=("success", "msg.saved"))

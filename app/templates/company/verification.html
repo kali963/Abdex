@@ -10,6 +10,17 @@
   <tbody>{% for n in range(4) %}<tr{% if n == c.verification_level %} class="current"{% endif %}><td>{{ ui.level(n) }}</td><td>{{ _("level.checked" ~ n) }}</td><td>{{ _("level.opens" ~ n) }}</td></tr>{% endfor %}</tbody>
 </table></div>
 {% if c.deal_limit_minor %}<p class="muted">{{ _("kyc.limit") }}: <b>{{ money(c.deal_limit_minor) }}</b></p>{% endif %}
+<section class="card" id="l3">
+  <div class="page-head"><h2>{{ _("l3.title") }}</h2>{% if c.verification_level >= 3 %}<span class="badge ok">{{ _("l3.granted") }}</span>{% endif %}</div>
+  <p class="muted">{{ _("l3.text") }}</p>
+  <ul class="checklist">{% for i in l3 %}<li class="{{ 'done' if i.ok else 'missing' }}">{{ "✓" if i.ok else "✗" }} {{ _("l3.req." ~ i.code) }}{% if i.missing %} <small class="muted">({{ i.missing|join(", ") }})</small>{% endif %}</li>{% endfor %}</ul>
+  {% if eds_enabled and me.can("company.manage") and not c.eds_confirmed_at %}
+  <div class="eds stack">
+    <button type="button" class="btn primary" data-eds-auth data-slot="company" data-mode="{{ eds_mode }}" data-challenge="/company/eds/challenge" data-action="/company/eds/confirm" {% if eds_mode == "dev" %}data-cert="/dev/eds/certificate"{% endif %} data-wait="{{ _('eds.wait') }}" data-fail="{{ _('eds.fail') }}">{{ _("l3.eds_btn") }}</button>
+    <small class="muted" data-eds-status>{{ _("l3.eds_note") }}</small>
+  </div>
+  {% elif c.eds_confirmed_at %}<p class="muted"><small>{{ _("l3.eds_done", date=fmt_date(c.eds_confirmed_at)) }}</small></p>{% endif %}
+</section>
 <div class="grid two">
 <section class="card">
   <h2>{{ _("kyc.upload") }}</h2>
@@ -44,3 +55,4 @@
 <tbody>{% for d in docs %}<tr><td>{{ _("doc." ~ d.doc_type) }}</td><td>{{ _("kyc.subject_" ~ d.subject_type) }}</td><td>{{ fmt_date(d.expires_on) }}</td><td>{{ ui.status(d.status) }}{% if d.reject_reason %}<br><small>{{ d.reject_reason }}</small>{% endif %}</td><td><a href="{{ file_url(d.file_id) }}" target="_blank" rel="noopener">{{ _("action.open") }}</a></td></tr>
 {% else %}<tr><td colspan="5" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
 {% endblock %}
+{% block scripts %}{% if eds_enabled %}<script src="/static/js/eds.js?v=3" defer></script>{% endif %}{% endblock %}
