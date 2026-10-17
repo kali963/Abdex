@@ -17,6 +17,7 @@ from app.core.audit import audit
 from app.core.context import get_ctx
 from app.core.errors import AppError, NotFound, ValidationFailed
 from app.core.i18n import to_local_input
+from app.core.timeutil import local_today
 from app.db import utcnow
 from app.modules.accounts.models import Company
 from app.modules.orders import service as orders
@@ -74,7 +75,7 @@ def create_series(db: Session, company: Company, source: Order, form) -> OrderSe
     if source.load_from is None or not source.points:
         raise ValidationFailed({"source": "error.series_source"})
     data = parse_form(form)
-    if data["start_date"] < utcnow().date():
+    if data["start_date"] < local_today():
         raise ValidationFailed({"start_date": "error.date_past"})
     s = OrderSeries(company_id=company.id, source_order_id=source.id, name=data["name"] or source.number,
                     weekdays=data["weekdays"], start_date=data["start_date"], end_date=data["end_date"],
@@ -93,7 +94,7 @@ def company_series(db: Session, company_id) -> list[OrderSeries]:
 
 
 def upcoming_dates(s: OrderSeries, *, today: date | None = None, count: int = 5) -> list[date]:
-    today = today or utcnow().date()
+    today = today or local_today()
     days = {int(d) for d in s.weekdays.split(",") if d}
     d = max(s.start_date, today, (s.last_load_date + timedelta(days=1)) if s.last_load_date else s.start_date)
     out = []
@@ -121,7 +122,7 @@ def _form_for(source: Order, load_day: date) -> dict:
 
 def generate_due(db: Session, *, today: date | None = None) -> int:
     """Worker job: create orders whose loading date falls within the series lead time."""
-    today = today or utcnow().date()
+    today = today or local_today()
     created = 0
     ids = list(db.execute(select(OrderSeries.id).where(OrderSeries.active.is_(True),
                                                        OrderSeries.is_deleted.is_(False))).scalars())
@@ -134,12 +135,19 @@ def generate_due(db: Session, *, today: date | None = None) -> int:
             continue
         horizon = today + timedelta(days=s.lead_days)
         n = 0
+        now = utcnow()
         for d in upcoming_dates(s, today=today, count=MAX_PER_RUN):
             if d > horizon:
                 break
+            form = _form_for(source, d)
+            shifted = source.load_from + timedelta(days=(d - source.load_from.astimezone(
+                ZoneInfo(get_ctx().timezone or "Asia/Almaty")).date()).days)
+            if shifted < now + timedelta(minutes=30):
+                s.last_load_date = d  # today's loading time has already passed: skip the day, keep the series
+                continue
             try:
                 with db.begin_nested():
-                    order = orders.create_order(db, company, _form_for(source, d), rate_limited=False)
+                    order = orders.create_order(db, company, form, rate_limited=False)
                     if s.auto_submit:
                         orders.submit(db, order)
             except AppError as exc:  # restricted company, invalid source: stop the series, tell the owner

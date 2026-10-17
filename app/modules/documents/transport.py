@@ -31,7 +31,8 @@ from app.modules.orders.models import Order
 TYPES = ("e_waybill", "cmr_form")
 ALLOWED_STATUSES = (flow.ASSIGNED, flow.DOCS_SIGNED, flow.LOADING, flow.IN_TRANSIT)
 REQUIRED_FIELDS = ("shipper_bin", "carrier_bin", "vehicle", "driver", "load_point", "unload_point", "cargo", "weight")
-MAX_ATTEMPTS = 5
+MAX_ATTEMPTS = 8
+BACKOFF_MINUTES = (1, 5, 15, 60, 180, 360, 720)  # a short outage of the state system is waited out
 
 
 class EtdAdapter(Adapter):
@@ -140,7 +141,7 @@ def submit_paper(db: Session, reg: TransportDocRegistration) -> None:
         raise Conflict("already_decided")
     deal = db.get(Deal, reg.deal_id)
     reg.status = "pending" if flag_enabled(db, "gov.etd", deal.carrier_company_id) else "local"
-    reg.attempts = 0
+    reg.attempts, reg.next_attempt_at = 0, None
     audit(db, "transport_docs.submitted", object_type="deal", object_id=reg.deal_id, details={"mode": reg.mode})
 
 
@@ -148,8 +149,15 @@ def process(db: Session, limit: int = 50) -> int:
     """Worker job (GOV-TR-03): register pending documents, keep errors visible on the deal card."""
     from app.core import rls
 
-    rows = db.execute(select(TransportDocRegistration).where(TransportDocRegistration.status == "pending")
-                      .limit(limit)).scalars().all()
+    from datetime import timedelta
+
+    from sqlalchemy import or_
+
+    now = utcnow()
+    rows = db.execute(select(TransportDocRegistration).where(
+        TransportDocRegistration.status == "pending",
+        or_(TransportDocRegistration.next_attempt_at.is_(None), TransportDocRegistration.next_attempt_at <= now))
+        .limit(limit).with_for_update(skip_locked=True)).scalars().all()
     with rls.system(db):
         for reg in rows:
             reg.attempts += 1
@@ -159,6 +167,9 @@ def process(db: Session, limit: int = 50) -> int:
                 reg.last_error = f"unavailable: {exc}"[:300]
                 if reg.attempts >= MAX_ATTEMPTS:
                     reg.status = "error"
+                else:
+                    pause = BACKOFF_MINUTES[min(reg.attempts - 1, len(BACKOFF_MINUTES) - 1)]
+                    reg.next_attempt_at = now + timedelta(minutes=pause)
                 continue
             if out.get("ok"):
                 reg.status, reg.external_number, reg.registered_at, reg.last_error = "registered", out["number"], utcnow(), ""

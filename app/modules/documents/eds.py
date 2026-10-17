@@ -175,9 +175,10 @@ class NcaNodeVerifier(Adapter):
 
     def verify(self, package: str, data: bytes, *, signed_at: datetime, expected_bin: str,
                revoked: set[str]) -> VerifyResult:
-        return self.call("verify", lambda: self._verify(package, data, signed_at, expected_bin), summary="cms-verify")
+        return self.call("verify", lambda: self._verify(package, data, signed_at, expected_bin, revoked),
+                         summary="cms-verify")
 
-    def _verify(self, package, data, signed_at, expected_bin) -> VerifyResult:
+    def _verify(self, package, data, signed_at, expected_bin, revoked=frozenset()) -> VerifyResult:
         import urllib.request
 
         body = json.dumps({"cms": package, "data": base64.b64encode(data).decode(), "revocationCheck": ["OCSP"]}).encode()
@@ -191,9 +192,24 @@ class NcaNodeVerifier(Adapter):
         tsp = (signer.get("tsp") or {}).get("genTime")
         res = VerifyResult(valid=False, provider=self.provider,
                            signed_at=datetime.fromisoformat(tsp.replace("Z", "+00:00")) if tsp else signed_at)
+        revocations = cert.get("revocations") or []
+        serial = str(cert.get("serialNumber", ""))
+        at = res.signed_at or signed_at
+
+        def _ts(v):
+            try:
+                return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+            except ValueError:
+                return None
+
+        nb, na = _ts(cert.get("notBefore", "")), _ts(cert.get("notAfter", ""))
         res.checks = {"integrity": bool(out.get("valid")), "chain": bool(cert.get("valid", out.get("valid"))),
-                      "validity": True, "revocation": all(r.get("revoked") is False for r in cert.get("revocations", [])),
-                      "owner": expected_bin in (subject.get("bin", ""), subject.get("iin", ""))}
+                      # validity at the signing time; no dates in the answer means not proven
+                      "validity": bool(nb and na and nb <= at <= na),
+                      # an OCSP answer must exist and say "not revoked"; the platform's own list is checked too
+                      "revocation": bool(revocations) and all(r.get("revoked") is False for r in revocations)
+                      and serial.lower() not in {str(x).lower() for x in revoked},
+                      "owner": bool(expected_bin) and expected_bin in (subject.get("bin", ""), subject.get("iin", ""))}
         res.signer = {"iin": subject.get("iin", ""), "bin": subject.get("bin", ""),
                       "name": subject.get("commonName", ""), "serial": cert.get("serialNumber", ""),
                       "issuer": (cert.get("issuer") or {}).get("commonName", ""), "not_after": cert.get("notAfter", "")}

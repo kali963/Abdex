@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+from datetime import timedelta
 import json
 import zipfile
 from dataclasses import dataclass
@@ -61,7 +62,7 @@ def get_access(db: Session, deal_id, *, user: User, company_id, role: str | None
         raise NotFound()
     if role == "driver":
         drv = db.get(Driver, deal.driver_id) if deal.driver_id else None
-        if drv is None or drv.user_id != user.id:
+        if drv is None or drv.user_id != user.id or drv.company_id != deal.carrier_company_id:
             raise NotFound()
         return DealAccess(deal, order, "driver", role)
     if company_id == deal.client_company_id:
@@ -269,15 +270,24 @@ def clear_manual_review(db: Session, deal: Deal, note: str) -> None:
 SUPPLEMENT_FIELDS = ("price", "unload_to", "load_from")
 
 
+# terms can change only while the trip is not closed: after the closing documents the platform fee is charged
+SUPPLEMENT_STATUSES = (flow.ASSIGNED, flow.DOCS_SIGNED, flow.LOADING, flow.IN_TRANSIT, flow.UNLOADED)
+
+
 def propose_supplement(db: Session, acc: DealAccess, form: dict) -> Supplement:
-    if acc.order.status in flow.FINAL or acc.order.status == flow.DISPUTE:
+    if acc.order.status not in SUPPLEMENT_STATUSES:
         raise Conflict("deal_closed")
     changes = {}
     if form.get("price"):
         try:
             changes["price_minor"] = to_minor(form["price"], acc.deal.currency)
+            if changes["price_minor"] <= 0:
+                raise ValueError
         except ValueError:
             raise ValidationFailed({"price": "error.number"})
+        carrier = db.get(Company, acc.deal.carrier_company_id)
+        if carrier.deal_limit_minor is not None and changes["price_minor"] > carrier.deal_limit_minor:
+            raise ValidationFailed({"price": "error.over_deal_limit"})
     if form.get("trailer_plate"):
         changes["trailer_plate"] = form["trailer_plate"].strip().upper()[:20]
     if not changes:
@@ -297,6 +307,8 @@ def decide_supplement(db: Session, acc: DealAccess, sup: Supplement, accept: boo
         raise NotFound()
     if sup.initiator_company_id == get_ctx().company_id:
         raise Forbidden("cannot_accept_own")  # the OTHER side must accept
+    if accept and acc.order.status not in SUPPLEMENT_STATUSES:
+        raise Conflict("deal_closed")
     sup.status = "accepted" if accept else "rejected"
     sup.decided_by = get_ctx().user_id
     sup.decided_at = utcnow()
@@ -330,8 +342,15 @@ def propose_executor_change(db: Session, acc: DealAccess, vehicle_id, driver_id,
         raise ValidationFailed({"reason": "error.reason_required"})
     v = db.get(Vehicle, vehicle_id) if vehicle_id else None
     d = db.get(Driver, driver_id) if driver_id else None
-    if (vehicle_id and v is None) or (driver_id and d is None):
+    carrier_id = acc.deal.carrier_company_id
+    # only the carrier's own fleet: another company's truck or driver would get the client's addresses
+    if (vehicle_id and (v is None or v.company_id != carrier_id or v.is_deleted)) or \
+            (driver_id and (d is None or d.company_id != carrier_id or d.is_deleted)):
         raise ValidationFailed({"vehicle_id": "error.invalid_choice"})
+    if d is not None:
+        from app.modules.fleet.reverify import ensure_allowed
+
+        ensure_allowed(db, d.id)
     from app.modules.fleet.schedule import ensure_free
 
     ensure_free(db, acc.order, vehicle_id=v.id if v else None, driver_id=d.id if d else None,
@@ -373,6 +392,8 @@ def decide_executor_change(db: Session, acc: DealAccess, ch: ExecutorChange, acc
 
 # --------------------------------------------------------------------- trip (M11)
 
+OFFLINE_WINDOW_HOURS = 48
+
 
 def add_checkpoint(db: Session, acc: DealAccess, kind: str, *, lat=None, lng=None, photo_file_id=None, note: str = "",
                    offline_id: str = "", happened_at=None) -> Checkpoint:
@@ -395,7 +416,11 @@ def add_checkpoint(db: Session, acc: DealAccess, kind: str, *, lat=None, lng=Non
     # FR-TRK-03: geo is stored only with explicit consent and only during the trip
     if not acc.deal.geo_consent:
         lat = lng = None
-    cp = Checkpoint(deal_id=acc.deal.id, kind=kind, happened_at=happened_at or utcnow(), lat=lat, lng=lng,
+    now = utcnow()
+    if happened_at is not None:
+        # FR-TRK-07: an offline mark keeps its own time, but only within the offline window and never in the future
+        happened_at = min(max(happened_at, now - timedelta(hours=OFFLINE_WINDOW_HOURS)), now)
+    cp = Checkpoint(deal_id=acc.deal.id, kind=kind, happened_at=happened_at or now, lat=lat, lng=lng,
                     photo_file_id=photo_file_id, note=note[:300], offline_id=offline_id,
                     created_by=get_ctx().user_id)
     db.add(cp)
@@ -405,7 +430,7 @@ def add_checkpoint(db: Session, acc: DealAccess, kind: str, *, lat=None, lng=Non
         flow.transition(db, order, target, actor=flow.DRIVER, reason=f"checkpoint {kind}")
     if kind == "unloaded":
         acc.deal.geo_consent = False  # stop geo sharing automatically after the trip
-        rating.on_unloaded_late(db, acc.deal, order)
+        rating.on_unloaded_late(db, acc.deal, order, cp.happened_at)
     from app.modules.notifications.service import notify_event
 
     webhooks.enqueue(db, (acc.deal.client_company_id, acc.deal.carrier_company_id), "deal.checkpoint",
@@ -588,8 +613,11 @@ def dossier_zip(db: Session, acc: DealAccess) -> bytes:
     for c in checkpoints(db, acc.deal.id):
         lines.append(f"{c.happened_at:%d.%m.%Y %H:%M} UTC · {c.kind} · {c.lat or '—'}, {c.lng or '—'}")
     lines += ["", "## Переписка"]
-    for m in thread_messages(db, deal_id=acc.deal.id, include_hidden=True):
-        lines.append(f"{m.created_at:%d.%m.%Y %H:%M} UTC · {m.kind} · {m.body}")
+    from app.modules.documents.service import FINANCIAL_DOC_TYPES, one_line
+
+    # hidden messages stay in the audit journal for staff; the parties' dossier shows what they saw
+    for m in thread_messages(db, deal_id=acc.deal.id, include_hidden=acc.side == "staff"):
+        lines.append(f"{m.created_at:%d.%m.%Y %H:%M} UTC · {m.kind} · {one_line(m.body)}")
     summary = render_pdf(f"Досье сделки {acc.deal.number}", "\n".join(lines))
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
@@ -601,7 +629,12 @@ def dossier_zip(db: Session, acc: DealAccess) -> bytes:
         for doc in deal_documents(db, acc.deal.id):
             if not doc.file_id:
                 continue
+            # platform-fee documents belong to the payer only (as on the deal card and in file access)
+            if doc.doc_type in FINANCIAL_DOC_TYPES and acc.side != "staff" and doc.company_id != get_ctx().company_id:
+                continue
             f = db.get(StoredFile, doc.file_id)
+            if f is None or f.scan_status == "infected":
+                continue
             ext = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png"}.get(f.content_type, "bin")
             name = f"documents/{doc.doc_type}-{doc.number}.{ext}"
             z.writestr(name, storage.get(f.storage_key))

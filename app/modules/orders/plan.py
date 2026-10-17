@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass
-from datetime import date, datetime, time, timezone
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -117,8 +117,9 @@ def get_plan(db: Session, company_id, plan_id) -> ShipmentPlan:
 
 
 def plan_vs_fact(db: Session, plan: ShipmentPlan) -> dict:
-    start = datetime.combine(plan.period_from, time.min, tzinfo=timezone.utc)
-    end = datetime.combine(plan.period_to, time.max, tzinfo=timezone.utc)
+    from app.core.timeutil import day_bounds
+
+    start, end = day_bounds(plan.period_from, plan.period_to)  # local business days
     orders = db.execute(select(Order).where(Order.client_company_id == plan.company_id, Order.load_from >= start,
                                             Order.load_from <= end, Order.status.in_(FACT_STATUSES))).scalars().all()
     fact: dict[tuple[str, str], list[int]] = {}

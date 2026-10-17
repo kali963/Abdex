@@ -4,7 +4,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, timedelta
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -15,6 +15,7 @@ from app.core.audit import audit
 from app.core.context import get_ctx
 from app.core.errors import AppError, Conflict, NotFound, ValidationFailed
 from app.core.money import format_money, percent_of, to_minor
+from app.core.timeutil import local_today
 from app.db import utcnow
 from app.modules.accounts.models import Company
 from app.modules.billing.models import (
@@ -106,7 +107,7 @@ def accrue_for_deal(db: Session, deal: Deal) -> Accrual | None:
     client = db.get(Company, deal.client_company_id)
     invoice = Invoice(number=next_number(db, "fee_invoice", "СЧ"), company_id=client.id, deal_id=deal.id,
                       amount_minor=amount, currency=tariff.currency,
-                      due_date=utcnow().date() + timedelta(days=int(get_setting(db, "billing.payment_days", 5))))
+                      due_date=local_today() + timedelta(days=int(get_setting(db, "billing.payment_days", 5))))
     db.add(invoice)
     db.flush()
     try:
@@ -117,6 +118,8 @@ def accrue_for_deal(db: Session, deal: Deal) -> Accrual | None:
             db.add(accrual)
             db.flush()
     except IntegrityError:
+        db.delete(invoice)  # a concurrent run accrued first: no orphan "issued" invoice is left behind
+        db.flush()
         return db.execute(select(Accrual).where(Accrual.event == event)).scalar_one()
     if amount == 0:  # fully covered by a promo code / grace period: nothing to pay
         invoice.status, invoice.paid_at = "paid", utcnow()
@@ -155,12 +158,22 @@ def _on_status(db: Session, order, frm, to, **_):
 
     with rls.system(db):  # the client's invoice is created by a deal event, possibly on the carrier's request
         accrual = accrue_for_deal(db, deal)
-    if accrual is not None:
-        flow.transition(db, order, flow.FEE_INVOICED, actor=flow.SYSTEM, reason="platform fee accrued")
-        from app.modules.notifications.service import notify_event
+        invoice = db.get(Invoice, accrual.invoice_id) if accrual is not None and accrual.invoice_id else None
+    if accrual is None:
+        # not formalized on the platform: no fee is due; the deal passes the fee step (section 6 status model)
+        # and is complete — no dead end in CLOSED_DOCS
+        flow.transition(db, order, flow.FEE_INVOICED, actor=flow.SYSTEM, reason="no platform fee due")
+        flow.transition(db, order, flow.COMPLETED, actor=flow.SYSTEM, reason="no platform fee due")
+        return
+    flow.transition(db, order, flow.FEE_INVOICED, actor=flow.SYSTEM, reason="platform fee accrued")
+    if invoice is None or invoice.status in ("paid", "cancelled"):
+        # a zero fee (promo, grace period), a reversed fee or one paid before a rollback: nothing left to pay
+        flow.transition(db, order, flow.COMPLETED, actor=flow.SYSTEM, reason="platform fee settled")
+        return
+    from app.modules.notifications.service import notify_event
 
-        notify_event(db, "fee.invoiced", params={"number": deal.number}, link=f"/deals/{deal.id}#docs",
-                     client_company_id=deal.client_company_id, include_managers=True, dedup=f"fee:{deal.id}")
+    notify_event(db, "fee.invoiced", params={"number": deal.number}, link=f"/deals/{deal.id}#docs",
+                 client_company_id=deal.client_company_id, include_managers=True, dedup=f"fee:{deal.id}")
 
 
 def register_payment(db: Session, invoice: Invoice, amount_minor: int, *, source: str = "manual",
@@ -169,6 +182,13 @@ def register_payment(db: Session, invoice: Invoice, amount_minor: int, *, source
         raise Conflict("invoice_cancelled")
     if amount_minor <= 0:
         raise ValidationFailed({"amount": "error.number"})
+    invoice = db.execute(select(Invoice).where(Invoice.id == invoice.id).with_for_update()).scalar_one()
+    if reference:
+        # the same bank line or provider payment imported twice is recorded once
+        dup = db.execute(select(Payment).where(Payment.invoice_id == invoice.id, Payment.source == source,
+                                               Payment.reference == reference[:100])).scalars().first()
+        if dup is not None:
+            return dup
     p = Payment(invoice_id=invoice.id, company_id=invoice.company_id, amount_minor=amount_minor,
                 currency=invoice.currency, source=source, reference=reference[:100], created_by=get_ctx().user_id)
     db.add(p)
@@ -209,6 +229,12 @@ def storno(db: Session, accrual: Accrual, reason: str) -> Accrual:
         inv = db.get(Invoice, accrual.invoice_id)
         if inv and inv.status == "issued":
             inv.status = "cancelled"
+            lift_debt_restrictions(db, inv.company_id)
+            if accrual.deal_id:  # the fee is reversed: the deal no longer waits for a payment
+                deal = db.get(Deal, accrual.deal_id)
+                order = flow.lock_order(db, deal.order_id)
+                if order.status == flow.FEE_INVOICED:
+                    flow.transition(db, order, flow.COMPLETED, actor=flow.SYSTEM, reason="platform fee reversed")
     audit(db, "billing.storno", object_type="accrual", object_id=accrual.id, reason=reason)
     return rev
 
@@ -259,7 +285,7 @@ def enforce_debt_limits(db: Session) -> int:
 
     threshold = int(get_setting(db, "billing.debt_threshold_minor", 10_000_000))
     grace_days = int(get_setting(db, "billing.grace_days", 10))
-    today = utcnow().date()
+    today = local_today()
     count = 0
     rows = db.execute(select(Invoice.company_id, func.sum(Invoice.amount_minor))
                       .where(Invoice.status == "issued", Invoice.due_date < today)
@@ -288,7 +314,7 @@ def lift_debt_restrictions(db: Session, company_id) -> None:
     from app.modules.platform.models import Restriction
 
     overdue = db.execute(select(Invoice.id).where(Invoice.company_id == company_id, Invoice.status == "issued",
-                                                  Invoice.due_date < utcnow().date())).first()
+                                                  Invoice.due_date < local_today())).first()
     if overdue:
         return
     for r in db.execute(select(Restriction).where(Restriction.company_id == company_id,
@@ -302,8 +328,9 @@ def lift_debt_restrictions(db: Session, company_id) -> None:
 
 
 def pvd_report(db: Session, date_from: date, date_to: date) -> dict:
-    start = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
-    end = datetime.combine(date_to, time.max, tzinfo=timezone.utc)
+    from app.core.timeutil import day_bounds
+
+    start, end = day_bounds(date_from, date_to)  # local business days
     rows = db.execute(select(Accrual).where(Accrual.created_at >= start, Accrual.created_at <= end)
                       .order_by(Accrual.created_at)).scalars().all()
     by_type = {t: 0 for t in INCOME_TYPES}
@@ -399,13 +426,13 @@ def create_promo(db: Session, form) -> PromoCode:
         errors["value"] = "error.number"
         value = 0
     try:
-        valid_from = date.fromisoformat(str(form.get("valid_from") or "")) if form.get("valid_from") else utcnow().date()
+        valid_from = date.fromisoformat(str(form.get("valid_from") or "")) if form.get("valid_from") else local_today()
         valid_to = date.fromisoformat(str(form.get("valid_to"))) if form.get("valid_to") else None
         if valid_to and valid_to < valid_from:
             raise ValueError
     except ValueError:
         errors["valid_to"] = "error.date"
-        valid_from, valid_to = utcnow().date(), None
+        valid_from, valid_to = local_today(), None
     try:
         max_uses = int(form.get("max_uses") or 0)
         per_company = int(form.get("deals_per_company") or 1)
@@ -431,7 +458,7 @@ def redeem_promo(db: Session, company: Company, raw_code: str) -> PromoRedemptio
     if company.kind != "client":
         raise ValidationFailed({"code": "error.promo_invalid"})
     promo = db.execute(select(PromoCode).where(PromoCode.code == code).with_for_update()).scalar_one_or_none()
-    today = utcnow().date()
+    today = local_today()
     if (promo is None or not promo.active or promo.is_deleted or promo.valid_from > today
             or (promo.valid_to and promo.valid_to < today) or (promo.max_uses and promo.uses >= promo.max_uses)):
         raise ValidationFailed({"code": "error.promo_invalid"})
@@ -439,7 +466,7 @@ def redeem_promo(db: Session, company: Company, raw_code: str) -> PromoRedemptio
                                                    PromoRedemption.company_id == company.id)).first():
         raise ValidationFailed({"code": "error.promo_used"})
     red = PromoRedemption(promo_id=promo.id, company_id=company.id, created_by=get_ctx().user_id,
-                          free_until=today + timedelta(days=promo.value) if promo.kind == "free_days" else None)
+                          free_until=today + timedelta(days=promo.value - 1) if promo.kind == "free_days" else None)
     promo.uses += 1
     db.add(red)
     db.flush()

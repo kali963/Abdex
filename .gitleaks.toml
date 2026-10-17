@@ -4,7 +4,7 @@ useDefault = true
 
 [allowlist]
 description = "Test fixtures and the deny-list of weak passwords (not secrets)"
-paths = ['''^tests/''']
+paths = ['''^tests/''', '''^app/i18n/[a-z]{2}\.json$''']  # UI text catalogues: "2fa_enabled" is a label, not a key
 regexTarget = "line"
 regexes = [
   '''"123456789012", "password1234", "qwerty123456"''',

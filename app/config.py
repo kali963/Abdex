@@ -62,6 +62,9 @@ class Settings:
     # Take the client IP from X-Forwarded-For only behind a proxy that overwrites it; otherwise
     # anyone could spoof their IP and bypass per-IP rate limits (SEC-AUT-03, SEC-APP-06).
     trust_proxy: bool = field(default_factory=lambda: _bool("TRUST_PROXY", False))
+    # how many reverse proxies in front of the app append to X-Forwarded-For; the client address is that many
+    # entries from the right (the left part of the header is whatever the client sent)
+    trusted_proxy_hops: int = field(default_factory=lambda: max(1, int(os.getenv("TRUSTED_PROXY_HOPS", "1") or 1)))
     require_2fa_privileged: bool = field(default_factory=lambda: _bool("REQUIRE_2FA_PRIVILEGED", False))
     run_background_worker: bool = field(default_factory=lambda: _bool("RUN_BACKGROUND_WORKER", True))
     seed_demo_data: bool = field(default_factory=lambda: _bool("SEED_DEMO_DATA", True))

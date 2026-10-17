@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.core.audit import audit
 from app.core.errors import AppError, Conflict, NotFound, ValidationFailed
 from app.core.money import format_money, to_minor
+from app.core.timeutil import local_today
 from app.db import utcnow
 from app.modules.accounts.models import Company
 from app.modules.billing.models import (
@@ -55,13 +56,13 @@ def catalog(db: Session, company: Company) -> list[tuple[DigitalModule, Subscrip
 
 
 def is_active(sub: Subscription | None, on=None) -> bool:
-    on = on or utcnow().date()
+    on = on or local_today()
     return bool(sub) and sub.status in ("active", "cancelled") and sub.period_start <= on <= sub.period_end
 
 
 def flag_from_subscription(db: Session, key: str, company_id) -> bool:
     """Used by flag_enabled: an active paid subscription switches the module's flag on for the company."""
-    today = utcnow().date()
+    today = local_today()
     return db.execute(select(Subscription.id).join(DigitalModule, DigitalModule.id == Subscription.module_id)
                       .where(DigitalModule.flag_key == key, Subscription.company_id == company_id,
                              Subscription.status.in_(("active", "cancelled")),
@@ -80,7 +81,7 @@ def _charge(db: Session, sub: Subscription, module: DigitalModule, company: Comp
         name=module.name, start=sub.period_start.strftime("%d.%m.%Y"), end=sub.period_end.strftime("%d.%m.%Y"))
     invoice = Invoice(number=next_number(db, "fee_invoice", "СЧ"), company_id=company.id,
                       amount_minor=module.price_minor, currency=module.currency,
-                      due_date=utcnow().date() + timedelta(days=int(get_setting(db, "billing.payment_days", 5))))
+                      due_date=local_today() + timedelta(days=int(get_setting(db, "billing.payment_days", 5))))
     db.add(invoice)
     db.flush()
     try:
@@ -125,7 +126,7 @@ def subscribe(db: Session, company: Company, module_id) -> Subscription:
     sub = db.execute(select(Subscription).where(Subscription.company_id == company.id,
                                                 Subscription.module_id == module.id).with_for_update()
                      ).scalar_one_or_none()
-    today = utcnow().date()
+    today = local_today()
     if sub is not None and is_active(sub, today):
         raise Conflict("subscription_active")
     if sub is None:
@@ -162,7 +163,7 @@ def renew_due(db: Session) -> int:
     from app.modules.notifications.service import notify_company_owners
     from app.modules.platform.service import has_restriction
 
-    today = utcnow().date()
+    today = local_today()
     done = 0
     with rls.system(db):
         due = db.execute(select(Subscription).where(Subscription.status.in_(("active", "cancelled")),

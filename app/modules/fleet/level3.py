@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import audit
 from app.core.errors import AppError, Forbidden
+from app.core.timeutil import local_today
 from app.db import utcnow
 from app.modules.accounts.models import Company
 from app.modules.fleet.models import BiometricCheck, Driver, Vehicle, VerificationDocument
@@ -51,7 +52,7 @@ def requirements(db: Session, company: Company) -> list[dict]:
         for d in drivers:
             last = db.execute(select(BiometricCheck).where(BiometricCheck.driver_id == d.id)
                               .order_by(BiometricCheck.created_at.desc())).scalars().first()
-            fresh = last and (last.valid_until is None or last.valid_until >= utcnow().date())
+            fresh = last and (last.valid_until is None or last.valid_until >= local_today())
             if not (last and last.status == "passed" and last.match and last.liveness and fresh) or d.reverify_reason:
                 missing_d.append(d.full_name)
         items.append({"code": "biometrics", "ok": bool(drivers) and not missing_d, "missing": missing_d})

@@ -62,3 +62,16 @@ class NotificationPrefs(Model):
     digest: Mapped[str] = mapped_column(String(10), default="off")  # off / hourly / daily
     digest_hour: Mapped[int] = mapped_column(Integer, default=9)
     digest_sent_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+
+
+class PushSubscription(Model):
+    """FR-MOB-02: a browser's Web Push subscription (endpoint of the push service and the keys to encrypt for it)."""
+
+    __tablename__ = "push_subscriptions"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), index=True)
+    endpoint: Mapped[str] = mapped_column(String(1000), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
+    user_agent: Mapped[str] = mapped_column(String(300), default="")
+    last_used_at: Mapped[datetime | None] = mapped_column(AwareDateTime)

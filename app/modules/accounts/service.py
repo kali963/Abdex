@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core import ratelimit
 from app.core.audit import audit
+from app.core.i18n import LOCALES
 from app.core.context import get_ctx
 from app.core.errors import AppError, Forbidden, NotFound, ValidationFailed
 from app.core.security import (
@@ -158,7 +159,7 @@ def register(db: Session, data: RegistrationData) -> User:
         raise ValidationFailed(errors)
 
     user = User(phone=phone, email=email, full_name=data.full_name.strip(), password_hash=hash_password(data.password),
-                locale=data.locale if data.locale in ("ru", "kk") else "ru")
+                locale=data.locale if data.locale in LOCALES else "ru")
     db.add(user)
     db.flush()
     db.add(Consent(user_id=user.id, purpose="registration", text_version=CONSENT_TEXT_VERSION, ip=get_ctx().ip))
@@ -211,7 +212,8 @@ def authenticate(db: Session, login: str, password: str) -> User:
     now = utcnow()
     if user and user.locked_until and user.locked_until > now:
         raise AppError("account_temporarily_locked", status_code=429)
-    if not user or not verify_password(user.password_hash, password) or user.is_deleted:
+    password_ok = verify_password(user.password_hash if user else None, password)  # same cost for unknown logins
+    if not user or not password_ok or user.is_deleted:
         if user:
             user.failed_logins += 1
             if user.failed_logins >= 10:
@@ -342,7 +344,15 @@ def verify_totp_code(user: User, code: str) -> bool:
     return True
 
 
+MAX_2FA_FAILURES = 5
+
+
 def verify_second_factor(db: Session, user: User, code: str) -> bool:
+    """Every guess counts, whatever factor it is checked against: the limit is per account, so a correct
+    authenticator code cannot be brute-forced behind the SMS limit (SEC-AUT-03)."""
+    if not ratelimit.hit("2fa", str(user.id), raise_exc=False):
+        audit(db, "auth.2fa_throttled", object_type="user", object_id=user.id, result="denied", user_id=user.id)
+        raise AppError("too_many_attempts", status_code=429)
     ok = user.totp_enabled and verify_totp_code(user, code)
     if not ok:
         ok = check_otp(db, user.phone, "login_2fa", code)  # SMS code (primary for SMS-2FA users, reserve for TOTP)

@@ -103,7 +103,7 @@
   {% set show_address = true %}{% include "client/_order_details.html" %}
 
   {% if supplements %}<h3>{{ _("deal.supplements") }}</h3><ul class="timeline">{% for s in supplements %}{% set ch = json_loads(s.changes) %}
-    <li>{{ fmt_dt(s.created_at) }} · {{ ui.status(s.status) }} {% if ch.price_minor %}{{ _("deal.new_price") }}: <b>{{ money(ch.price_minor, deal.currency) }}</b>{% endif %}{% if ch.trailer_plate %} {{ _("deal.trailer") }}: {{ ch.trailer_plate }}{% endif %} {% if s.reason %}<small>({{ s.reason }})</small>{% endif %}
+    <li>{{ fmt_dt(s.created_at) }} · {{ ui.status(s.status) }} {% if ch.price_minor and show_finance %}{{ _("deal.new_price") }}: <b>{{ money(ch.price_minor, deal.currency) }}</b>{% endif %}{% if ch.trailer_plate %} {{ _("deal.trailer") }}: {{ ch.trailer_plate }}{% endif %} {% if s.reason %}<small>({{ s.reason }})</small>{% endif %}
     {% if s.status == "proposed" and me.company and s.initiator_company_id != me.company.id and side in ("client", "carrier") %}
       <form class="inline" method="post" action="/deals/{{ deal.id }}/supplement/{{ s.id }}">{{ ui.csrf() }}<input type="hidden" name="accept" value="1"><button class="btn small ok">{{ _("deal.accept") }}</button></form>
       <form class="inline" method="post" action="/deals/{{ deal.id }}/supplement/{{ s.id }}">{{ ui.csrf() }}<input type="hidden" name="accept" value="0"><button class="btn small">{{ _("deal.reject") }}</button></form>{% endif %}</li>{% endfor %}</ul>{% endif %}
@@ -266,16 +266,16 @@
 <aside class="stack">
 <section class="card" id="chat">
   <h2>{{ _("chat.title") }}</h2>
-  <div class="chat" data-chat="/deals/{{ deal.id }}/chat.json" data-last="{{ messages[-1].id if messages else '' }}" aria-live="polite">
+  <div class="chat" tabindex="0" role="log" aria-label="{{ _('chat.title') }}" data-chat="/deals/{{ deal.id }}/chat.json" data-chat-ws="/deals/{{ deal.id }}/chat/ws" data-last="{{ messages[-1].id if messages else '' }}" data-attachment="{{ _('chat.attachment') }}" data-sent="{{ _('chat.sent') }}" data-read="{{ _('chat.read') }}" aria-live="polite">
   {% for m in messages %}
     {% if m.kind == "system" %}<div class="msg system" id="m-{{ m.id }}">{{ sysmsg(m.body) }}<span class="meta">{{ fmt_dt(m.created_at) }}</span></div>
     {% else %}<div class="msg {{ 'mine' if m.author_user_id == me.user.id }}" id="m-{{ m.id }}">{{ m.body }}{% if m.attachment_file_id %}<br><a href="{{ file_url(m.attachment_file_id) }}" target="_blank" rel="noopener">📎 {{ _("chat.attachment") }}</a>{% endif %}
-      <span class="meta">{{ fmt_dt(m.created_at) }}{% if m.author_user_id == me.user.id %} · {{ "✓✓" if m.id in read_ids else "✓" }}{% endif %}{% if m.flags %} · ⚠{% endif %}</span>
+      <span class="meta">{{ fmt_dt(m.created_at) }}{% if m.author_user_id == me.user.id %} · <span class="tick{{ ' read' if m.id in read_ids }}" title="{{ _('chat.read') if m.id in read_ids else _('chat.sent') }}">{{ "✓✓" if m.id in read_ids else "✓" }}</span>{% endif %}{% if m.flags %} · ⚠{% endif %}</span>
       {% if side == "staff" and me.can("admin.antifraud") %}<form method="post" action="/admin/messages/{{ m.id }}/hide" class="row">{{ ui.csrf() }}<input type="text" name="reason" placeholder="{{ _('admin.hide_reason') }}" aria-label="{{ _('admin.hide_reason') }}" required><button class="btn small">{{ _("admin.hide") }}</button></form>{% endif %}</div>{% endif %}
   {% endfor %}
   </div>
   {% if side != "staff" %}
-  <form method="post" action="/deals/{{ deal.id }}/chat" enctype="multipart/form-data" class="stack">{{ ui.csrf() }}
+  <form method="post" action="/deals/{{ deal.id }}/chat" enctype="multipart/form-data" class="stack" data-chat-form>{{ ui.csrf() }}
     <label class="sr-only" for="f-body">{{ _("chat.message") }}</label><textarea id="f-body" name="body" rows="2" placeholder="{{ _('chat.placeholder') }}"></textarea>
     <div class="row"><input type="file" name="file" accept=".pdf,image/*" aria-label="{{ _('chat.attachment') }}"><button class="btn primary">{{ _("action.send") }}</button></div>
     <p class="muted"><small>{{ _("chat.rules") }}</small></p>
@@ -287,4 +287,4 @@
 </aside>
 </div>
 {% endblock %}
-{% block scripts %}{% if eds_enabled %}<script src="/static/js/eds.js?v=3" defer></script>{% endif %}{% endblock %}
+{% block scripts %}{% if eds_enabled %}<script src="/static/js/eds.js?v=4" defer></script>{% endif %}{% endblock %}

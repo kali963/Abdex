@@ -14,7 +14,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.core.context import RequestContext, reset_ctx, set_ctx
-from app.db import SessionLocal, utcnow
+from app.core.timeutil import local_today
+from app.db import SessionLocal
 from app.modules.accounts.models import BankAccount, Company, User
 from app.modules.billing.models import Accrual, DigitalModule, Invoice, Subscription
 from tests.conftest import csrf_from
@@ -177,7 +178,7 @@ def test_modules_subscription_and_forecast(login, db):
     assert "недостаточно" in page.lower()
 
     # revenue is accounted separately in the PVD report
-    today = utcnow().date()
+    today = local_today()
     rep = pvd_report(db, today - timedelta(days=1), today)
     assert rep["by_type"].get("digital_modules", 0) >= module.price_minor
 

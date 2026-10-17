@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.audit import audit
+from app.core.i18n import LOCALES
 from app.core.errors import AppError, Forbidden, NotFound, ValidationFailed
 from app.core.security import mask_phone, new_totp_secret, token, totp_uri
 from app.core.storage import save_upload
@@ -94,7 +95,7 @@ async def account_save(request: Request, db: Session = Depends(get_db), me: Prin
     form = await request.form()
     user = db.get(User, me.user.id)
     user.full_name = str(form.get("full_name", user.full_name)).strip()[:200] or user.full_name
-    if form.get("locale") in ("ru", "kk"):
+    if form.get("locale") in LOCALES:
         user.locale = str(form["locale"])
     tz = str(form.get("timezone", ""))
     if tz in ("Asia/Almaty", "Asia/Aqtobe", "Asia/Oral", "Asia/Aqtau", "Asia/Atyrau", "Asia/Qostanay", "Asia/Qyzylorda"):
@@ -350,7 +351,84 @@ def notif_settings(request: Request, db: Session = Depends(get_db), me: Principa
     disabled = {(ch, e) for ch, cl in links.items() for e in cl.disabled_events.split(",") if e}
     return render(request, "account/notifications.html", {
         "tg": links.get("telegram"), "categories": USER_CATEGORIES, "channels": USER_CHANNELS,
-        "disabled": disabled, "prefs": prefs_for(db, me.user.id), "hours": [(h, f"{h:02d}:00") for h in range(24)]})
+        "disabled": disabled, "prefs": prefs_for(db, me.user.id), "hours": [(h, f"{h:02d}:00") for h in range(24)],
+        "push_key": _push_key(), "push_count": _push_count(db, me.user.id)})
+
+
+def _push_key() -> str:
+    from app.modules.notifications import webpush
+
+    return webpush.public_key() if webpush.enabled() else ""
+
+
+def _push_count(db: Session, user_id) -> int:
+    from sqlalchemy import func
+
+    from app.modules.notifications.models import PushSubscription
+
+    return db.execute(select(func.count(PushSubscription.id)).where(PushSubscription.user_id == user_id)).scalar_one()
+
+
+# ------------------------------------------------------------------ Web Push (FR-MOB-02)
+
+MAX_PUSH_SUBSCRIPTIONS = 10
+
+
+@router.post("/account/push/subscribe")
+async def push_subscribe(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    from fastapi.responses import JSONResponse
+
+    from app.core import ratelimit
+    from app.modules.notifications import webpush
+    from app.modules.notifications.models import PushSubscription
+
+    if me.session.impersonator_id or not webpush.enabled():
+        raise Forbidden()
+    ratelimit.hit("invite", f"push:{me.user.id}")
+    try:
+        data = await request.json()
+        endpoint = str(data["endpoint"])[:1000]
+        p256dh, auth = str(data["keys"]["p256dh"])[:200], str(data["keys"]["auth"])[:100]
+        if len(webpush.b64u_dec(p256dh)) != 65 or len(webpush.b64u_dec(auth)) != 16:
+            raise ValueError
+    except (ValueError, KeyError, TypeError):
+        raise ValidationFailed({"endpoint": "error.invalid_value"})
+    if not webpush.endpoint_allowed(endpoint):
+        raise ValidationFailed({"endpoint": "error.invalid_value"})
+    sub = db.execute(select(PushSubscription).where(PushSubscription.endpoint == endpoint)).scalar_one_or_none()
+    if sub is None:
+        mine = list(db.execute(select(PushSubscription).where(PushSubscription.user_id == me.user.id)
+                               .order_by(PushSubscription.created_at)).scalars())
+        for old in mine[: max(0, len(mine) - MAX_PUSH_SUBSCRIPTIONS + 1)]:
+            db.delete(old)
+        sub = PushSubscription(user_id=me.user.id, endpoint=endpoint, p256dh=p256dh, auth=auth)
+        db.add(sub)
+    else:  # the same browser re-subscribed (possibly after another user signed in on it)
+        sub.user_id, sub.p256dh, sub.auth = me.user.id, p256dh, auth
+    sub.user_agent = request.headers.get("user-agent", "")[:300]
+    audit(db, "push.subscribed", object_type="user", object_id=me.user.id)
+    db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.post("/account/push/unsubscribe")
+async def push_unsubscribe(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    from fastapi.responses import JSONResponse
+
+    from app.modules.notifications.models import PushSubscription
+
+    try:
+        endpoint = str((await request.json()).get("endpoint", ""))
+    except ValueError:
+        endpoint = ""
+    q = select(PushSubscription).where(PushSubscription.user_id == me.user.id)
+    if endpoint:
+        q = q.where(PushSubscription.endpoint == endpoint)
+    for sub in db.execute(q).scalars():
+        db.delete(sub)
+    audit(db, "push.unsubscribed", object_type="user", object_id=me.user.id)
+    db.commit()
+    return JSONResponse({"ok": True})
 
 
 @router.post("/account/notifications/telegram")
@@ -436,9 +514,28 @@ def company(request: Request, db: Session = Depends(get_db), me: Principal = Dep
     banks = list(db.execute(select(BankAccount).where(BankAccount.company_id == me.company.id)
                             .order_by(BankAccount.created_at.desc())).scalars())
     roles = roles_in_scope("client" if me.company.kind == "client" else "carrier")
+    from app.modules.deals.models import TelematicsConnection
+
+    telem = db.execute(select(TelematicsConnection).where(TelematicsConnection.company_id == me.company.id)
+                       ).scalar_one_or_none() if me.company.kind == "carrier" else None
     return render(request, "company/company.html", {"members": members, "invites": invites, "banks": banks,
-                                                     "roles": roles, "now": utcnow(),
+                                                     "roles": roles, "now": utcnow(), "telematics": telem,
                                                      "new_invite": request.query_params.get("invite")})
+
+
+@router.post("/company/telematics")
+async def company_telematics(request: Request, db: Session = Depends(get_db),
+                             me: Principal = Depends(require("company.manage"))):
+    """FR-TRK-05: the carrier's GPS system polled by the platform."""
+    from app.modules.deals import telematics
+
+    if me.company.kind != "carrier":
+        raise NotFound()
+    form = await request.form()
+    telematics.save_connection(db, me.company, str(form.get("url", "")), str(form.get("token", "")),
+                               active=bool(form.get("active")))
+    db.commit()
+    return redirect("/company#telematics", flash=("success", "msg.saved"))
 
 
 @router.post("/company")
@@ -451,7 +548,7 @@ async def company_save(request: Request, db: Session = Depends(get_db), me: Prin
     c.vat_payer = bool(form.get("vat_payer"))
     if me.company.kind == "carrier":
         c.show_finance_to_drivers = bool(form.get("show_finance_to_drivers"))
-    if form.get("locale") in ("ru", "kk"):
+    if form.get("locale") in LOCALES:
         c.locale = str(form["locale"])
     audit(db, "company.updated", object_type="company", object_id=c.id)
     db.commit()

@@ -41,7 +41,7 @@ router = APIRouter(prefix="/api/v1", tags=["v1"], dependencies=[Depends(csrf_pro
 html = APIRouter(dependencies=[Depends(csrf_protect)])
 
 MAX_PAGE = 100
-SCOPES = ("orders:read", "orders:write", "market:read", "bids:write", "dictionaries:read")
+SCOPES = ("orders:read", "orders:write", "market:read", "bids:write", "dictionaries:read", "telematics:write")
 
 
 class ApiCaller(BaseModel):
@@ -74,6 +74,8 @@ def api_caller(request: Request, db: Session = Depends(get_db), x_api_key: str |
         if company is None or company.is_blocked:
             raise Forbidden()
         get_ctx().company_id = company.id
+        get_ctx().role = "owner" if company.kind == "client" else "fleet_owner"  # never a staff role of a cookie
+        get_ctx().extra.pop("rls_bypass", None)
         from app.core import rls
 
         rls.apply(db)  # NFR-DB-07
@@ -83,6 +85,10 @@ def api_caller(request: Request, db: Session = Depends(get_db), x_api_key: str |
     ratelimit.hit("api", f"ip:{ip}")
     if principal is None or principal.company is None or not principal.session.mfa_passed:
         raise AppError("unauthorized", status_code=401)
+    if principal.session.impersonator_id:
+        raise Forbidden("impersonation_forbidden")  # FR-ADM-05: support sessions work only in the journaled UI
+    if principal.company.is_blocked:
+        raise Forbidden("company_blocked")
     return ApiCaller(company=principal.company, user_id=principal.user.id, scopes=SCOPES, role=principal.role)
 
 
@@ -333,6 +339,42 @@ def create_bid(oid: str, body: BidIn, db: Session = Depends(get_db), caller: Api
     db.commit()
     return BidOut(id=str(bid.id), status=bid.status, price_minor=bid.price_minor, currency=bid.currency,
                   created_at=bid.created_at)
+
+
+# ------------------------------------------------------------------ telematics (FR-TRK-05)
+
+
+class PositionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    plate: str = Field(min_length=2, max_length=20)
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+    at: datetime
+    speed: int = Field(default=0, ge=0, le=300)
+
+
+class PositionsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    positions: list[PositionIn] = Field(min_length=1, max_length=500)
+
+
+class PositionsOut(BaseModel):
+    accepted: int
+    ignored: int
+
+
+@router.post("/telematics/positions", response_model=PositionsOut)
+def telematics_positions(body: PositionsIn, db: Session = Depends(get_db), caller: ApiCaller = Depends(api_caller)):
+    """GPS positions of the carrier's vehicles. Kept only for a vehicle on a deal that is loading or on the way
+    with the geodata consent; anything else is counted as ignored and not stored (FR-TRK-03)."""
+    from app.modules.deals import telematics
+
+    need(caller, "telematics:write", "fleet.manage")
+    ratelimit.hit("api", f"telematics:{caller.company.id}")
+    res = telematics.ingest(db, caller.company.id, [p.model_dump(mode="json") for p in body.positions],
+                            store=not caller.sandbox)
+    db.commit()
+    return PositionsOut(**res)
 
 
 # ------------------------------------------------------------------ sandbox controls (FR-API-05)

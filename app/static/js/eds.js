@@ -124,6 +124,53 @@
     });
   });
 
+  /* ---- FR-AUTH-09: eGov mobile — QR for the app, the browser waits for the result ------------------------ */
+  var egov = document.querySelector("[data-egov]");
+  if (egov) {
+    var estatus = egov.querySelector("[data-egov-status]"), started = null, timer = null;
+    var esay = function (t) { if (estatus) estatus.textContent = t; };
+    var check = function () {
+      fetch(started.status, { credentials: "same-origin", headers: { "Accept": "application/json" } })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j.status === "signed") { clearInterval(timer); window.location.href = j.redirect || "/dashboard"; }
+          else if (j.status === "failed") { clearInterval(timer); esay(egov.getAttribute("data-fail") + " " + (j.message || "")); }
+        }).catch(function () { clearInterval(timer); esay(egov.getAttribute("data-expired")); });
+    };
+    egov.querySelector("[data-egov-start]").addEventListener("click", function () {
+      post("/login/egov/start", "").then(function (r) { if (!r.ok) throw new Error("start"); return r.json(); })
+        .then(function (j) {
+          started = j;
+          egov.querySelector("[data-egov-qr]").src = j.qr;
+          egov.querySelector("[data-egov-panel]").hidden = false;
+          esay(egov.getAttribute("data-wait"));
+          if (timer) clearInterval(timer);
+          timer = setInterval(check, 2000);
+        }).catch(function (e) { esay(egov.getAttribute("data-fail") + " " + (e && e.message || "")); });
+    });
+    var phone = egov.querySelector("[data-egov-devphone]");
+    if (phone) {
+      // development only: this button plays the eGov mobile app with the browser's test key
+      phone.addEventListener("click", function () {
+        if (!started || !started.dev_api) return;
+        var meta;
+        fetch(started.dev_api).then(function (r) { return r.json(); })
+          .then(function (m) { meta = m; return fetch(m.document.uri.replace(/^https?:\/\/[^/]+/, ""),
+                { headers: { "Authorization": "Bearer " + m.document.auth_token } }); })
+          .then(function (r) { return r.json(); })
+          .then(function (doc) {
+            var text = atob(doc.documentsToSign[0].document.file.data);
+            return devKeySign(text, null, "default").then(function (pkg) {
+              doc.documentsToSign[0].document.file.data = btoa(unescape(encodeURIComponent(pkg)));
+              return fetch(meta.document.uri.replace(/^https?:\/\/[^/]+/, ""), { method: "PUT",
+                headers: { "Content-Type": "application/json", "Authorization": "Bearer " + meta.document.auth_token },
+                body: JSON.stringify(doc) });
+            });
+          }).catch(function (e) { esay(egov.getAttribute("data-fail") + " " + (e && e.message || "")); });
+      });
+    }
+  }
+
   document.querySelectorAll("[data-eds-sign]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var status = btn.parentNode.querySelector("[data-eds-status]");

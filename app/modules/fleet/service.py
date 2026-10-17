@@ -11,6 +11,7 @@ from app.core.audit import audit
 from app.core.context import get_ctx
 from app.core.crypto import blind_index
 from app.core.errors import AppError, NotFound, ValidationFailed
+from app.core.timeutil import local_today
 from app.db import utcnow
 from app.modules.accounts.models import BankAccount, Company, Membership, User
 from app.modules.fleet.models import Driver, RegistryCheck, Vehicle, VerificationDocument, VerificationRequest
@@ -129,6 +130,9 @@ def attach_verification_document(db: Session, company: Company, *, subject_type:
                                doc_type=doc_type, file_id=file_id, expires_on=expires_on, created_by=get_ctx().user_id)
     db.add(doc)
     db.flush()
+    from app.modules.documents.recognition import recognize
+
+    recognize(db, doc, company)  # M6: read the document for the moderator, flag a BIN/plate mismatch
     audit(db, "verification.document_uploaded", object_type="verification_document", object_id=doc.id,
           details={"doc_type": doc_type})
     return doc
@@ -219,7 +223,7 @@ def decide_verification(db: Session, req: VerificationRequest, *, approve: bool,
 
 def check_document_expiry(db: Session) -> int:
     """FR-KYC-05: notify 30/14/3 days before expiry and downgrade level on expiry."""
-    today = utcnow().date()
+    today = local_today()
     count = 0
     from app.modules.notifications.service import notify_company_owners
 

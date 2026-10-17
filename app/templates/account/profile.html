@@ -10,7 +10,7 @@
     {{ ui.field("full_name", _("auth.full_name"), me.user.full_name, required=true) }}
     <div class="field"><label>{{ _("auth.phone") }}</label><input type="text" value="{{ me.user.phone }}" disabled><span class="hint">{{ _("account.phone_change_hint") }}</span></div>
     <div class="field"><label>{{ _("auth.email") }}</label><input type="text" value="{{ me.user.email or '' }}" disabled></div>
-    {{ ui.select("locale", _("account.language"), [("ru", "Русский"), ("kk", "Қазақша")], me.user.locale) }}
+    {{ ui.select("locale", _("account.language"), [("ru", "Русский"), ("kk", "Қазақша"), ("en", "English")], me.user.locale) }}
     {{ ui.select("timezone", _("account.timezone"), [("Asia/Almaty", "Алматы / Астана (UTC+5)"), ("Asia/Aqtobe", "Актобе (UTC+5)"), ("Asia/Oral", "Уральск (UTC+5)"), ("Asia/Aqtau", "Актау (UTC+5)"), ("Asia/Atyrau", "Атырау (UTC+5)"), ("Asia/Qostanay", "Костанай (UTC+5)"), ("Asia/Qyzylorda", "Кызылорда (UTC+5)")], me.user.timezone) }}
   </div>
   <div class="actions"><button class="btn primary">{{ _("action.save") }}</button></div>

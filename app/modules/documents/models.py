@@ -119,6 +119,7 @@ class TransportDocRegistration(Model):
     status: Mapped[str] = mapped_column(String(12), default="pending", index=True)  # pending/registered/error/paper
     external_number: Mapped[str] = mapped_column(String(60), default="")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(AwareDateTime)  # retry with a growing pause
     last_error: Mapped[str] = mapped_column(String(300), default="")
     registered_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
     data: Mapped[str] = mapped_column(Text, default="{}")  # the data set sent (GOV-TR-02), kept for audit

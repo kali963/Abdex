@@ -40,8 +40,12 @@ class Match:
 
 
 def weights(db: Session) -> dict[str, float]:
-    from app.modules.platform.service import get_setting
+    from app.modules.platform.service import flag_enabled, get_setting
 
+    if flag_enabled(db, "matching.ai"):  # FR-BID-09: weights learned from the clients' past choices
+        learned = get_setting(db, "matching.learned", None) or {}
+        if isinstance(learned, dict) and learned.get("weights") and learned.get("samples", 0) >= MIN_SAMPLES:
+            return {k: max(0.0, float(learned["weights"].get(k, 0) or 0)) for k in DEFAULT_WEIGHTS}
     value = get_setting(db, "matching.weights", None)
     merged = {**DEFAULT_WEIGHTS, **(value if isinstance(value, dict) else {})}
     return {k: max(0.0, float(merged.get(k, 0) or 0)) for k in DEFAULT_WEIGHTS}
@@ -77,7 +81,6 @@ def _route_counts(db: Session, carrier_ids: list, origin: str, destination: str)
 
 def rank(db: Session, order: Order, *, limit: int = 10) -> list[Match]:
     from app.modules.platform.service import has_restriction
-    from app.modules.rating.service import compute
 
     w = weights(db)
     total_w = sum(w.values()) or 1.0
@@ -92,6 +95,19 @@ def rank(db: Session, order: Order, *, limit: int = 10) -> list[Match]:
                 and not has_restriction(db, c.id, ("block", "no_bids"))]
     if not carriers:
         return []
+    result = []
+    for c, parts, r in features(db, order, carriers):
+        score = round(100 * sum(w[k] * parts[k] for k in w) / total_w)
+        result.append(Match(company=c, score=score, parts={k: round(v * 100) for k, v in parts.items()},
+                            rating=r))
+    result.sort(key=lambda m: (-m.score, m.company.name))
+    return result[:limit]
+
+
+def features(db: Session, order: Order, carriers: list) -> list[tuple]:
+    """The six partial scores (0…1) of each carrier for the order: [(company, parts, rating)]."""
+    from app.modules.rating.service import compute
+
     ids = [c.id for c in carriers]
     vehicles: dict = {}
     for v in db.execute(select(Vehicle).where(Vehicle.company_id.in_(ids), Vehicle.is_deleted.is_(False),
@@ -107,8 +123,7 @@ def rank(db: Session, order: Order, *, limit: int = 10) -> list[Match]:
         .group_by(Deal.carrier_company_id)).all())
     geo, route = _route_counts(db, ids, _city(order.origin), _city(order.destination))
     need = max(order.weight_kg or 0, order.min_capacity_kg or 0)
-
-    result = []
+    out = []
     for c in carriers:
         fleet = vehicles.get(c.id, [])
         same_body = [v for v in fleet if v.body_type == order.body_type]
@@ -127,11 +142,68 @@ def rank(db: Session, order: Order, *, limit: int = 10) -> list[Match]:
             "level": min(1.0, c.verification_level / 3),
             "load": max(0.0, 1 - active.get(c.id, 0) / len(fleet)) if fleet else 0.0,
         }
-        score = round(100 * sum(w[k] * parts[k] for k in w) / total_w)
-        result.append(Match(company=c, score=score, parts={k: round(v * 100) for k, v in parts.items()},
-                            rating=r["value"]))
-    result.sort(key=lambda m: (-m.score, m.company.name))
-    return result[:limit]
+        out.append((c, parts, r["value"]))
+    return out
+
+
+# ------------------------------------------------------------------ FR-BID-09: learned weights ("AI matching")
+
+MIN_SAMPLES = 30
+
+
+def learn(db: Session, *, days: int = 365, max_orders: int = 400) -> dict:
+    """Fit a logistic regression on past choices: for every order that became a deal, each carrier who bid is
+    a sample (features = the six partial scores, label = was this bid accepted). The positive coefficients,
+    scaled to 100, become the matching weights. Plain Python, no external ML service; the model is a handful of
+    numbers stored in the setting ``matching.learned`` and switched on by the ``matching.ai`` flag."""
+    import math
+    from datetime import timedelta
+
+    from app.core import rls
+    from app.db import utcnow
+    from app.modules.bids.models import Bid
+    from app.modules.platform.service import set_setting
+
+    keys = list(DEFAULT_WEIGHTS)
+    xs, ys = [], []
+    with rls.system(db):
+        deals = db.execute(select(Deal).where(Deal.created_at >= utcnow() - timedelta(days=days))
+                           .order_by(Deal.created_at.desc()).limit(max_orders)).scalars().all()
+        for deal in deals:
+            order = db.get(Order, deal.order_id)
+            bids = db.execute(select(Bid).where(Bid.order_id == order.id)).scalars().all()
+            carriers = [db.get(Company, b.carrier_company_id) for b in bids]
+            carriers = [c for c in carriers if c is not None]
+            if len(carriers) < 2:
+                continue  # a single bidder says nothing about preferences
+            for c, parts, _ in features(db, order, carriers):
+                xs.append([parts[k] for k in keys])
+                ys.append(1.0 if c.id == deal.carrier_company_id else 0.0)
+    n = len(ys)
+    result = {"samples": n, "weights": None, "at": utcnow().isoformat(timespec="seconds")}
+    if n >= MIN_SAMPLES and 0 < sum(ys) < n:
+        w = [0.0] * len(keys)
+        b = 0.0
+        lr, l2 = 0.5, 0.01
+        for _ in range(400):
+            gw, gb = [0.0] * len(keys), 0.0
+            for x, y in zip(xs, ys, strict=True):
+                z = b + sum(wi * xi for wi, xi in zip(w, x, strict=True))
+                p = 1 / (1 + math.exp(-max(-30.0, min(30.0, z))))
+                err = p - y
+                gb += err
+                for i, xi in enumerate(x):
+                    gw[i] += err * xi
+            b -= lr * gb / n
+            w = [wi - lr * (g / n + l2 * wi) for wi, g in zip(w, gw, strict=True)]
+        positive = {k: max(0.0, wi) for k, wi in zip(keys, w, strict=True)}
+        total = sum(positive.values())
+        if total > 0:
+            result["weights"] = {k: round(100 * v / total, 1) for k, v in positive.items()}
+            result["coefficients"] = {k: round(wi, 3) for k, wi in zip(keys, w, strict=True)}
+    set_setting(db, "matching.learned", result)
+    db.commit()
+    return result
 
 
 def invited_ids(db: Session, order_id) -> set:

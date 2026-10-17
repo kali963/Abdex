@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.audit import audit
 from app.core.errors import ValidationFailed
-from app.db import utcnow
+from app.core.timeutil import local_today
 from app.modules.integrations.base import Adapter, IntegrationUnavailable
 from app.modules.platform.models import CurrencyRate
 
@@ -95,7 +95,7 @@ def _store(db: Session, on: date, code: str, rate: str, src: str) -> CurrencyRat
 
 def load(db: Session, on: date | None = None) -> int:
     """Worker job / on demand: official rates for the date."""
-    on = on or utcnow().date()
+    on = on or local_today()
     src = source()
     if src is None:
         return 0
@@ -146,7 +146,7 @@ def rate_on(db: Session, code: str, on: date, *, fetch: bool = True) -> Decimal 
 
 def fix_for_deal(db: Session, deal) -> None:
     """Called when the deal is created: the rate on the deal date is stored in the deal."""
-    on = utcnow().date()
+    on = local_today()
     rate = rate_on(db, deal.currency, on)
     deal.fx_rate, deal.fx_date = (str(rate) if rate is not None else ""), on
 
@@ -164,6 +164,6 @@ def deal_kzt(deal) -> int | None:
 
 
 def latest(db: Session, limit_days: int = 14) -> list[CurrencyRate]:
-    since = utcnow().date() - timedelta(days=limit_days)
+    since = local_today() - timedelta(days=limit_days)
     return list(db.execute(select(CurrencyRate).where(CurrencyRate.on_date >= since)
                            .order_by(CurrencyRate.on_date.desc(), CurrencyRate.code)).scalars())

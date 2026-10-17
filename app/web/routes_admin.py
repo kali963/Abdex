@@ -13,10 +13,11 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core import ratelimit
 from app.core.audit import audit
-from app.core.errors import NotFound, ValidationFailed
+from app.core.errors import Forbidden, NotFound, ValidationFailed
 from app.core.money import to_minor
-from app.db import get_db, utcnow
+from app.db import get_analytics_db, get_db, utcnow
 from app.modules.accounts.models import AuditLog, Company, Membership, User
+from app.modules.accounts.permissions import staff_can
 from app.modules.analytics import service as analytics
 from app.modules.billing import service as billing
 from app.modules.billing.models import Accrual, Invoice, Tariff
@@ -387,6 +388,10 @@ async def user_action(uid: str, request: Request, db: Session = Depends(get_db),
     reason = str(form.get("reason", "")).strip()
     if not reason:
         raise ValidationFailed({"reason": "error.reason_required"})
+    if u.id == me.user.id:
+        raise Forbidden()  # no blocking or anonymizing oneself
+    if u.staff_role and not staff_can(me.user.staff_role, "admin.settings"):
+        raise Forbidden()  # platform staff accounts are managed by an administrator only
     from app.modules.accounts import service as accounts_service
     from app.modules.accounts.service import revoke_all_sessions
 
@@ -455,8 +460,12 @@ def finance(request: Request, db: Session = Depends(get_db), me: Principal = Dep
                    .scalars())
     names = {c.id: c.name for c in db.execute(select(Company)).scalars()}
     clients = [c for c in db.execute(select(Company).where(Company.kind == "client").order_by(Company.name)).scalars()]
+    from app.modules.billing import esf
+    from app.modules.platform.service import flag_enabled
+
     return render(request, "admin/finance.html", {"invoices": invoices, "accruals": accruals, "tariffs": tariffs,
                                                   "names": names, "clients": clients,
+                                                  "esf_on": flag_enabled(db, "gov.esf"), "esf_items": esf.recent(db),
                                                   "income_map": dictionary_map(db, "income_types")})
 
 
@@ -569,7 +578,7 @@ def pvd_export(fmt: str, date_from: str = "", date_to: str = "", db: Session = D
 
 
 @router.get("/kpi")
-def kpi(request: Request, date_from: str = "", date_to: str = "", db: Session = Depends(get_db),
+def kpi(request: Request, date_from: str = "", date_to: str = "", db: Session = Depends(get_analytics_db),
         me: Principal = Depends(require("admin.kpi"))):
     df = _d(date_from, None) if date_from else None
     dt = _d(date_to, None) if date_to else None

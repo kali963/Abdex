@@ -5,6 +5,21 @@
 <div class="page-head"><h1>{{ _("admin.finance") }}</h1>
   <form method="get" class="row" action="/admin/finance/export.xlsx"><label for="ad1">{{ _("common.from") }}</label><input id="ad1" type="date" name="date_from" required><label for="ad2">{{ _("common.to") }}</label><input id="ad2" type="date" name="date_to" required>
     <button class="btn small">{{ _("acc.export") }}</button><button class="btn small" formaction="/admin/finance/esf.zip">{{ _("acc.esf") }}</button></form></div>
+<section class="card" id="esf">
+  <h2>{{ _("esf.title") }}</h2>
+  <p class="muted">{{ _("esf.text") }}</p>
+  {% if esf_on %}
+  <form method="post" class="row" action="/admin/finance/esf/send">{{ ui.csrf() }}<label for="ed1">{{ _("common.from") }}</label><input id="ed1" type="date" name="date_from" required><label for="ed2">{{ _("common.to") }}</label><input id="ed2" type="date" name="date_to" required><button class="btn small primary">{{ _("esf.send") }}</button></form>
+  {% else %}<p><span class="badge">{{ _("esf.off") }}</span></p>{% endif %}
+  {% if esf_items %}
+  <div class="table-wrap"><table><thead><tr><th>{{ _("fin.invoice") }}</th><th>{{ _("esf.kind") }}</th><th>{{ _("common.status") }}</th><th>{{ _("esf.number") }}</th><th></th></tr></thead><tbody>
+  {% for s, inv in esf_items %}<tr><td>{{ inv.number }}</td><td>{{ _("esf.kind_" ~ s.kind) }}</td>
+    <td><span class="badge {{ {'accepted': 'ok', 'error': 'err', 'pending': 'warn'}.get(s.status, '') }}">{{ _("esf.st." ~ s.status) }}</span>{% if s.last_error %}<br><small class="muted">{{ s.last_error }}</small>{% endif %}</td>
+    <td>{{ s.registration_number or "—" }}</td>
+    <td>{% if s.status == "error" %}<form method="post" action="/admin/finance/esf/{{ s.id }}/retry">{{ ui.csrf() }}<button class="btn small">{{ _("esf.retry") }}</button></form>{% endif %}</td></tr>
+  {% endfor %}</tbody></table></div>
+  {% endif %}
+</section>
 <div class="grid two">
 <section class="card"><h2>{{ _("fin.tariffs") }}</h2>
 <div class="table-wrap"><table><thead><tr><th>{{ _("fin.tariff") }}</th><th>{{ _("fin.model") }}</th><th>{{ _("fin.params") }}</th><th>{{ _("fin.period") }}</th></tr></thead>

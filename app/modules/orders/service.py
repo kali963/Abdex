@@ -407,11 +407,24 @@ def expire_bidding(db: Session) -> int:
         order = flow.lock_order(db, order.id)
         if order.status == flow.BIDDING:
             flow.transition(db, order, flow.CANCELLED, actor=flow.SYSTEM, reason="bidding deadline expired")
+            from app.modules.bids.models import Bid
+
+            for bid in db.execute(select(Bid).where(Bid.order_id == order.id, Bid.status.in_(
+                    ("active", "countered", "needs_confirmation")))).scalars():
+                bid.status = "rejected"  # as on a manual cancel: no bid stays "active" on a closed order
             count += 1
         elif order.status == flow.PUBLISHED:
-            # no bids at all: extend once and escalate to a manager (FR-NTF-07)
+            # no bids at all: extend once and escalate to a manager (FR-NTF-07); after that the order waits
+            # for the client or the manager without a deadline instead of being extended forever
+            from app.core.audit import audit
+            from app.modules.accounts.models import AuditLog
             from app.modules.notifications.service import notify_event
 
+            if db.execute(select(AuditLog.id).where(AuditLog.action == "order.deadline_extended",
+                                                    AuditLog.object_id == str(order.id))).first():
+                order.bidding_deadline = None
+                continue
+            audit(db, "order.deadline_extended", object_type="order", object_id=order.id, role="system")
             order.bidding_deadline = now + timedelta(hours=int(get_setting(db, "orders.default_bidding_hours", 24)))
             notify_event(db, "order.status", params={"number": order.number, "status": "no_bids"},
                          link=f"/orders/{order.id}", client_company_id=order.client_company_id,

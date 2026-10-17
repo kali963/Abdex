@@ -117,34 +117,121 @@
   if (!navigator.onLine) document.body.classList.add("offline");
   flush();
 
-  // ---- deal chat: polling (FR-CHAT-06 degradation path) -------------------------------
+  // ---- deal chat (FR-CHAT-06): WebSocket, falling back to polling; sent ✓ / read ✓✓ ----------
   var chat = document.querySelector("[data-chat]");
   if (chat) {
     var url = chat.getAttribute("data-chat");
     var last = chat.getAttribute("data-last") || "";
+    var timer = null, socket = null;
+    var render = function (m) {
+      if (document.getElementById("m-" + m.id)) return;
+      var div = document.createElement("div");
+      div.id = "m-" + m.id;
+      div.className = "msg " + (m.kind === "system" ? "system" : (m.mine ? "mine" : ""));
+      div.appendChild(document.createTextNode(m.text));
+      if (m.file && /^\/files\//.test(m.file)) {
+        var a = document.createElement("a");
+        a.href = m.file; a.target = "_blank"; a.rel = "noopener";
+        a.textContent = "📎 " + (chat.getAttribute("data-attachment") || "");
+        div.appendChild(document.createElement("br")); div.appendChild(a);
+      }
+      var meta = document.createElement("span");
+      meta.className = "meta";
+      meta.textContent = (m.author ? m.author + " · " : "") + new Date(m.at).toLocaleString();
+      if (m.mine) {
+        var tick = document.createElement("span");
+        tick.className = "tick"; tick.textContent = "✓"; tick.title = chat.getAttribute("data-sent") || "";
+        meta.appendChild(document.createTextNode(" · ")); meta.appendChild(tick);
+      }
+      div.appendChild(meta);
+      chat.appendChild(div);
+      last = m.id;
+    };
+    var apply = function (data) {
+      (data.messages || []).forEach(render);
+      (data.read || []).forEach(function (id) {
+        var t = document.querySelector("#m-" + id + " .tick");
+        if (t && !t.classList.contains("read")) {
+          t.classList.add("read"); t.textContent = "✓✓"; t.title = chat.getAttribute("data-read") || "";
+        }
+      });
+      if (data.messages && data.messages.length) chat.scrollTop = chat.scrollHeight;
+    };
     var poll = function () {
       fetch(url + (last ? "?after=" + encodeURIComponent(last) : ""), { credentials: "same-origin",
         headers: { "Accept": "application/json" } })
         .then(function (r) { return r.ok ? r.json() : { messages: [] }; })
-        .then(function (data) {
-          data.messages.forEach(function (m) {
-            if (document.getElementById("m-" + m.id)) return;
-            var div = document.createElement("div");
-            div.id = "m-" + m.id;
-            div.className = "msg " + (m.kind === "system" ? "system" : (m.mine ? "mine" : ""));
-            div.textContent = m.text;
-            var meta = document.createElement("span");
-            meta.className = "meta";
-            meta.textContent = (m.author ? m.author + " · " : "") + new Date(m.at).toLocaleString();
-            div.appendChild(meta);
-            chat.appendChild(div);
-            last = m.id;
-          });
-          if (data.messages.length) chat.scrollTop = chat.scrollHeight;
-        }).catch(function () { /* offline */ });
+        .then(apply).catch(function () { /* offline */ });
+    };
+    var startPolling = function () { if (!timer) timer = setInterval(poll, 5000); };
+    var connect = function () {
+      if (!window.WebSocket) { startPolling(); return; }
+      var proto = location.protocol === "https:" ? "wss://" : "ws://";
+      try {
+        socket = new WebSocket(proto + location.host + chat.getAttribute("data-chat-ws") +
+                               (last ? "?after=" + encodeURIComponent(last) : ""));
+      } catch (e) { startPolling(); return; }
+      socket.onopen = function () { if (timer) { clearInterval(timer); timer = null; } };
+      socket.onmessage = function (ev) { try { apply(JSON.parse(ev.data)); } catch (e) { /* ignore */ } };
+      socket.onclose = function () { socket = null; startPolling(); setTimeout(connect, 30000); };
     };
     chat.scrollTop = chat.scrollHeight;
-    setInterval(poll, 5000);
+    connect();
+    var form = document.querySelector("[data-chat-form]");
+    if (form) {
+      form.addEventListener("submit", function (e) {
+        var file = form.querySelector("input[type=file]");
+        if (file && file.files && file.files.length) return;  // attachments go the classic way
+        var body = form.querySelector("textarea");
+        if (!body || !body.value.trim()) { e.preventDefault(); return; }
+        e.preventDefault();
+        var fd = new FormData(form);
+        fetch(form.action, { method: "POST", body: fd, credentials: "same-origin",
+                             headers: { "Accept": "application/json" } })
+          .then(function (r) { if (!r.ok) throw new Error("send"); body.value = ""; if (!socket) poll(); })
+          .catch(function () { form.submit(); });
+      });
+    }
+  }
+
+  // ---- Web Push subscription (FR-MOB-02) ----------------------------------------------
+  var pushBox = document.getElementById("push");
+  if (pushBox) {
+    var status = pushBox.querySelector("[data-push-status]");
+    var say = function (t) { if (status) status.textContent = t; };
+    var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
+    var keyBytes = function (b64) {
+      var pad = "=".repeat((4 - b64.length % 4) % 4), raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+      var out = new Uint8Array(raw.length);
+      for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+      return out;
+    };
+    var send = function (url, body) {
+      return fetch(url, { method: "POST", credentials: "same-origin", body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": csrfToken } });
+    };
+    var supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    pushBox.querySelector("[data-push-enable]").addEventListener("click", function () {
+      if (!supported) { say(pushBox.getAttribute("data-push-unsupported")); return; }
+      Notification.requestPermission().then(function (perm) {
+        if (perm !== "granted") { say(pushBox.getAttribute("data-push-denied")); return null; }
+        return navigator.serviceWorker.ready.then(function (reg) {
+          return reg.pushManager.subscribe({ userVisibleOnly: true,
+            applicationServerKey: keyBytes(pushBox.getAttribute("data-push-key")) });
+        }).then(function (sub) { return send("/account/push/subscribe", sub.toJSON()); })
+          .then(function (r) { if (r && r.ok) { say(pushBox.getAttribute("data-push-on")); } });
+      }).catch(function (e) { say(String(e && e.message || e)); });
+    });
+    pushBox.querySelector("[data-push-disable]").addEventListener("click", function () {
+      if (!supported) { send("/account/push/unsubscribe", {}); return; }
+      navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); })
+        .then(function (sub) {
+          var ep = sub ? sub.endpoint : "";
+          return (sub ? sub.unsubscribe() : Promise.resolve()).then(function () {
+            return send("/account/push/unsubscribe", { endpoint: ep });
+          });
+        }).then(function () { say(pushBox.getAttribute("data-push-off")); });
+    });
   }
 
   // ---- 3D tilt for panels (pointer devices only, respects reduced motion) ----------

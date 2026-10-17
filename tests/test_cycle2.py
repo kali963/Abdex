@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from app.core.context import RequestContext, reset_ctx, set_ctx
 from app.core.errors import AppError, Forbidden, ValidationFailed
+from app.core.timeutil import local_today
 from app.db import SessionLocal, utcnow
 from app.modules.accounts.models import AuditLog, Company, User
 from app.modules.deals.models import Deal
@@ -305,7 +306,7 @@ def test_notification_matrix_per_channel(login, db):
 
 def test_documents_zip_by_period(login):
     s = login("+77010000001")
-    today = utcnow().date()
+    today = local_today()
     r = s.get(f"/documents/export.zip?date_from={(today - timedelta(days=30)).isoformat()}&date_to={today.isoformat()}")
     assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
     z = zipfile.ZipFile(io.BytesIO(r.content))
@@ -340,9 +341,9 @@ def test_promo_codes(login, db):
     client_co = db.execute(select(Company).where(Company.name.contains("Агро"))).scalars().first() or \
         db.execute(select(Company).where(Company.kind == "client")).scalars().first()
     tok = _ctx()
-    amount, calc = apply_promo(db, client_co.id, utcnow().date(), 3_500_000, {"result_minor": 3_500_000})
+    amount, calc = apply_promo(db, client_co.id, local_today(), 3_500_000, {"result_minor": 3_500_000})
     assert amount == 1_750_000 and calc["discount_minor"] == 1_750_000 and calc["promo"] == "START-50"
-    amount2, _ = apply_promo(db, client_co.id, utcnow().date(), 3_500_000, {})
+    amount2, _ = apply_promo(db, client_co.id, local_today(), 3_500_000, {})
     assert amount2 == 3_500_000  # one discounted deal per company
     db.rollback()
     reset_ctx(tok)
@@ -462,4 +463,8 @@ def test_app_error_codes_have_texts():
     assert not [k for k in ru if k not in kk]
     ph = re.compile(r"\{(\w+)\}")
     assert not [k for k in ru if set(ph.findall(ru[k])) != set(ph.findall(kk[k]))]
+    # FR-LOC-02: and in English
+    en = json.loads(Path("app/i18n/en.json").read_text())
+    assert not [k for k in ru if k not in en]
+    assert not [k for k in ru if set(ph.findall(ru[k])) != set(ph.findall(en[k]))]
     assert AppError  # imported for the error classes above

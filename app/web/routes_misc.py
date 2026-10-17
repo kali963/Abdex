@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core import ratelimit
 from app.core.audit import audit
 from app.core.errors import Forbidden, NotFound, ValidationFailed
-from app.db import get_db, utcnow
+from app.db import get_analytics_db, get_db, utcnow
 from app.modules.analytics import service as analytics
 from app.modules.billing import service as billing
 from app.modules.calc import service as calc
@@ -40,7 +40,8 @@ def finance(request: Request, db: Session = Depends(get_db), me: Principal = Dep
 
 
 @router.get("/analytics")
-def analytics_page(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("analytics.view"))):
+def analytics_page(request: Request, db: Session = Depends(get_analytics_db),
+                   me: Principal = Depends(require("analytics.view"))):
     if me.company.kind == "client":
         data = analytics.client_analytics(db, me.company.id)
     else:

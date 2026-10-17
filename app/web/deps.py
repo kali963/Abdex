@@ -69,6 +69,9 @@ def get_principal_optional(request: Request, db: Session = Depends(get_db)) -> P
         return request.state.principal
     sess = load_session(db, request.cookies.get(SESSION_COOKIE))
     principal = None
+    if sess is not None and not sess.mfa_passed and request.url.path not in MFA_PENDING_PATHS:
+        request.state.mfa_pending = True  # password step only: not signed in anywhere but the 2FA page
+        sess = None
     if sess is not None:
         user = db.get(User, sess.user_id)
         if user is not None and not user.is_blocked and not user.is_deleted:
@@ -92,8 +95,13 @@ def get_principal_optional(request: Request, db: Session = Depends(get_db)) -> P
     return principal
 
 
+MFA_PENDING_PATHS = ("/login/2fa", "/logout")
+
+
 def get_principal(request: Request, principal: Principal | None = Depends(get_principal_optional)) -> Principal:
     if principal is None:
+        if getattr(request.state, "mfa_pending", False):
+            raise MfaRequired()
         raise LoginRequired()
     if not principal.session.mfa_passed and request.url.path not in ("/login/2fa", "/logout"):
         raise MfaRequired()
@@ -151,9 +159,6 @@ async def csrf_protect(request: Request) -> None:
     from app.db import SessionLocal
 
     expected: list[str] = []
-    pre = request.cookies.get("abdex_pre_csrf", "")
-    if pre:
-        expected.append(pre)  # double-submit token for anonymous forms (login, registration)
     raw = request.cookies.get(SESSION_COOKIE)
     if raw:
         db = SessionLocal()
@@ -163,6 +168,12 @@ async def csrf_protect(request: Request) -> None:
                 expected.append(sess.csrf_token)
         finally:
             db.close()
+    if not expected:
+        # the double-submit token is for anonymous forms only (login, registration): with a live session a planted
+        # cookie must not be able to stand in for the session's own token
+        pre = request.cookies.get("abdex_pre_csrf", "")
+        if pre:
+            expected.append(pre)
     sent = request.headers.get("x-csrf-token", "")
     if not sent:
         ctype = request.headers.get("content-type", "")
@@ -266,6 +277,17 @@ def _role_label(code: str | None) -> str:
 
 def _status_label(status: str) -> str:
     return translate(f"status.{status}")
+
+
+def _from_json(text) -> dict:
+    try:
+        value = json.loads(text or "{}")
+    except (ValueError, TypeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+templates.env.filters["fromjson"] = _from_json
 
 
 def _sysmsg(body: str) -> str:

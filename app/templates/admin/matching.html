@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("ai.title") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("ai.title") }}</h1>
+  <form method="post" action="/admin/matching/learn">{{ ui.csrf() }}<button class="btn small">{{ _("ai.learn") }}</button></form></div>
+<p class="muted">{{ _("ai.text", n=min_samples) }}</p>
+<p><span class="badge {{ 'ok' if ai_on else '' }}">{{ _("ai.on") if ai_on else _("ai.off") }}</span>
+{% if learned.at %} <small class="muted">{{ _("ai.trained", at=learned.at, n=learned.samples) }}</small>{% endif %}</p>
+<div class="table-wrap"><table><thead><tr><th>{{ _("ai.factor") }}</th><th class="num">{{ _("ai.default") }}</th><th class="num">{{ _("ai.learned") }}</th><th class="num">{{ _("ai.active") }}</th></tr></thead>
+<tbody>{% for k, v in defaults.items() %}<tr><td>{{ _("match.part." ~ k) }}</td><td class="num">{{ manual.get(k, v) }}</td>
+<td class="num">{{ learned.weights[k] if learned.weights else "—" }}</td><td class="num"><b>{{ active[k]|round(1) }}</b></td></tr>{% endfor %}</tbody></table></div>
+{% if learned.samples is defined and not learned.weights %}<p class="muted">{{ _("ai.not_enough", n=learned.samples, min=min_samples) }}</p>{% endif %}
+{% endblock %}

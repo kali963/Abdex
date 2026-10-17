@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 from app.core.context import get_ctx
 
-LOCALES = ("ru", "kk")
+LOCALES = ("ru", "kk", "en")  # FR-LOC-02: English for international directions and the partner API
 I18N_DIR = Path(__file__).resolve().parent.parent / "i18n"
 
 
