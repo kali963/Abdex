@@ -153,6 +153,26 @@ def deal_view(did: str, request: Request, db: Session = Depends(get_db),
     return deal_card(did, request, db, me)
 
 
+@router.get("/deals/{did}/transport-docs/{rid}.xml")
+def deal_transport_xml(did: str, rid: str, request: Request, db: Session = Depends(get_db),
+                       me: Principal = Depends(require("admin.deal_content"))):
+    from app.web.routes_deals import transport_xml
+
+    audit(db, "staff.document_downloaded", object_type="deal", object_id=did, details={"transport_doc": rid})
+    db.commit()
+    return transport_xml(did, rid, request, db, me)
+
+
+@router.api_route("/deals/{did}/docs/{doc_id}/signatures", methods=["GET", "POST"])
+async def deal_doc_signatures(did: str, doc_id: str, request: Request, db: Session = Depends(get_db),
+                              me: Principal = Depends(require("admin.deal_content"))):
+    from app.web.routes_deals import doc_signatures
+
+    audit(db, "staff.deal_viewed", object_type="deal", object_id=did, details={"signatures": doc_id})
+    db.commit()
+    return await doc_signatures(did, doc_id, request, db, me)
+
+
 @router.post("/deals/{did}/clear-review")
 async def clear_review(did: str, request: Request, db: Session = Depends(get_db),
                        me: Principal = Depends(require("admin.antifraud"))):

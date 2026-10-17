@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("module.title") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("module.title") }}</h1><a class="btn small" href="/finance">{{ _("nav.finance") }}</a></div>
+<p class="muted">{{ _("module.text") }}</p>
+{% if not on_sale %}<div class="alert info">{{ _("module.not_on_sale") }}</div>{% endif %}
+<div class="grid two">
+{% for m, sub in items %}
+<section class="card panel-3d stack">
+  <div class="page-head"><h2>{{ m.name }}</h2>{% if is_active(sub) %}<span class="badge ok">{{ _("module.active") }}</span>{% elif sub and sub.status == "expired" %}<span class="badge">{{ _("module.expired") }}</span>{% endif %}</div>
+  {% if m.description %}<p>{{ m.description }}</p>{% endif %}
+  <p><b class="big">{{ money(m.price_minor, m.currency) }}</b> <span class="muted">{{ _("module.per_period", days=m.period_days) }}</span></p>
+  {% if is_active(sub) %}
+    <p class="muted">{{ _("module.paid_until", date=fmt_date(sub.period_end)) }}</p>
+    <p>{% if sub.auto_renew %}{{ _("module.renews") }}{% else %}{{ _("module.ends") }}{% endif %}</p>
+    {% if me.can("company.manage") %}
+    <form method="post" action="/modules/subscriptions/{{ sub.id }}/auto-renew">{{ ui.csrf() }}
+      {% if sub.auto_renew %}<input type="hidden" name="on" value="0"><button class="btn danger">{{ _("module.cancel") }}</button>
+      {% else %}<input type="hidden" name="on" value="1"><button class="btn">{{ _("module.resume") }}</button>{% endif %}
+    </form>
+    {% endif %}
+  {% elif m.active and on_sale and me.can("company.manage") %}
+    <form method="post" action="/modules/{{ m.id }}/subscribe">{{ ui.csrf() }}<button class="btn primary">{{ _("module.subscribe") }}</button></form>
+    <small class="muted">{{ _("module.subscribe_note") }}</small>
+  {% endif %}
+</section>
+{% else %}
+<p class="empty">{{ _("common.empty") }}</p>
+{% endfor %}
+</div>
+{% endblock %}

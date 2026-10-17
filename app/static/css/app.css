@@ -499,3 +499,16 @@ form.af-rule .inline-num input { width: 5.5rem; }
 .narrow { max-width: 520px; margin: 2rem auto; }
 .big { font-size: 2rem; font-weight: 800; margin: .6rem 0 1rem; }
 .eds { display: grid; gap: .25rem; margin-top: .35rem; }
+
+/* SEC-FRD-04 link graph */
+.graph-wrap { overflow-x: auto; }
+.link-graph { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+.link-graph .edge line { stroke: var(--muted, #888); stroke-width: 1.5; opacity: .6; }
+.link-graph .edge.strong line { stroke: #d64545; stroke-width: 3; opacity: .85; }
+.link-graph .edge text { font-size: 10px; fill: var(--muted, #888); paint-order: stroke; stroke: var(--bg, #fff); stroke-width: 4px; }
+.link-graph .node circle { fill: #3b82f6; stroke: var(--bg, #fff); stroke-width: 2; }
+.link-graph .node.carrier circle { fill: #f59e0b; }
+.link-graph .node.center circle { stroke: #111; stroke-width: 3; }
+.link-graph .node.blocked circle { fill: #9ca3af; }
+.link-graph .node text { font-size: 11px; fill: var(--text, #222); paint-order: stroke; stroke: var(--bg, #fff); stroke-width: 3px; }
+.legend.client { color: #3b82f6; } .legend.carrier { color: #f59e0b; } .legend.strong { color: #d64545; }

@@ -24,6 +24,7 @@ from app.web.deps import (
     redirect,
     render,
     safe_next,
+    set_flash,
 )
 
 router = APIRouter(dependencies=[Depends(csrf_protect)])
@@ -47,9 +48,17 @@ def set_lang(code: str, request: Request, next: str = "/"):
     return resp
 
 
+def _eds_ctx(db: Session) -> dict:
+    from app.modules.accounts import eds_login
+    from app.modules.documents.eds import is_dev_signer
+
+    return {"eds_login": eds_login.enabled(db), "eds_mode": "dev" if is_dev_signer() else "ncalayer"}
+
+
 @router.get("/login")
-def login_form(request: Request, next: str = "", me: Principal | None = Depends(get_principal_optional)):
-    return render(request, "public/login.html", {"next": safe_next(next, "")})
+def login_form(request: Request, next: str = "", db: Session = Depends(get_db),
+               me: Principal | None = Depends(get_principal_optional)):
+    return render(request, "public/login.html", {"next": safe_next(next, ""), **_eds_ctx(db)})
 
 
 @router.post("/login")
@@ -61,7 +70,11 @@ async def login(request: Request, db: Session = Depends(get_db)):
     except AppError as exc:
         db.commit()  # keep failed-attempt counters and audit entries
         return render(request, "public/login.html", {"error": exc.message_key, "form": {"login": form.get("login")},
-                                                     "next": nxt}, status_code=exc.status_code)
+                                                     "next": nxt, **_eds_ctx(db)}, status_code=exc.status_code)
+    return _signed_in(db, user, nxt)
+
+
+def _signed_in(db: Session, user: User, nxt: str):
     is_admin = bool(user.staff_role)
     raw, sess = accounts.create_session(db, user, mfa_passed=not accounts.requires_second_factor(db, user),
                                         is_admin=is_admin)
@@ -80,6 +93,36 @@ async def login(request: Request, db: Session = Depends(get_db)):
     resp = redirect(target)
     _set_session_cookie(resp, raw)
     return resp
+
+
+@router.post("/login/eds/challenge")
+def eds_challenge(db: Session = Depends(get_db)):
+    """FR-AUTH-09: a one-time text to sign (login or binding the EDS)."""
+    from fastapi.responses import JSONResponse
+
+    from app.modules.accounts import eds_login
+
+    if not eds_login.enabled(db):
+        raise NotFound()
+    challenge = eds_login.new_challenge(db)
+    db.commit()
+    return JSONResponse({"challenge": challenge}, headers={"Cache-Control": "no-store"})
+
+
+@router.post("/login/eds")
+async def login_eds(request: Request, db: Session = Depends(get_db)):
+    from app.modules.accounts import eds_login
+
+    form = await request.form()
+    nxt = safe_next(str(form.get("next", "")), "/dashboard")
+    try:
+        user = eds_login.authenticate(db, str(form.get("package", "")), str(form.get("challenge", "")))
+    except AppError as exc:
+        db.commit()
+        resp = redirect("/login")
+        set_flash(resp, "error", exc.message_key, **exc.params)
+        return resp
+    return _signed_in(db, user, nxt)
 
 
 @router.get("/login/2fa")

@@ -2,7 +2,7 @@
 {% import "components.html" as ui with context %}
 {% block title %}{{ _("nav.finance") }}{% endblock %}
 {% block content %}
-<h1>{{ _("nav.finance") }}</h1>
+<div class="page-head"><h1>{{ _("nav.finance") }}</h1><a class="btn small" href="/modules">🧩 {{ _("module.title") }}</a></div>
 {% if ledger %}
 <div class="grid three">
   <div class="card stat"><b>{{ money(ledger.accrued) }}</b><span>{{ _("fin.accrued") }}</span></div>

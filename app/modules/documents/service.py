@@ -34,11 +34,12 @@ DOC_PREFIX = {
     "work_act": "АВР",
     "fee_invoice": "СЧ",
     "fee_act": "АКТ",
+    "module_invoice": "СЧ",
     "reconciliation_act": "АС",
     "dossier": "ДС",
     "waybill": "ТТН",
 }
-FINANCIAL_DOC_TYPES = ("fee_invoice", "fee_act", "reconciliation_act")
+FINANCIAL_DOC_TYPES = ("fee_invoice", "fee_act", "module_invoice", "reconciliation_act")
 FORBIDDEN_FINANCIAL_PHRASES = ("услуги перевозки", "экспедирован", "доставка груза", "транспортные услуги",
                                "тасымалдау қызмет")
 CLOSING_DOC_TYPES = ("waybill", "cmr", "unload_act")

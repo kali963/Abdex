@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("fc.title") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("fc.title") }}</h1><a class="btn small" href="/calc">{{ _("nav.calc") }}</a></div>
+<p class="muted">{{ _("fc.text") }}</p>
+{% if not available %}
+<div class="card note"><p>{{ _("fc.module_needed") }}</p>{% if me.can("finance.view") %}<a class="btn primary" href="/modules">{{ _("module.title") }}</a>{% endif %}</div>
+{% else %}
+<form class="card stack" method="get" action="/calc/forecast">
+  <div class="form-grid">
+    {{ ui.field("from_city", _("fc.from"), form.from_city, errors=errors or {}, required=true) }}
+    {{ ui.field("to_city", _("fc.to"), form.to_city, errors=errors or {}, required=true) }}
+    {{ ui.field("distance_km", _("calc.distance"), form.distance_km, errors=errors or {}, attrs='inputmode="decimal"', hint=_("fc.distance_hint")) }}
+    <div class="field"><label for="f-fbody">{{ _("order.body_type") }}</label><select id="f-fbody" name="body_type"><option value="">{{ _("fc.any_body") }}</option>{% for i in body_types %}<option value="{{ i.code }}" {{ 'selected' if form.body_type == i.code }}>{{ i.name_ru }}</option>{% endfor %}</select></div>
+  </div>
+  <button class="btn primary">{{ _("fc.run") }}</button>
+</form>
+{% if forecast %}
+<section class="card" id="forecast">
+  <h2>{{ _("fc.result") }}</h2>
+  {% if not forecast.enough %}
+    <p>{{ _("fc.not_enough", n=forecast.count, min=forecast.min_deals) }}</p>
+  {% else %}
+  <div class="grid three">
+    <div class="card stat"><b>{{ money(forecast.median) }}</b><span>{{ _("fc.median") }}</span></div>
+    <div class="card stat"><b>{{ money(forecast.p25) }} — {{ money(forecast.p75) }}</b><span>{{ _("fc.range") }}</span></div>
+    {% if forecast.estimate is defined %}<div class="card stat"><b>{{ money(forecast.estimate) }}</b><span>{{ _("fc.estimate") }}</span></div>{% endif %}
+  </div>
+  <div class="table-wrap"><table>
+    <tr><td>{{ _("fc.count") }}</td><td class="num">{{ forecast.count }}</td></tr>
+    {% if forecast.per_km is defined %}<tr><td>{{ _("fc.per_km") }}</td><td class="num">{{ money(forecast.per_km) }}</td></tr>{% endif %}
+    {% if forecast.trend_pct is defined %}<tr><td>{{ _("fc.trend") }}</td><td class="num">{{ "+" if forecast.trend_pct > 0 }}{{ forecast.trend_pct }} %</td></tr>{% endif %}
+    <tr><td>{{ _("fc.basis") }}</td><td>{{ _("fc.basis_body") if forecast.by_body else _("fc.basis_all") }}, {{ _("fc.window", days=forecast.window_days) }}</td></tr>
+  </table></div>
+  {% endif %}
+  <p class="muted"><small>{{ _("fc.privacy") }}</small></p>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

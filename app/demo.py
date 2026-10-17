@@ -55,7 +55,7 @@ def seed_demo(db) -> None:
     log.info("seeding demo data")
     from app.modules.platform.models import FeatureFlag
 
-    for key in ("qualified_signature", "online_payments"):  # demo: show the integrations with their simulators
+    for key in ("qualified_signature", "online_payments", "auth.eds_login", "digital_modules", "subscriptions"):  # demo: show the integrations with their simulators
         flag = db.execute(select(FeatureFlag).where(FeatureFlag.key == key)).scalar_one_or_none()
         if flag is not None:
             flag.enabled = True
@@ -108,6 +108,9 @@ def seed_demo(db) -> None:
     d3 = Driver(company_id=carrier2.id, full_name="Айдар Сапаров", iin=make_bin("88062030078"), phone="+77030000001",
                 status="approved")
     db.add_all([v3, d3])
+    # SEC-FRD-04 demo: an unverified company with the same phone and truck as the sole trader — seen in the link graph
+    shell = _company(db, "carrier", "ТОО «Транзит Сервис»", make_bin("19114000789"), 0, phone="+77030000001")
+    db.add(Vehicle(company_id=shell.id, plate="123KZ05", body_type="tent", capacity_kg=10000, volume_m3=45))
     db.commit()
 
     from app.modules.billing.models import Tariff

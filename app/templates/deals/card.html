@@ -166,7 +166,7 @@
         {% else %}<form method="post" action="/deals/{{ deal.id }}/docs/{{ doc.id }}/sign-code">{{ ui.csrf() }}<button class="btn small primary">{{ _("sign.start") }}</button></form>{% endif %}
         {% if eds_enabled %}<div class="eds"><button type="button" class="btn small ok" data-eds-sign data-mode="{{ eds_mode }}" data-file="{{ file_url(doc.file_id) }}" data-action="/deals/{{ deal.id }}/docs/{{ doc.id }}/sign-eds" data-cert="/dev/eds/certificate" data-wait="{{ _('eds.wait') }}" data-fail="{{ _('eds.fail') }}">{{ _("eds.sign") }}{% if eds_mode == "dev" %} ({{ _("eds.test") }}){% endif %}</button><small class="muted" data-eds-status role="status"></small></div>{% endif %}
       {% endif %}
-      {% if sigs[doc.id] %}<a class="btn small link" href="/deals/{{ deal.id }}/docs/{{ doc.id }}/signatures">{{ _("eds.details") }}</a>{% endif %}
+      {% if sigs[doc.id] %}<a class="btn small link" href="{{ ('/admin' if side == 'staff' else '') }}/deals/{{ deal.id }}/docs/{{ doc.id }}/signatures">{{ _("eds.details") }}</a>{% endif %}
       {% if not doc.is_generated and side in ("client", "carrier") and me.company and doc.company_id != me.company.id and doc.status == "uploaded" %}
         <form method="post" action="/deals/{{ deal.id }}/docs/{{ doc.id }}/review" class="row">{{ ui.csrf() }}<button class="btn small" name="status" value="checked">{{ _("doc.accept") }}</button><input type="text" name="reason" placeholder="{{ _('doc.reject_reason') }}" aria-label="{{ _('doc.reject_reason') }}"><button class="btn small danger" name="status" value="rejected">{{ _("doc.reject") }}</button></form>{% endif %}
     </td></tr>{% else %}<tr><td colspan="4" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}
@@ -230,4 +230,4 @@
 </aside>
 </div>
 {% endblock %}
-{% block scripts %}{% if eds_enabled %}<script src="/static/js/eds.js?v=1" defer></script>{% endif %}{% endblock %}
+{% block scripts %}{% if eds_enabled %}<script src="/static/js/eds.js?v=2" defer></script>{% endif %}{% endblock %}

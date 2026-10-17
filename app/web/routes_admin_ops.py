@@ -393,3 +393,63 @@ def admin_esf_zip(request: Request, db: Session = Depends(get_db), me: Principal
     db.commit()
     return Response(data, media_type="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="abdex-esf-{d1:%Y%m%d}-{d2:%Y%m%d}.zip"'})
+
+
+# ------------------------------------------------------------------ link graph (SEC-FRD-04)
+
+
+@router.get("/antifraud/graph")
+def af_graph(request: Request, company: str = "", q: str = "", depth: int = 2, db: Session = Depends(get_db),
+             me: Principal = Depends(require("admin.antifraud"))):
+    from app.core.audit import audit
+    from app.modules.platform import linkgraph
+
+    ctx: dict = {"q": q, "depth": max(1, min(depth, 3)), "kinds": linkgraph.KINDS}
+    if q.strip() and not company:
+        term = q.strip()
+        ctx["found"] = list(db.execute(select(Company).where((Company.bin_iin == term) | Company.name.contains(term))
+                                       .order_by(Company.name).limit(20)).scalars())
+        if len(ctx["found"]) == 1:
+            company = str(ctx["found"][0].id)
+    if company:
+        g = linkgraph.build(db, parse_uuid(company), depth=ctx["depth"])
+        ctx.update(graph=g, view=linkgraph.layout(g))
+        audit(db, "antifraud.graph_viewed", object_type="company", object_id=g.center.id,
+              details={"depth": ctx["depth"], "nodes": len(g.nodes)})
+        db.commit()
+    return render(request, "admin/af_graph.html", ctx)
+
+
+# ------------------------------------------------------------------ digital modules (FR-BIL-08, FR-PVD-07)
+
+
+@router.get("/modules")
+def admin_modules(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("admin.finance"))):
+    from app.modules.billing import subscriptions
+
+    return render(request, "admin/modules.html", {"items": subscriptions.modules(db, only_active=False),
+                                                  "stats": subscriptions.stats(db)})
+
+
+@router.post("/modules")
+async def admin_module_create(request: Request, db: Session = Depends(get_db),
+                              me: Principal = Depends(require("admin.finance"))):
+    from app.modules.billing import subscriptions
+
+    subscriptions.save_module(db, await request.form())
+    db.commit()
+    return redirect("/admin/modules", flash=("success", "msg.saved"))
+
+
+@router.post("/modules/{mid}")
+async def admin_module_save(mid: str, request: Request, db: Session = Depends(get_db),
+                            me: Principal = Depends(require("admin.finance"))):
+    from app.modules.billing import subscriptions
+    from app.modules.billing.models import DigitalModule
+
+    m = db.get(DigitalModule, parse_uuid(mid))
+    if m is None:
+        raise NotFound()
+    subscriptions.save_module(db, await request.form(), m)
+    db.commit()
+    return redirect("/admin/modules", flash=("success", "msg.saved"))

@@ -101,6 +101,9 @@ def test_qualified_signature_verified_on_server(login, db, fresh_deal):
 
     page = owner.post(f"/deals/{fresh_deal}/docs/{doc.id}/signatures").text  # re-verification at any time
     assert "✓" in page and "✗" not in page
+    manager = login("manager@abdex.kz")
+    assert f"/admin/deals/{fresh_deal}/docs/{doc.id}/signatures" in manager.get(f"/admin/deals/{fresh_deal}").text
+    assert manager.get(f"/admin/deals/{fresh_deal}/docs/{doc.id}/signatures").status_code == 200
 
     # the other side cannot pass with a certificate of a different company (owner check)
     carrier = login("+77020000001")
@@ -217,6 +220,8 @@ def test_transport_documents(login, db, fresh_deal):
     assert reg.status == "local"  # the state exchange is switched off
     xml = carrier.get(f"/deals/{fresh_deal}/transport-docs/{reg.id}.xml")
     assert xml.status_code == 200 and b"<shipper_bin>" in xml.content
+    manager = login("manager@abdex.kz")  # staff open deal documents only through the audited admin routes
+    assert manager.get(f"/admin/deals/{fresh_deal}/transport-docs/{reg.id}.xml").status_code == 200
     flag = db.execute(select(FeatureFlag).where(FeatureFlag.key == "gov.etd")).scalar_one()
     flag.enabled = True
     db.commit()

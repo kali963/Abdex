@@ -579,6 +579,7 @@ def anonymize_user(db: Session, user: User, *, reason: str, by_staff: bool = Fal
     user.totp_secret = None
     user.totp_enabled = False
     user.sms_2fa_enabled = False
+    user.iin, user.eds_linked_at = "", None
     user.is_blocked = True
     user.is_deleted = True
     user.anonymized_at = utcnow()
