@@ -69,6 +69,7 @@
     <nav class="lang" aria-label="{{ _('nav.language') }}">
       <a href="/lang/ru?next={{ request.url.path }}" class="{{ 'on' if locale == 'ru' }}">RU</a>
       <a href="/lang/kk?next={{ request.url.path }}" class="{{ 'on' if locale == 'kk' }}">KZ</a>
+      <a href="/lang/en?next={{ request.url.path }}" class="{{ 'on' if locale == 'en' }}">EN</a>
     </nav>
     {% if me %}
       {% if my_companies and my_companies|length > 1 and not me.session.is_admin %}
@@ -123,7 +124,7 @@
   {% endif %}
 </nav>
 {% endif %}
-<script src="/static/js/app.js?v=3" defer></script>
+<script src="/static/js/app.js?v=4" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

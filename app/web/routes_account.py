@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.audit import audit
+from app.core.i18n import LOCALES
 from app.core.errors import AppError, Forbidden, NotFound, ValidationFailed
 from app.core.security import mask_phone, new_totp_secret, token, totp_uri
 from app.core.storage import save_upload
@@ -94,7 +95,7 @@ async def account_save(request: Request, db: Session = Depends(get_db), me: Prin
     form = await request.form()
     user = db.get(User, me.user.id)
     user.full_name = str(form.get("full_name", user.full_name)).strip()[:200] or user.full_name
-    if form.get("locale") in ("ru", "kk"):
+    if form.get("locale") in LOCALES:
         user.locale = str(form["locale"])
     tz = str(form.get("timezone", ""))
     if tz in ("Asia/Almaty", "Asia/Aqtobe", "Asia/Oral", "Asia/Aqtau", "Asia/Atyrau", "Asia/Qostanay", "Asia/Qyzylorda"):
@@ -451,7 +452,7 @@ async def company_save(request: Request, db: Session = Depends(get_db), me: Prin
     c.vat_payer = bool(form.get("vat_payer"))
     if me.company.kind == "carrier":
         c.show_finance_to_drivers = bool(form.get("show_finance_to_drivers"))
-    if form.get("locale") in ("ru", "kk"):
+    if form.get("locale") in LOCALES:
         c.locale = str(form["locale"])
     audit(db, "company.updated", object_type="company", object_id=c.id)
     db.commit()

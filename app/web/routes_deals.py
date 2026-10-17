@@ -2,7 +2,7 @@
 statuses, tracking, finance, change history. Also the driver's trip screens (M18)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, WebSocket
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -30,7 +30,7 @@ from app.modules.orders.models import Order
 from app.modules.platform.fx import deal_kzt
 from app.modules.platform.service import dictionary, dictionary_map
 from app.web.access import deal_access
-from app.web.deps import Principal, _sysmsg as sysmsg, csrf_protect, get_principal, parse_uuid, redirect, render, require
+from app.web.deps import Principal, _sysmsg as sysmsg, csrf_protect, file_url, get_principal, parse_uuid, redirect, render, require
 
 router = APIRouter(dependencies=[Depends(csrf_protect)])
 
@@ -466,22 +466,132 @@ async def chat_post(did: str, request: Request, db: Session = Depends(get_db), m
     return redirect(f"/deals/{did}#chat")
 
 
-@router.get("/deals/{did}/chat.json")
-def chat_poll(did: str, after: str = "", db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
-    """FR-CHAT-06: periodic polling fallback (WebSocket upgrade can use the same payload)."""
-    acc = deal_access(db, me, parse_uuid(did))
+def chat_payload(db: Session, me: Principal, deal_id, after: str = "") -> dict:
+    """FR-CHAT-06: the same payload for polling and for the WebSocket: new messages (read on delivery) and
+    which of my messages the other side has read (the read indicator)."""
+    acc = deal_access(db, me, deal_id)
     after_id = parse_uuid(after) if after else None
     msgs = chat.thread_messages(db, deal_id=acc.deal.id, after=after_id)
     chat.mark_read(db, msgs, me.user.id)
-    db.commit()
     users = {u.id: u.full_name for u in db.execute(select(User).where(
         User.id.in_([m.author_user_id for m in msgs if m.author_user_id] or [None]))).scalars()}
     out = []
     for m in msgs:
         text = sysmsg(m.body) if m.kind == "system" else m.body
         out.append({"id": str(m.id), "kind": m.kind, "text": text, "author": users.get(m.author_user_id, ""),
-                    "mine": m.author_user_id == me.user.id, "at": m.created_at.isoformat()})
-    return JSONResponse({"messages": out})
+                    "mine": m.author_user_id == me.user.id, "at": m.created_at.isoformat(),
+                    "file": file_url(m.attachment_file_id) if m.attachment_file_id else ""})
+    mine = [m.id for m in chat.thread_messages(db, deal_id=acc.deal.id) if m.author_user_id == me.user.id][-200:]
+    read = [str(i) for i in chat.read_by_others(db, mine, me.user.id)]
+    return {"messages": out, "read": read}
+
+
+ws_router = APIRouter()  # WebSockets carry no CSRF form token: the Origin check below protects them
+
+
+def _ws_principal(db: Session, raw_session: str | None) -> Principal | None:
+    from app.modules.accounts.models import Company
+    from app.modules.accounts.service import role_in
+    from app.web.deps import load_session
+
+    sess = load_session(db, raw_session)
+    if sess is None or not sess.mfa_passed or sess.impersonator_id:
+        return None
+    user = db.get(User, sess.user_id)
+    if user is None or user.is_blocked or user.is_deleted:
+        return None
+    company = db.get(Company, sess.active_company_id) if sess.active_company_id else None
+    role = role_in(db, user.id, company.id) if company else None
+    if company is not None and role is None:
+        return None
+    return Principal(user=user, session=sess, company=company, role=role)
+
+
+def _ws_tick(raw_session: str | None, deal_id, after: str) -> dict | None:
+    """One poll of the database for the socket; None ends the connection (session gone, access lost)."""
+    import uuid as _uuid
+
+    from app.core import rls
+    from app.core.context import RequestContext, reset_ctx, set_ctx
+    from app.core.errors import AppError
+    from app.db import SessionLocal
+
+    db = SessionLocal()
+    tok = set_ctx(RequestContext(request_id=_uuid.uuid4().hex))
+    try:
+        me = _ws_principal(db, raw_session)
+        if me is None:
+            return None
+        from app.core.context import get_ctx
+
+        ctx = get_ctx()
+        ctx.user_id, ctx.company_id, ctx.role = me.user.id, me.company.id if me.company else None, me.role or ""
+        rls.apply(db)
+        try:
+            data = chat_payload(db, me, deal_id, after)
+        except AppError:
+            return None
+        db.commit()
+        return data
+    finally:
+        reset_ctx(tok)
+        db.close()
+
+
+@ws_router.websocket("/deals/{did}/chat/ws")
+async def chat_ws(websocket: WebSocket, did: str):
+    """FR-CHAT-06: real-time delivery. The server pushes new messages and read receipts; the database is the
+    bus, so it works with several application processes. Same-origin only (no cross-site WebSocket hijacking)."""
+    import asyncio
+    from urllib.parse import urlparse
+
+    from starlette.concurrency import run_in_threadpool
+    from starlette.websockets import WebSocketDisconnect
+
+    from app.web.deps import SESSION_COOKIE
+
+    origin = websocket.headers.get("origin", "")
+    host = websocket.headers.get("host", "")
+    if not origin or urlparse(origin).netloc != host:
+        await websocket.close(code=4403)
+        return
+    try:
+        deal_id = parse_uuid(did)
+    except Exception:  # noqa: BLE001
+        await websocket.close(code=4404)
+        return
+    raw = websocket.cookies.get(SESSION_COOKIE)
+    after = websocket.query_params.get("after", "")
+    first = await run_in_threadpool(_ws_tick, raw, deal_id, after)
+    if first is None:
+        await websocket.close(code=4403)
+        return
+    await websocket.accept()
+    read_seen: set = set()
+    data = first
+    try:
+        while True:
+            fresh = [r for r in data["read"] if r not in read_seen]
+            if data["messages"] or fresh:
+                read_seen.update(fresh)
+                await websocket.send_json({"messages": data["messages"], "read": fresh})
+                if data["messages"]:
+                    after = data["messages"][-1]["id"]
+            await asyncio.sleep(2)
+            data = await run_in_threadpool(_ws_tick, raw, deal_id, after)
+            if data is None:
+                await websocket.close(code=4401)
+                return
+    except (WebSocketDisconnect, RuntimeError):
+        return
+
+
+@router.get("/deals/{did}/chat.json")
+def chat_poll(did: str, after: str = "", db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    """FR-CHAT-06: periodic polling — the fallback when the WebSocket is not available."""
+    data = chat_payload(db, me, parse_uuid(did), after)
+    db.commit()
+    return JSONResponse(data)
 
 
 @router.get("/deals/{did}/dossier.zip")

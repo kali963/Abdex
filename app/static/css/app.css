@@ -526,3 +526,4 @@ pre.code { overflow-x: auto; white-space: pre; }
 .checklist li { padding: .15rem 0; break-inside: avoid; }
 .checklist .done { color: var(--ok, #15803d); } .checklist .missing { color: var(--muted); }
 @media (max-width: 640px) { .checklist { columns: 1; } }
+.msg .tick { letter-spacing: -.15em; } .msg .tick.read { color: var(--primary, #2563eb); font-weight: 700; }

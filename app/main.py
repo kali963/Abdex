@@ -89,7 +89,10 @@ def create_app() -> FastAPI:
         new_device = ""
         if not device:
             device = new_device = token(16)
-        lang = request.cookies.get(LANG_COOKIE) or settings.default_locale
+        lang = request.cookies.get(LANG_COOKIE)
+        if not lang:  # FR-LOC-02: API partners choose the language of messages with Accept-Language
+            wanted = [p.split(";")[0].strip()[:2].lower() for p in request.headers.get("accept-language", "").split(",")]
+            lang = next((w for w in wanted if w in LOCALES), settings.default_locale)
         ctx = RequestContext(request_id=rid, ip=ip, user_agent=request.headers.get("user-agent", "")[:300],
                              device_id=device, locale=lang if lang in LOCALES else "ru",
                              timezone=settings.default_timezone)
@@ -158,6 +161,7 @@ def create_app() -> FastAPI:
     from app.web import routes_admin_ops
 
     app.include_router(routes_admin_ops.router, include_in_schema=False)
+    app.include_router(routes_deals.ws_router, include_in_schema=False)  # FR-CHAT-06
     app.include_router(routes_api.html, include_in_schema=False)
     from app.web import routes_hooks
 

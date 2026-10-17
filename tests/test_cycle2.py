@@ -462,4 +462,8 @@ def test_app_error_codes_have_texts():
     assert not [k for k in ru if k not in kk]
     ph = re.compile(r"\{(\w+)\}")
     assert not [k for k in ru if set(ph.findall(ru[k])) != set(ph.findall(kk[k]))]
+    # FR-LOC-02: and in English
+    en = json.loads(Path("app/i18n/en.json").read_text())
+    assert not [k for k in ru if k not in en]
+    assert not [k for k in ru if set(ph.findall(ru[k])) != set(ph.findall(en[k]))]
     assert AppError  # imported for the error classes above

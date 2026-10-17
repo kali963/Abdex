@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core import ratelimit
 from app.core.audit import audit
+from app.core.i18n import LOCALES
 from app.core.context import get_ctx
 from app.core.errors import AppError, Forbidden, NotFound, ValidationFailed
 from app.core.security import (
@@ -158,7 +159,7 @@ def register(db: Session, data: RegistrationData) -> User:
         raise ValidationFailed(errors)
 
     user = User(phone=phone, email=email, full_name=data.full_name.strip(), password_hash=hash_password(data.password),
-                locale=data.locale if data.locale in ("ru", "kk") else "ru")
+                locale=data.locale if data.locale in LOCALES else "ru")
     db.add(user)
     db.flush()
     db.add(Consent(user_id=user.id, purpose="registration", text_version=CONSENT_TEXT_VERSION, ip=get_ctx().ip))

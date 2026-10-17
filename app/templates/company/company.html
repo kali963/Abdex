@@ -18,7 +18,7 @@
     {{ ui.field("actual_address", _("company.actual_address"), c.actual_address) }}
     {{ ui.field("contact_phone", _("company.contact_phone"), c.contact_phone, type="tel") }}
     {{ ui.field("contact_email", _("company.contact_email"), c.contact_email, type="email") }}
-    {{ ui.select("locale", _("company.doc_language"), [("ru", "Русский"), ("kk", "Қазақша")], c.locale) }}
+    {{ ui.select("locale", _("company.doc_language"), [("ru", "Русский"), ("kk", "Қазақша"), ("en", "English")], c.locale) }}
   </div>
   {{ ui.checkbox("vat_payer", _("company.vat_payer"), c.vat_payer) }}
   {% if c.kind == "carrier" %}{{ ui.checkbox("show_finance_to_drivers", _("company.show_finance_to_drivers"), c.show_finance_to_drivers) }}{% endif %}

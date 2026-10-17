@@ -11,7 +11,7 @@
   {% set src = namespace(t=None) %}{% for t in items %}{% if t.id|string == edit %}{% set src.t = t %}{% endif %}{% endfor %}
   <div class="form-grid">
     {{ ui.select("doc_type", _("doc.type"), [("contract_order", _("doc.contract_order")), ("fee_invoice", _("doc.fee_invoice")), ("fee_act", _("doc.fee_act")), ("transport_request", _("doc.transport_request")), ("power_of_attorney", _("doc.power_of_attorney")), ("work_act", _("doc.work_act")), ("reconciliation_act", _("doc.reconciliation_act"))], src.t.doc_type if src.t else "contract_order") }}
-    {{ ui.select("locale", _("tpl.locale"), [("ru", "RU"), ("kk", "KZ")], src.t.locale if src.t else "ru") }}
+    {{ ui.select("locale", _("tpl.locale"), [("ru", "RU"), ("kk", "KZ"), ("en", "EN")], src.t.locale if src.t else "ru") }}
     {{ ui.field("valid_from", _("tpl.valid_from"), "", type="date", required=true) }}
   </div>
   {{ ui.field("title", _("tpl.title"), src.t.title if src.t else "") }}
