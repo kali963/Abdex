@@ -144,8 +144,13 @@ def counter_offer(db: Session, bid: Bid, price_raw: str, comment: str = "") -> N
         raise Conflict("bid_closed")
     try:
         price = to_minor(price_raw, bid.currency)
+        if price <= 0:
+            raise ValueError
     except ValueError:
         raise ValidationFailed({"counter_price": "error.number"})
+    carrier = db.get(Company, bid.carrier_company_id)
+    if carrier is not None and carrier.deal_limit_minor is not None and price > carrier.deal_limit_minor:
+        raise ValidationFailed({"counter_price": "error.over_deal_limit"})  # the same limits as the bid itself
     bid.counter_price_minor = price
     bid.status = "countered"
     _event(db, bid, "counter", price, comment)

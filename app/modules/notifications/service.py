@@ -199,7 +199,8 @@ def process_outbox(db: Session, limit: int = 100) -> int:
     now = utcnow()
     rows = db.execute(select(OutboxMessage).where(OutboxMessage.status == "queued",
                                                   OutboxMessage.next_attempt_at <= now)
-                      .order_by(OutboxMessage.created_at).limit(limit)).scalars().all()
+                      .order_by(OutboxMessage.created_at).limit(limit)
+                      .with_for_update(skip_locked=True)).scalars().all()  # several workers never send one twice
     for msg in rows:
         adapter = CHANNELS.get(msg.channel)
         msg.attempts += 1

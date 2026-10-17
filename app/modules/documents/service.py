@@ -16,10 +16,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.audit import audit
+from app.core.export import row as safe_row
 from app.core.context import get_ctx
 from app.core.errors import AppError, Conflict, NotFound, ValidationFailed
 from app.core.security import sha256_hex
 from app.core.storage import save_generated, storage
+from app.core.timeutil import local_today
 from app.db import utcnow
 from app.modules.documents.models import Document, DocumentTemplate, Signature, StoredFile
 
@@ -71,7 +73,7 @@ def _placeholders(body: str) -> set[str]:
 
 
 def active_template(db: Session, doc_type: str, locale: str = "ru") -> DocumentTemplate:
-    today = utcnow().date()
+    today = local_today()
     for loc in (locale, "ru"):
         tpl = db.execute(select(DocumentTemplate).where(DocumentTemplate.doc_type == doc_type,
                                                         DocumentTemplate.locale == loc,
@@ -128,6 +130,13 @@ def render_pdf(title: str, body: str) -> bytes:
     return buf.getvalue()
 
 
+_CONTROL = re.compile(r"[\x00-\x1f\x7f\u2028\u2029]+")
+
+
+def one_line(value) -> str:
+    return "" if value is None else _CONTROL.sub(" ", str(value)).strip()
+
+
 def generate(db: Session, doc_type: str, context: dict, *, deal_id=None, company_id=None, locale: str = "ru",
              requires_signatures: bool = False, number: str | None = None) -> Document:
     """FR-DOC-01: generate from the active template version."""
@@ -135,13 +144,17 @@ def generate(db: Session, doc_type: str, context: dict, *, deal_id=None, company
 
     tpl = active_template(db, doc_type, locale)
     number = number or next_number(db, doc_type, DOC_PREFIX.get(doc_type, "DOC"))
-    ctx = {k: ("" if v is None else str(v)) for k, v in context.items()}
+    # values come from users (cargo, addresses, company names): one line each, so a value can never open a new
+    # paragraph or a "## heading" that would look like a clause of the template
+    ctx = {k: one_line(v) for k, v in context.items()}
     ctx.setdefault("number", number)
     ctx.setdefault("date", utcnow().strftime("%d.%m.%Y"))
     body = string.Template(tpl.body).safe_substitute(ctx)
     title = string.Template(tpl.title).safe_substitute(ctx)
     if doc_type in FINANCIAL_DOC_TYPES:
-        validate_template_body(doc_type, body)  # guard against substituted text too
+        # FR-PVD-03: the wording the platform controls — template and subject — never names transport services;
+        # a client's own company name is not the platform's wording and must not block its invoice
+        validate_template_body(doc_type, tpl.body + "\n" + tpl.title + "\n" + ctx.get("subject", ""))
     pdf = render_pdf(title, body)
     f = save_generated(db, data=pdf, name=f"{doc_type}-{number}.pdf", content_type="application/pdf",
                        company_id=company_id)
@@ -280,9 +293,9 @@ def period_zip(db: Session, company_id, date_from: date, date_to: date, labels: 
             folder = deal_number or "platform"
             name = f"{folder}/{doc.doc_type}-{doc.number}.{_EXT.get(f.content_type, 'bin')}".replace("..", ".")
             z.writestr(name, data)
-            w.writerow([i, deal_number, labels.get(f"doc.{doc.doc_type}", doc.doc_type), doc.number, doc.title,
+            w.writerow(safe_row([i, deal_number, labels.get(f"doc.{doc.doc_type}", doc.doc_type), doc.number, doc.title,
                         labels.get(f"st.{doc.status}", doc.status), doc.created_at.strftime("%d.%m.%Y %H:%M"),
-                        f.sha256, name])
+                        f.sha256, name]))
         z.writestr("inventory.csv", "﻿" + inventory.getvalue())
     return buf.getvalue()
 

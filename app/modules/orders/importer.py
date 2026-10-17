@@ -17,6 +17,8 @@ from app.modules.accounts.models import Company
 from app.modules.orders import service as orders
 
 MAX_ROWS = 500
+MAX_COLS = 40  # the format has a dozen columns; anything wider is ignored
+MAX_UNPACKED = 20 * 1024 * 1024  # bytes of XML inside an uploaded .xlsx
 COLUMNS = ("from_city", "from_address", "to_city", "to_address", "cargo_name", "weight_kg", "volume_m3", "places",
            "body_type", "load_date", "unload_date", "desired_rate", "payment_terms", "publish")
 REQUIRED = ("from_city", "to_city", "cargo_name", "weight_kg", "load_date")
@@ -45,16 +47,28 @@ def _to_local_input(value) -> str:
     raise ValueError(text)
 
 
-def read_rows(filename: str, data: bytes) -> list[dict]:
+def read_rows(filename: str, data: bytes, max_rows: int | None = None) -> list[dict]:
+    max_rows = max_rows or MAX_ROWS
     name = (filename or "").lower()
     if name.endswith(".xlsx"):
+        import zipfile
+
         from openpyxl import load_workbook
 
-        try:
+        try:  # a small file must not unpack into gigabytes (decompression bomb)
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                if sum(i.file_size for i in z.infolist()) > MAX_UNPACKED:
+                    raise AppError("import_bad_file")
             wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        except AppError:
+            raise
         except Exception as exc:  # noqa: BLE001 — any parse failure is a bad file for the user
             raise AppError("import_bad_file") from exc
-        rows = list(wb.active.iter_rows(values_only=True))
+        rows = []
+        # read lazily and only as wide and as deep as the format needs: a sheet padded with millions of empty
+        # cells far to the right or below is never materialised
+        for r in wb.active.iter_rows(values_only=True, max_col=MAX_COLS, max_row=max_rows + 2):
+            rows.append(r)
         if not rows:
             return []
         header = [str(h or "").strip().lower() for h in rows[0]]
@@ -66,7 +80,13 @@ def read_rows(filename: str, data: bytes) -> list[dict]:
         except csv.Error:
             dialect = csv.excel
         reader = csv.DictReader(io.StringIO(text), dialect=dialect)
-        return [{(k or "").strip().lower(): v for k, v in row.items()} for row in reader if any((v or "").strip() for v in row.values())]
+        out = []
+        for i, row in enumerate(reader):
+            if i > max_rows + 1:
+                break
+            if any((v or "").strip() for v in row.values() if isinstance(v, str)):
+                out.append({(k or "").strip().lower(): v for k, v in row.items() if isinstance(k, str)})
+        return out
     raise AppError("import_bad_file")
 
 

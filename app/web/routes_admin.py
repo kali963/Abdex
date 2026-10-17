@@ -13,10 +13,11 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core import ratelimit
 from app.core.audit import audit
-from app.core.errors import NotFound, ValidationFailed
+from app.core.errors import Forbidden, NotFound, ValidationFailed
 from app.core.money import to_minor
 from app.db import get_db, utcnow
 from app.modules.accounts.models import AuditLog, Company, Membership, User
+from app.modules.accounts.permissions import staff_can
 from app.modules.analytics import service as analytics
 from app.modules.billing import service as billing
 from app.modules.billing.models import Accrual, Invoice, Tariff
@@ -387,6 +388,10 @@ async def user_action(uid: str, request: Request, db: Session = Depends(get_db),
     reason = str(form.get("reason", "")).strip()
     if not reason:
         raise ValidationFailed({"reason": "error.reason_required"})
+    if u.id == me.user.id:
+        raise Forbidden()  # no blocking or anonymizing oneself
+    if u.staff_role and not staff_can(me.user.staff_role, "admin.settings"):
+        raise Forbidden()  # platform staff accounts are managed by an administrator only
     from app.modules.accounts import service as accounts_service
     from app.modules.accounts.service import revoke_all_sessions
 

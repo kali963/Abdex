@@ -194,6 +194,46 @@
     }
   }
 
+  // ---- Web Push subscription (FR-MOB-02) ----------------------------------------------
+  var pushBox = document.getElementById("push");
+  if (pushBox) {
+    var status = pushBox.querySelector("[data-push-status]");
+    var say = function (t) { if (status) status.textContent = t; };
+    var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
+    var keyBytes = function (b64) {
+      var pad = "=".repeat((4 - b64.length % 4) % 4), raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+      var out = new Uint8Array(raw.length);
+      for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+      return out;
+    };
+    var send = function (url, body) {
+      return fetch(url, { method: "POST", credentials: "same-origin", body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": csrfToken } });
+    };
+    var supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    pushBox.querySelector("[data-push-enable]").addEventListener("click", function () {
+      if (!supported) { say(pushBox.getAttribute("data-push-unsupported")); return; }
+      Notification.requestPermission().then(function (perm) {
+        if (perm !== "granted") { say(pushBox.getAttribute("data-push-denied")); return null; }
+        return navigator.serviceWorker.ready.then(function (reg) {
+          return reg.pushManager.subscribe({ userVisibleOnly: true,
+            applicationServerKey: keyBytes(pushBox.getAttribute("data-push-key")) });
+        }).then(function (sub) { return send("/account/push/subscribe", sub.toJSON()); })
+          .then(function (r) { if (r && r.ok) { say(pushBox.getAttribute("data-push-on")); } });
+      }).catch(function (e) { say(String(e && e.message || e)); });
+    });
+    pushBox.querySelector("[data-push-disable]").addEventListener("click", function () {
+      if (!supported) { send("/account/push/unsubscribe", {}); return; }
+      navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); })
+        .then(function (sub) {
+          var ep = sub ? sub.endpoint : "";
+          return (sub ? sub.unsubscribe() : Promise.resolve()).then(function () {
+            return send("/account/push/unsubscribe", { endpoint: ep });
+          });
+        }).then(function () { say(pushBox.getAttribute("data-push-off")); });
+    });
+  }
+
   // ---- 3D tilt for panels (pointer devices only, respects reduced motion) ----------
   var fine = window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
   var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;

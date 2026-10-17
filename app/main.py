@@ -78,8 +78,9 @@ def create_app() -> FastAPI:
         rid = _REQUEST_ID_RE.sub("", request.headers.get("x-request-id", ""))[:40] or uuid7().hex
         ip = request.client.host if request.client else ""
         if settings.trust_proxy:
-            fwd = request.headers.get("x-forwarded-for", "")
-            ip = (fwd.split(",")[0].strip() if fwd else "") or ip
+            hops = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+            if hops:  # the right-most entries are added by our own proxies; the left ones are client-controlled
+                ip = hops[-min(settings.trusted_proxy_hops, len(hops))]
         length = request.headers.get("content-length", "")
         if length.isdigit() and int(length) > (settings.max_upload_mb + 2) * 1024 * 1024:
             return JSONResponse(status_code=413, content={"error": {
@@ -166,6 +167,7 @@ def create_app() -> FastAPI:
     from app.web import routes_hooks
 
     app.include_router(routes_hooks.router, include_in_schema=False)
+    app.add_middleware(BodyLimit, limit=(settings.max_upload_mb + 2) * 1024 * 1024)  # outermost
     return app
 
 
@@ -256,6 +258,43 @@ def _install_error_handlers(app: FastAPI) -> None:
         if _is_api(request):
             return _error_json(request, "internal_error", translate("error.internal"), 500)
         return render(request, "error.html", {"code": 500, "message": translate("error.internal")}, status_code=500)
+
+
+class BodyLimit:
+    """A request body larger than the upload limit is refused while it streams in — also for chunked uploads,
+    which carry no Content-Length (the header check alone would read the whole body into memory first)."""
+
+    def __init__(self, app, limit: int):
+        self.app, self.limit = app, limit
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        seen = 0
+
+        async def limited():
+            nonlocal seen
+            message = await receive()
+            if message["type"] == "http.request":
+                seen += len(message.get("body", b""))
+                if seen > self.limit:
+                    raise _TooLarge()
+            return message
+
+        too_large = False
+        try:
+            await self.app(scope, limited, send)
+        except* _TooLarge:  # may arrive wrapped in an exception group from inner middleware task groups
+            too_large = True
+        if too_large:
+            body = b'{"error": {"code": "payload_too_large", "message": "", "fields": {}, "request_id": ""}}'
+            await send({"type": "http.response.start", "status": 413,
+                        "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]})
+            await send({"type": "http.response.body", "body": body})
+
+
+class _TooLarge(Exception):
+    pass
 
 
 app = create_app()

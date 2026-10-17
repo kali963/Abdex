@@ -19,6 +19,7 @@ LIMITS = {
     "login_account": (5, 300),   # 5 attempts / 5 min per account
     "otp_send": (5, 600),
     "otp_check": (10, 600),
+    "2fa": (8, 900),             # second-factor guesses per account (TOTP and SMS together)
     "password_reset": (5, 900),
     "register": (10, 3600),
     "bid": (60, 3600),

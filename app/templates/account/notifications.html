@@ -12,6 +12,16 @@
   {% else %}<p>{{ _("ntf.tg_text") }}</p>{% endif %}
   <form method="post" action="/account/notifications/telegram" class="actions">{{ ui.csrf() }}<button class="btn">{{ _("ntf.tg_link") }}</button></form>
 </section>
+{% if push_key %}
+<section class="card" id="push" data-push-key="{{ push_key }}" data-push-on="{{ _('push.on') }}" data-push-off="{{ _('push.off') }}" data-push-denied="{{ _('push.denied') }}" data-push-unsupported="{{ _('push.unsupported') }}">
+  <h2>🔔 {{ _("push.title") }}</h2>
+  <p class="muted">{{ _("push.text") }}</p>
+  <p><span class="badge {{ 'ok' if push_count }}" data-push-state>{{ _("push.devices", n=push_count) }}</span></p>
+  <div class="row"><button type="button" class="btn primary" data-push-enable>{{ _("push.enable") }}</button>
+  <button type="button" class="btn" data-push-disable>{{ _("push.disable") }}</button></div>
+  <small class="muted" data-push-status></small>
+</section>
+{% endif %}
 <section class="card">
   <h2>{{ _("ntf.schedule") }}</h2>
   <form method="post" action="/account/notifications/schedule" class="stack">{{ ui.csrf() }}

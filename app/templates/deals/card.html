@@ -103,7 +103,7 @@
   {% set show_address = true %}{% include "client/_order_details.html" %}
 
   {% if supplements %}<h3>{{ _("deal.supplements") }}</h3><ul class="timeline">{% for s in supplements %}{% set ch = json_loads(s.changes) %}
-    <li>{{ fmt_dt(s.created_at) }} · {{ ui.status(s.status) }} {% if ch.price_minor %}{{ _("deal.new_price") }}: <b>{{ money(ch.price_minor, deal.currency) }}</b>{% endif %}{% if ch.trailer_plate %} {{ _("deal.trailer") }}: {{ ch.trailer_plate }}{% endif %} {% if s.reason %}<small>({{ s.reason }})</small>{% endif %}
+    <li>{{ fmt_dt(s.created_at) }} · {{ ui.status(s.status) }} {% if ch.price_minor and show_finance %}{{ _("deal.new_price") }}: <b>{{ money(ch.price_minor, deal.currency) }}</b>{% endif %}{% if ch.trailer_plate %} {{ _("deal.trailer") }}: {{ ch.trailer_plate }}{% endif %} {% if s.reason %}<small>({{ s.reason }})</small>{% endif %}
     {% if s.status == "proposed" and me.company and s.initiator_company_id != me.company.id and side in ("client", "carrier") %}
       <form class="inline" method="post" action="/deals/{{ deal.id }}/supplement/{{ s.id }}">{{ ui.csrf() }}<input type="hidden" name="accept" value="1"><button class="btn small ok">{{ _("deal.accept") }}</button></form>
       <form class="inline" method="post" action="/deals/{{ deal.id }}/supplement/{{ s.id }}">{{ ui.csrf() }}<input type="hidden" name="accept" value="0"><button class="btn small">{{ _("deal.reject") }}</button></form>{% endif %}</li>{% endfor %}</ul>{% endif %}

@@ -154,7 +154,9 @@ def handle_callback(db: Session, body: bytes, signature: str) -> str:
             return "mismatch"
         intent.status, intent.paid_at = "paid", utcnow()
         invoice = db.get(Invoice, intent.invoice_id)
-        if invoice.status == "issued":
+        if invoice.status != "cancelled":
+            # the money arrived even if the invoice was meanwhile paid another way: it is recorded (an
+            # over-payment is then visible to finance instead of disappearing)
             register_payment(db, invoice, amount, source="provider", reference=ref)
     return "ok"
 

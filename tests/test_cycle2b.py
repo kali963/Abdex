@@ -14,6 +14,7 @@ from sqlalchemy import select
 from app.core import ratelimit
 from app.core.context import RequestContext, reset_ctx, set_ctx
 from app.core.errors import RateLimited
+from app.core.timeutil import local_today
 from app.db import SessionLocal, utcnow
 from app.main import app
 from app.modules.accounts.models import AuditLog, Company, User
@@ -278,7 +279,7 @@ def test_plan_upload_and_fact(login, db):
         wb.save(buf)
         return buf.getvalue()
 
-    today = utcnow().date()
+    today = local_today()
     period = {"name": "План месяца", "period_from": (today - timedelta(days=10)).isoformat(),
               "period_to": (today + timedelta(days=30)).isoformat()}
     bad = s.post("/plan/periods", data=period,

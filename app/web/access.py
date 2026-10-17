@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import audit
 from app.core.errors import NotFound
-from app.modules.accounts.permissions import staff_can
+from app.modules.accounts.permissions import company_can, staff_can
 from app.modules.chat.models import Message
 from app.modules.deals.models import Checkpoint, Deal
 from app.modules.deals.service import get_access
@@ -35,11 +35,21 @@ def assert_file_access(db: Session, me: Principal, file_id) -> None:
         return
     company_id = me.company.id if me.company else None
     from app.modules.documents.service import FINANCIAL_DOC_TYPES
+    from app.modules.fleet.models import BiometricCheck, Driver
+
+    bio = db.execute(select(BiometricCheck).where(or_(BiometricCheck.selfie_file_id == file_id,
+                                                      BiometricCheck.document_file_id == file_id))).scalars().first()
+    if bio is not None:
+        # SEC-DAT-10: biometric images are seen by the driver alone (and the moderator above), not the employer
+        drv = db.get(Driver, bio.driver_id)
+        if drv is not None and drv.user_id == me.user.id:
+            return
+        raise NotFound()
 
     for doc in db.execute(select(Document).where(Document.file_id == file_id)).scalars():
         if doc.doc_type in FINANCIAL_DOC_TYPES:
             # platform fee documents belong to the payer only
-            if company_id and doc.company_id == company_id and me.role in ("owner", "accountant", "logist"):
+            if company_id and doc.company_id == company_id and company_can(me.role, "finance.view"):
                 return
             raise NotFound()
     deal_ids = set()
@@ -55,7 +65,7 @@ def assert_file_access(db: Session, me: Principal, file_id) -> None:
     if company_id and f.owner_company_id == company_id and not deal_ids:
         vd = db.execute(select(VerificationDocument.id).where(VerificationDocument.file_id == file_id,
                                                               VerificationDocument.company_id == company_id)).first()
-        if vd or me.role in ("owner", "fleet_owner", "accountant", "dispatcher", "logist"):
+        if me.role in ("owner", "fleet_owner", "accountant", "dispatcher", "logist") or (vd and me.role != "driver"):
             return
     raise NotFound()
 

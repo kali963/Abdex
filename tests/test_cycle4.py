@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from app.core.context import RequestContext, reset_ctx, set_ctx
 from app.core.errors import AppError, Conflict, Forbidden
+from app.core.timeutil import local_today
 from app.db import SessionLocal, utcnow
 from app.modules.accounts.models import Company, User
 from app.modules.fleet.models import BiometricCheck, Driver, Vehicle, VerificationDocument
@@ -83,7 +84,7 @@ def test_level3_requirements_and_gate(login, db):
     db.add(VerificationDocument(company_id=c.id, subject_type="vehicle", subject_id=v.id, doc_type="tech_passport",
                                 file_id=f.id, status="approved"))
     db.add(BiometricCheck(driver_id=d.id, company_id=c.id, provider="test", match=True, liveness=True, score=95,
-                          status="passed", valid_until=utcnow().date() + timedelta(days=30)))
+                          status="passed", valid_until=local_today() + timedelta(days=30)))
     db.flush()
     assert level3.evaluate(db, c) == 3
     # a new vehicle without a passport takes L3 away again
@@ -186,7 +187,7 @@ def test_exchange_rates_and_foreign_currency_deal(login, db):
     from app.modules.orders.service import create_order, submit
     from app.modules.platform import fx
 
-    today = utcnow().date()
+    today = local_today()
     assert fx.rate_on(db, "KZT", today) == 1
     usd = fx.rate_on(db, "USD", today)
     assert usd == Decimal("478.50")  # development simulator

@@ -115,11 +115,62 @@ class _OutboundAdapter(Adapter):
 
 
 class SmsAdapter(_OutboundAdapter):
+    """SMS through an HTTP gateway (``SMS_GATEWAY_URL`` + ``SMS_GATEWAY_TOKEN``): POST {"to", "text"} as JSON with
+    a bearer token — the common shape of Kazakh SMS aggregators; mapping a concrete one is this method only."""
+
     name = "sms"
+    timeout = 10.0
+
+    def _deliver(self, recipient: str, body: str) -> None:
+        import json as _json
+        import os
+        import urllib.request
+
+        url = os.getenv("SMS_GATEWAY_URL", "")
+        if not url:
+            return
+        if not url.startswith("https://"):
+            raise RuntimeError("SMS_GATEWAY_URL must be https")
+        req = urllib.request.Request(url, data=_json.dumps({"to": recipient, "text": body}).encode(), method="POST",  # noqa: S310 — https checked above
+                                     headers={"Content-Type": "application/json",
+                                              "Authorization": f"Bearer {os.getenv('SMS_GATEWAY_TOKEN', '')}"})
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 — configured https gateway
+            if resp.status >= 300:
+                raise RuntimeError(f"sms gateway status {resp.status}")
 
 
 class EmailAdapter(_OutboundAdapter):
+    """E-mail over SMTP with STARTTLS/TLS (``SMTP_HOST``, ``SMTP_PORT``, ``SMTP_USER``, ``SMTP_PASSWORD``,
+    ``SMTP_FROM``); without SMTP_HOST the message only goes to the development outbox."""
+
     name = "email"
+    timeout = 15.0
+
+    def _deliver(self, recipient: str, body: str) -> None:
+        import os
+        import smtplib
+        import ssl
+        from email.message import EmailMessage
+
+        host = os.getenv("SMTP_HOST", "")
+        if not host or not recipient:
+            return
+        port = int(os.getenv("SMTP_PORT", "587"))
+        msg = EmailMessage()
+        msg["From"] = os.getenv("SMTP_FROM", "AbdEX <no-reply@abdex.kz>")
+        msg["To"] = recipient
+        first = body.split("\n", 1)[0].strip()
+        msg["Subject"] = ("AbdEX: " + first)[:120]
+        msg.set_content(body)
+        context = ssl.create_default_context()
+        smtp = smtplib.SMTP_SSL(host, port, timeout=self.timeout, context=context) if port == 465 else \
+            smtplib.SMTP(host, port, timeout=self.timeout)
+        with smtp:
+            if port != 465:
+                smtp.starttls(context=context)
+            if os.getenv("SMTP_USER"):
+                smtp.login(os.getenv("SMTP_USER", ""), os.getenv("SMTP_PASSWORD", ""))
+            smtp.send_message(msg)
 
 
 class TelegramAdapter(_OutboundAdapter):
@@ -145,7 +196,41 @@ class TelegramAdapter(_OutboundAdapter):
 
 
 class PushAdapter(_OutboundAdapter):
+    """Web Push to every browser subscription of the user (recipient = user id); dead subscriptions are removed."""
+
     name = "push"
+    timeout = 10.0
+
+    def _deliver(self, recipient: str, body: str) -> None:
+        import uuid as _uuid
+
+        from sqlalchemy import select
+
+        from app.db import SessionLocal
+        from app.modules.notifications import webpush
+        from app.modules.notifications.models import PushSubscription
+
+        if not webpush.enabled():
+            return
+        lines = [x for x in body.split("\n") if x.strip()]
+        url = lines[-1] if lines and lines[-1].startswith("/") else "/notifications"
+        text = " ".join(x for x in lines if x != url)[:300]
+        db = SessionLocal()
+        try:
+            subs = db.execute(select(PushSubscription).where(PushSubscription.user_id == _uuid.UUID(recipient))).scalars().all()
+            for sub in subs:
+                try:
+                    status = webpush.send(sub.endpoint, sub.p256dh, sub.auth, {"title": "AbdEX", "body": text, "url": url},
+                                          timeout=self.timeout)
+                except (OSError, ValueError):
+                    continue
+                if status in (404, 410):
+                    db.delete(sub)
+                elif status < 300:
+                    sub.last_used_at = utcnow()
+            db.commit()
+        finally:
+            db.close()
 
 
 class BiometricsAdapter(Adapter):

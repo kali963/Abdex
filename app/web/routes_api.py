@@ -74,6 +74,8 @@ def api_caller(request: Request, db: Session = Depends(get_db), x_api_key: str |
         if company is None or company.is_blocked:
             raise Forbidden()
         get_ctx().company_id = company.id
+        get_ctx().role = "owner" if company.kind == "client" else "fleet_owner"  # never a staff role of a cookie
+        get_ctx().extra.pop("rls_bypass", None)
         from app.core import rls
 
         rls.apply(db)  # NFR-DB-07
@@ -83,6 +85,10 @@ def api_caller(request: Request, db: Session = Depends(get_db), x_api_key: str |
     ratelimit.hit("api", f"ip:{ip}")
     if principal is None or principal.company is None or not principal.session.mfa_passed:
         raise AppError("unauthorized", status_code=401)
+    if principal.session.impersonator_id:
+        raise Forbidden("impersonation_forbidden")  # FR-ADM-05: support sessions work only in the journaled UI
+    if principal.company.is_blocked:
+        raise Forbidden("company_blocked")
     return ApiCaller(company=principal.company, user_id=principal.user.id, scopes=SCOPES, role=principal.role)
 
 

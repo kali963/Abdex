@@ -12,12 +12,14 @@ from __future__ import annotations
 import io
 import json
 import zipfile
-from datetime import date, datetime, time, timezone
+from datetime import date
 from xml.etree import ElementTree as ET  # noqa: S405 — only builds XML, never parses untrusted input
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.export import row as safe_row
+from app.core.timeutil import local_date
 from app.core.money import from_minor
 from app.modules.accounts.models import Company
 from app.modules.billing.models import Accrual, Invoice, Payment
@@ -28,7 +30,9 @@ SUBJECT = ("Услуги по предоставлению программно-
 
 
 def _period(d1: date, d2: date):
-    return datetime.combine(d1, time.min, tzinfo=timezone.utc), datetime.combine(d2, time.max, tzinfo=timezone.utc)
+    from app.core.timeutil import day_bounds
+
+    return day_bounds(d1, d2)  # local business days
 
 
 def rows(db: Session, d1: date, d2: date, company_id=None) -> list[dict]:
@@ -59,10 +63,10 @@ def register_xlsx(items: list[dict], labels: dict[str, str]) -> bytes:
         c.font = Font(bold=True)
     for r in items:
         inv = r["invoice"]
-        ws.append([inv.created_at.strftime("%d.%m.%Y"), inv.number, r["deal"].number if r["deal"] else "",
+        ws.append(safe_row([local_date(inv.created_at).strftime("%d.%m.%Y"), inv.number, r["deal"].number if r["deal"] else "",
                    r["company"].name, r["company"].bin_iin, float(from_minor(inv.amount_minor, inv.currency)),
                    inv.currency, labels.get(f"st.{inv.status}", inv.status),
-                   float(from_minor(r["paid_minor"], inv.currency)), inv.due_date.strftime("%d.%m.%Y") if inv.due_date else ""])
+                   float(from_minor(r["paid_minor"], inv.currency)), inv.due_date.strftime("%d.%m.%Y") if inv.due_date else ""]))
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -95,9 +99,9 @@ def esf_xml(db: Session, inv: Invoice, *, kind: str = "invoice") -> bytes:
     amount = from_minor(inv.amount_minor, inv.currency)
     root = ET.Element("v2:invoice" if kind == "invoice" else "awp:act",
                       {"xmlns:v2": "abdex:esf:v2", "xmlns:awp": "abdex:awp:v1", "num": inv.number,
-                       "date": inv.created_at.strftime("%d.%m.%Y")})
+                       "date": local_date(inv.created_at).strftime("%d.%m.%Y")})
     ET.SubElement(root, "invoiceType").text = "ORDINARY_INVOICE" if kind == "invoice" else "COMPLETED_WORKS"
-    ET.SubElement(root, "turnoverDate").text = inv.created_at.strftime("%d.%m.%Y")
+    ET.SubElement(root, "turnoverDate").text = local_date(inv.created_at).strftime("%d.%m.%Y")
     sellers = ET.SubElement(root, "sellers")
     _party(sellers, "seller", name=req.get("name", ""), tin=req.get("bin", ""), address=req.get("address", ""),
            iik=req.get("iik", ""), bank=req.get("bank", ""), bik=req.get("bik", ""))
@@ -111,12 +115,22 @@ def esf_xml(db: Session, inv: Invoice, *, kind: str = "invoice") -> bytes:
                                                else SUBJECT.format(deal=deal.number if deal else inv.number))
     ET.SubElement(prod, "unitNomenclature").text = "услуга"
     ET.SubElement(prod, "quantity").text = "1"
-    ET.SubElement(prod, "unitPrice").text = f"{amount:.2f}"
-    ET.SubElement(prod, "priceWithoutTax").text = f"{amount:.2f}"
-    ET.SubElement(prod, "ndsRate").text = "12" if vat_payer else "БЕЗ НДС"
-    ET.SubElement(prod, "priceWithTax").text = f"{amount:.2f}"
+    from decimal import ROUND_HALF_UP, Decimal
+
+    rate = Decimal(str(req.get("vat_rate", 12))) if vat_payer else Decimal(0)
+    # the invoiced amount includes VAT for a VAT payer: net = gross × 100 / (100 + rate), VAT = gross − net
+    gross = Decimal(str(amount))
+    net = (gross * 100 / (100 + rate)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    vat = gross - net
+    ET.SubElement(prod, "unitPrice").text = f"{net:.2f}"
+    ET.SubElement(prod, "priceWithoutTax").text = f"{net:.2f}"
+    ET.SubElement(prod, "ndsRate").text = f"{rate:g}" if vat_payer else "БЕЗ НДС"
+    ET.SubElement(prod, "ndsAmount").text = f"{vat:.2f}"
+    ET.SubElement(prod, "priceWithTax").text = f"{gross:.2f}"
     totals = ET.SubElement(products, "totals")
-    ET.SubElement(totals, "totalPriceWithTax").text = f"{amount:.2f}"
+    ET.SubElement(totals, "totalPriceWithoutTax").text = f"{net:.2f}"
+    ET.SubElement(totals, "totalNdsAmount").text = f"{vat:.2f}"
+    ET.SubElement(totals, "totalPriceWithTax").text = f"{gross:.2f}"
     if acc is not None:
         ET.SubElement(root, "incomeType").text = acc.income_type  # FR-PVD-01: kept for the ПВД report
     ET.indent(root)

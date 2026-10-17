@@ -17,6 +17,7 @@ from datetime import date, datetime, time, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.export import row as safe_row
 from app.db import utcnow
 from app.modules.accounts.models import Company, Membership, ROLE_DRIVER
 from app.modules.billing.models import Accrual
@@ -171,7 +172,7 @@ def to_csv(rows: list[list]) -> bytes:
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
     for r in rows:
-        w.writerow(r)
+        w.writerow(safe_row(r))
     return ("﻿" + buf.getvalue()).encode("utf-8")
 
 
@@ -182,7 +183,7 @@ def to_xlsx(rows: list[list], title: str = "Отчет") -> bytes:
     ws = wb.active
     ws.title = title[:30]
     for r in rows:
-        ws.append(r)
+        ws.append(safe_row(r))
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

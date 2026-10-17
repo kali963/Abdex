@@ -306,7 +306,9 @@ def download(file_id: str, sig: str, request: Request, db: Session = Depends(get
     f, data = get_file(db, fid)
     db.commit()
     disposition = "inline" if f.content_type in ("application/pdf", "image/jpeg", "image/png", "image/webp") else "attachment"
-    ascii_name = "".join(ch if ch.isascii() and ch not in '";\\' else "_" for ch in f.original_name)
+    import re as _re
+
+    ascii_name = _re.sub(r"[^A-Za-z0-9._-]", "_", f.original_name)[:120] or "file"  # no quotes, no control chars
     return Response(content=data, media_type=f.content_type, headers={
         "Content-Disposition": f'{disposition}; filename="{ascii_name}"',
         "X-Content-Type-Options": "nosniff",

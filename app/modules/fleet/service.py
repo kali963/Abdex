@@ -11,6 +11,7 @@ from app.core.audit import audit
 from app.core.context import get_ctx
 from app.core.crypto import blind_index
 from app.core.errors import AppError, NotFound, ValidationFailed
+from app.core.timeutil import local_today
 from app.db import utcnow
 from app.modules.accounts.models import BankAccount, Company, Membership, User
 from app.modules.fleet.models import Driver, RegistryCheck, Vehicle, VerificationDocument, VerificationRequest
@@ -219,7 +220,7 @@ def decide_verification(db: Session, req: VerificationRequest, *, approve: bool,
 
 def check_document_expiry(db: Session) -> int:
     """FR-KYC-05: notify 30/14/3 days before expiry and downgrade level on expiry."""
-    today = utcnow().date()
+    today = local_today()
     count = 0
     from app.modules.notifications.service import notify_company_owners
 

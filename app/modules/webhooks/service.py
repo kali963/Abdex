@@ -201,11 +201,12 @@ def send_test(db: Session, ep: WebhookEndpoint) -> None:
                            payload=json.dumps({"type": "ping", "created_at": utcnow().isoformat(), "data": {}})))
 
 
-def process(db: Session, limit: int = 50) -> int:
+def process(db: Session, limit: int = 20) -> int:
     now = utcnow()
     rows = db.execute(select(WebhookDelivery).where(WebhookDelivery.status == "pending",
                                                     WebhookDelivery.next_attempt_at <= now)
-                      .order_by(WebhookDelivery.next_attempt_at).limit(limit)).scalars().all()
+                      .order_by(WebhookDelivery.next_attempt_at).limit(limit)
+                      .with_for_update(skip_locked=True)).scalars().all()  # several workers never post one twice
     for d in rows:
         ep = db.get(WebhookEndpoint, d.endpoint_id)
         if ep is None or not ep.active or ep.is_deleted:

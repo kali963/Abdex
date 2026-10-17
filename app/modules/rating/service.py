@@ -179,8 +179,9 @@ def _on_status(db: Session, order, frm, to, rollback=False, **_):
     record(db, deal.client_company_id, KIND_COMPLETED, deal_id=deal.id)
 
 
-def on_unloaded_late(db: Session, deal, order) -> None:
-    if order.unload_to and utcnow() > order.unload_to:
+def on_unloaded_late(db: Session, deal, order, at=None) -> None:
+    """Judged by when the unloading happened (an offline checkpoint syncs later), not by when it reached us."""
+    if order.unload_to and (at or utcnow()) > order.unload_to:
         record(db, deal.carrier_company_id, KIND_LATE, deal_id=deal.id)
 
 

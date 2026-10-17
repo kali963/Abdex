@@ -56,7 +56,8 @@ def deal_card(did: str, request: Request, db: Session = Depends(get_db), me: Pri
     client = db.get(Company, d.client_company_id)
     carrier = db.get(Company, d.carrier_company_id)
     docs = documents.deal_documents(db, d.id)
-    if acc.side != "client":
+    if acc.side != "client" or (acc.side == "client" and not me.can("finance.view")):
+        # platform-fee documents: the payer's finance roles only (a logist has no access to finance)
         docs = [x for x in docs if x.doc_type not in documents.FINANCIAL_DOC_TYPES]
     if acc.side == "driver":
         docs = [x for x in docs if x.doc_type not in ("contract_order",) or carrier.show_finance_to_drivers]
@@ -81,7 +82,7 @@ def deal_card(did: str, request: Request, db: Session = Depends(get_db), me: Pri
                                                      Rating.from_company_id == (me.company.id if me.company else None))
                                 ).scalar_one_or_none(),
         "invoice": db.execute(select(Invoice).where(Invoice.deal_id == d.id)).scalars().first()
-        if acc.side == "client" else None,
+        if acc.side == "client" and me.can("finance.view") else None,
         "show_finance": show_finance,
         "next_checkpoints": _next_checkpoints(o.status, deals.checkpoints(db, d.id)),
         "trip_map": trip_map(d, o, deals.checkpoints(db, d.id)),
@@ -226,8 +227,8 @@ def customs_xml(did: str, request: Request, db: Session = Depends(get_db), me: P
     from fastapi.responses import Response
 
     acc = deal_access(db, me, parse_uuid(did), staff=request.url.path.startswith("/admin/"))
-    if not db.get(Order, acc.deal.order_id).is_international:
-        raise NotFound()
+    if acc.side not in ("client", "carrier", "staff") or not db.get(Order, acc.deal.order_id).is_international:
+        raise NotFound()  # invoice values and the consignee are not for the driver
     audit(db, "customs.exported", object_type="deal", object_id=acc.deal.id)
     db.commit()
     return Response(customs.xml_export(db, acc.deal), media_type="application/xml",

@@ -23,11 +23,16 @@ from app.db import utcnow
 from app.modules.accounts.models import STAFF_ADMIN, SupportAccessGrant, User, UserSession
 
 MAX_GRANT_HOURS = 72
-# Paths a support session may never change (prefix match on POST/PUT/PATCH/DELETE).
+# A support session may only read, plus the few helping actions below (allow-list): filling in orders and fleet
+# cards, the support thread and the deal chat. Everything with legal or security weight — accepting bids,
+# cancelling, signing, money, API keys, notifications channels, company details, account security — is refused.
+ALLOWED_WRITE_PREFIXES = ("/orders/new", "/orders/import", "/fleet/vehicles", "/fleet/drivers", "/support",
+                          "/notifications", "/impersonation/end", "/logout")
+ALLOWED_WRITE_PATTERNS = (r"^/orders/[0-9a-f-]{36}/(edit|template|submit)$", r"^/deals/[0-9a-f-]{36}/chat$")
 FORBIDDEN_PREFIXES = ("/account/password", "/account/2fa", "/account/delete", "/account/sessions",
                       "/account/consents", "/account/support-access", "/company/bank", "/company/api-keys",
-                      "/company/webhooks", "/company/members", "/company/invite")
-FORBIDDEN_SUFFIXES = ("/sign", "/sign-code")
+                      "/company/webhooks", "/company/members", "/company/invite")  # kept for reference / tests
+FORBIDDEN_SUFFIXES = ("/sign", "/sign-code", "/sign-eds", "/accept")
 
 
 def active_grant(db: Session, user_id) -> SupportAccessGrant | None:
@@ -103,6 +108,10 @@ def end(db: Session, sess: UserSession) -> None:
 
 
 def is_forbidden(path: str, method: str) -> bool:
+    import re
+
     if method in ("GET", "HEAD", "OPTIONS"):
         return False
-    return path.startswith(FORBIDDEN_PREFIXES) or path.endswith(FORBIDDEN_SUFFIXES)
+    if path.endswith(FORBIDDEN_SUFFIXES) or path.startswith(FORBIDDEN_PREFIXES):
+        return True
+    return not (path.startswith(ALLOWED_WRITE_PREFIXES) or any(re.match(p, path) for p in ALLOWED_WRITE_PATTERNS))
