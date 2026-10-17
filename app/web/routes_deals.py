@@ -27,6 +27,7 @@ from app.modules.fleet.models import Driver, Vehicle
 from app.modules.fleet.service import company_drivers, company_vehicles
 from app.modules.orders import flow
 from app.modules.orders.models import Order
+from app.modules.platform.fx import deal_kzt
 from app.modules.platform.service import dictionary, dictionary_map
 from app.web.access import deal_access
 from app.web.deps import Principal, _sysmsg as sysmsg, csrf_protect, get_principal, parse_uuid, redirect, render, require
@@ -86,6 +87,7 @@ def deal_card(did: str, request: Request, db: Session = Depends(get_db), me: Pri
         "trip_map": trip_map(d, o, deals.checkpoints(db, d.id)),
         "transport_regs": transport.registrations(db, d.id),
         "transport_types": transport.required_types(db, o),
+        "fx_kzt": deal_kzt(d),
         "customs": customs.checklist(db, d, o, customs.get(db, d)) if o.is_international else None,
         "customs_dossier": customs.get(db, d) if o.is_international else None,
         "countries": dictionary(db, "countries"), "crossings": dictionary(db, "border_crossings"),

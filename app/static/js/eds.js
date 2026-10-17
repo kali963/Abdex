@@ -80,7 +80,8 @@
       .then(function (j) { return j.challenge; });
   }
 
-  function devKeySign(text, certUrl) {
+  function devKeySign(text, certUrl, slot) {
+    slot = slot || "default";
     var subtle = window.crypto && window.crypto.subtle, data = new TextEncoder().encode(text);
     if (!subtle || !window.indexedDB) return Promise.reject(new Error("WebCrypto is not available"));
     var made = certUrl ? subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"])
@@ -90,9 +91,9 @@
         }).then(function (r) { if (!r.ok) throw new Error("certificate"); return r.json(); })
           .then(function (j) {
             var rec = { key: k.privateKey, cert: j.certificate };
-            return idb("readwrite", function (st) { return st.put(rec, "default"); }).then(function () { return rec; });
+            return idb("readwrite", function (st) { return st.put(rec, slot); }).then(function () { return rec; });
           });
-      }) : idb("readonly", function (st) { return st.get("default"); });
+      }) : idb("readonly", function (st) { return st.get(slot); });
     return made.then(function (rec) {
       if (!rec) throw new Error("no key");
       return subtle.sign({ name: "ECDSA", hash: "SHA-256" }, rec.key, data)
@@ -110,7 +111,7 @@
       challenge(btn.getAttribute("data-challenge"))
         .then(function (c) {
           text = c;
-          if (dev) return devKeySign(c, btn.getAttribute("data-cert"));
+          if (dev) return devKeySign(c, btn.getAttribute("data-cert"), btn.getAttribute("data-slot"));
           return ncalayerSign(new TextEncoder().encode(c));
         })
         .then(function (pkg) {

@@ -92,7 +92,7 @@
 <section class="card" id="terms">
   <h2>{{ _("deal.terms") }}</h2>
   <dl class="kv">
-    {% if show_finance %}<dt>{{ _("deal.price") }}</dt><dd><b>{{ money(deal.price_minor, deal.currency) }}</b> · {{ _("pay." ~ order.payment_terms) }}{% if order.payment_delay_days %} ({{ order.payment_delay_days }} {{ _("unit.days") }}){% endif %}</dd>{% endif %}
+    {% if show_finance %}<dt>{{ _("deal.price") }}</dt><dd><b>{{ money(deal.price_minor, deal.currency) }}</b>{% if deal.currency != "KZT" %}{% if deal.fx_rate %} <small class="muted">≈ {{ money(fx_kzt) }} {{ _("fx.at_rate", rate=deal.fx_rate, date=fmt_date(deal.fx_date)) }}</small>{% else %} <small class="muted">{{ _("fx.no_rate") }}</small>{% endif %}{% endif %} · {{ _("pay." ~ order.payment_terms) }}{% if order.payment_delay_days %} ({{ order.payment_delay_days }} {{ _("unit.days") }}){% endif %}</dd>{% endif %}
     <dt>{{ _("deal.client") }}</dt><dd>{{ client.name }} · {{ _("auth.bin_iin") }} {{ client.bin_iin }}{% if side != "driver" %}<br><small>{{ client.contact_phone }} {{ client.contact_email }}</small>{% endif %}</dd>
     <dt>{{ _("deal.carrier") }}</dt><dd>{{ carrier.name }} · {{ carrier.bin_iin }}{% if side != "driver" %}<br><small>{{ carrier.contact_phone }}</small>{% endif %}</dd>
     <dt>{{ _("deal.vehicle") }}</dt><dd>{{ vehicle.plate if vehicle else "—" }}{% if deal.trailer_plate %} + {{ deal.trailer_plate }}{% endif %}</dd>
@@ -287,4 +287,4 @@
 </aside>
 </div>
 {% endblock %}
-{% block scripts %}{% if eds_enabled %}<script src="/static/js/eds.js?v=2" defer></script>{% endif %}{% endblock %}
+{% block scripts %}{% if eds_enabled %}<script src="/static/js/eds.js?v=3" defer></script>{% endif %}{% endblock %}

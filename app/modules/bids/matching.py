@@ -85,7 +85,10 @@ def rank(db: Session, order: Order, *, limit: int = 10) -> list[Match]:
         select(Company).where(Company.kind == COMPANY_CARRIER, Company.is_blocked.is_(False),
                               Company.is_deleted.is_(False), Company.verification_level >= 1)
         .order_by(Company.verification_level.desc(), Company.created_at).limit(MAX_CANDIDATES)).scalars())
-    carriers = [c for c in carriers if carrier_can_see(db, order, c)
+    from app.modules.fleet.level3 import required_for
+
+    min_level = 3 if required_for(db, order) else 1  # section 8: valuable / international cargo — L3 only
+    carriers = [c for c in carriers if carrier_can_see(db, order, c) and c.verification_level >= min_level
                 and not has_restriction(db, c.id, ("block", "no_bids"))]
     if not carriers:
         return []
@@ -152,7 +155,10 @@ def invite(db: Session, order: Order, carrier: Company) -> None:
 
     if order.status not in flow.OPEN_FOR_BIDS:
         raise Conflict("order_not_open")
-    if (carrier.kind != COMPANY_CARRIER or carrier.verification_level < 1 or carrier.is_blocked
+    from app.modules.fleet.level3 import required_for
+
+    if (carrier.kind != COMPANY_CARRIER or carrier.verification_level < (3 if required_for(db, order) else 1)
+            or carrier.is_blocked
             or not carrier_can_see(db, order, carrier) or has_restriction(db, carrier.id, ("block", "no_bids"))):
         raise NotFound()
     ratelimit.hit("invite", str(order.client_company_id))

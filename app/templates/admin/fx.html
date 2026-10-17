@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("fx.title") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("fx.title") }}</h1>
+  <form method="post" action="/admin/fx">{{ ui.csrf() }}<input type="hidden" name="action" value="load"><button class="btn small">{{ _("fx.load") }}</button></form></div>
+<p class="muted">{{ _("fx.text", source=source) }}</p>
+<div class="grid side">
+<div class="table-wrap"><table><thead><tr><th>{{ _("common.date") }}</th><th>{{ _("fx.code") }}</th><th class="num">{{ _("fx.rate") }}</th><th>{{ _("fx.source") }}</th></tr></thead>
+<tbody>{% for r in rates %}<tr><td>{{ fmt_date(r.on_date) }}</td><td><b>{{ r.code }}</b></td><td class="num">{{ r.rate }} ₸</td><td>{% if r.source == "manual" %}<span class="badge warn">{{ _("fx.src.manual") }}</span>{% else %}{{ _("fx.src." ~ r.source) }}{% endif %}</td></tr>
+{% else %}<tr><td colspan="4" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+<form method="post" action="/admin/fx" class="card stack">{{ ui.csrf() }}
+  <h2>{{ _("fx.manual") }}</h2>
+  <p class="muted"><small>{{ _("fx.manual_text") }}</small></p>
+  {{ ui.field("on_date", _("common.date"), today.isoformat() if today is defined else "", type="date", required=true) }}
+  <div class="field"><label for="f-code">{{ _("fx.code") }}</label><select id="f-code" name="code">{% for c in currencies %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select></div>
+  {{ ui.field("rate", _("fx.rate_input"), "", required=true, attrs='inputmode="decimal"') }}
+  <button class="btn primary">{{ _("action.save") }}</button>
+</form>
+</div>
+{% endblock %}

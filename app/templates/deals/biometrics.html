@@ -4,6 +4,7 @@
 {% block content %}
 <div class="page-head"><h1>{{ _("bio.title") }}</h1><a class="btn small" href="/trips">{{ _("nav.trips") }}</a></div>
 <p class="muted">{{ _("bio.text") }}</p>
+{% if driver and driver.reverify_reason %}<div class="alert warn" role="alert">{{ _("bio.reverify", reason=_("bio.reason." ~ driver.reverify_reason)) }}</div>{% endif %}
 {% if check %}
 <section class="card {{ 'warn' if check.status != 'passed' }}">
   <h2>{{ _("bio.last") }}</h2>

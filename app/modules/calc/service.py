@@ -149,6 +149,7 @@ def forecast(db: Session, form: dict) -> dict:
     from app.modules.deals.models import Deal
     from app.modules.orders import flow
     from app.modules.orders.models import Order
+    from app.modules.platform.fx import deal_kzt
 
     errors: dict = {}
     origin, dest = _norm_city(form.get("from_city", "")), _norm_city(form.get("to_city", ""))
@@ -168,10 +169,10 @@ def forecast(db: Session, form: dict) -> dict:
     since = now - timedelta(days=window)
     with rls.system(db):  # aggregates over the whole market; only statistics leave this function
         rows = db.execute(select(Deal, Order).join(Order, Order.id == Deal.order_id)
-                          .where(Deal.created_at >= since, Deal.currency == currency,
-                                 Order.status != flow.CANCELLED)
+                          .where(Deal.created_at >= since, Order.status != flow.CANCELLED)
                           .order_by(Deal.created_at.desc()).limit(5000)).all()
-        sample = [(d, o) for d, o in rows if o.origin and o.destination
+        # FR-LOC-04: deals in other currencies count at the rate fixed in the deal; without a rate they are left out
+        sample = [(d, o) for d, o in rows if o.origin and o.destination and deal_kzt(d) is not None
                   and _norm_city(o.origin.city) == origin and _norm_city(o.destination.city) == dest]
     by_body = [(d, o) for d, o in sample if body and o.body_type == body]
     used_body = bool(body) and len(by_body) >= min_deals and len({d.client_company_id for d, _ in by_body}) >= min_companies
@@ -183,16 +184,16 @@ def forecast(db: Session, form: dict) -> dict:
                     "min_deals": min_deals}
     if not result["enough"]:
         return result
-    prices = [d.price_minor for d, _ in sample]
+    prices = [deal_kzt(d) for d, _ in sample]
     result.update(median=_quantile(prices, 0.5), p25=_quantile(prices, 0.25), p75=_quantile(prices, 0.75))
-    per_km = [round(d.price_minor / o.distance_km) for d, o in sample if o.distance_km > 0]
+    per_km = [round(deal_kzt(d) / o.distance_km) for d, o in sample if o.distance_km > 0]
     if len(per_km) >= min_deals:
         result["per_km"] = _quantile(per_km, 0.5)
         if distance > 0:
             result["estimate"] = round_minor(Decimal(result["per_km"]) * distance)
     recent_edge = now - timedelta(days=90)
-    recent = [d.price_minor for d, _ in sample if d.created_at >= recent_edge]
-    earlier = [d.price_minor for d, _ in sample if d.created_at < recent_edge]
+    recent = [deal_kzt(d) for d, _ in sample if d.created_at >= recent_edge]
+    earlier = [deal_kzt(d) for d, _ in sample if d.created_at < recent_edge]
     if len(recent) >= 2 and len(earlier) >= 2:
         r, e = _quantile(recent, 0.5), _quantile(earlier, 0.5)
         result["trend_pct"] = float(round((r - e) * 100 / e, 1)) if e else 0.0

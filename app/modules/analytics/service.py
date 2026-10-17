@@ -26,6 +26,7 @@ from app.modules.documents.models import Document
 from app.modules.fleet.models import Driver
 from app.modules.orders import flow
 from app.modules.orders.models import Order, StatusHistory
+from app.modules.platform.fx import deal_kzt
 from app.modules.platform.models import KpiSnapshot
 
 KPI_TARGETS = {  # month -> targets from the development plan
@@ -124,7 +125,7 @@ def client_analytics(db: Session, company_id) -> dict:
     """FR-BI-03."""
     rows = db.execute(select(Deal, Order).join(Order, Order.id == Deal.order_id)
                       .where(Deal.client_company_id == company_id)).all()
-    spend = sum(d.price_minor for d, o in rows if d.currency == "KZT")
+    spend = sum(deal_kzt(d) or 0 for d, o in rows)  # FR-LOC-04: tenge at the deal's own rate
     km = sum(o.distance_km for _, o in rows)
     directions: dict[str, int] = {}
     carriers: dict = {}
@@ -152,11 +153,11 @@ def carrier_analytics(db: Session, company_id) -> dict:
     """FR-BI-04."""
     rows = db.execute(select(Deal, Order).join(Order, Order.id == Deal.order_id)
                       .where(Deal.carrier_company_id == company_id)).all()
-    income = sum(d.price_minor for d, _ in rows if d.currency == "KZT")
+    income = sum(deal_kzt(d) or 0 for d, _ in rows)  # FR-LOC-04
     directions: dict[str, int] = {}
     for d, o in rows:
         key = f"{o.origin.city if o.origin else '?'} → {o.destination.city if o.destination else '?'}"
-        directions[key] = directions.get(key, 0) + d.price_minor
+        directions[key] = directions.get(key, 0) + (deal_kzt(d) or 0)
     avg = db.execute(select(func.avg(Rating.score)).where(Rating.to_company_id == company_id)).scalar_one()
     bids_total = db.execute(select(func.count(Bid.id)).where(Bid.carrier_company_id == company_id)).scalar_one()
     rejected = db.execute(select(func.count(Bid.id)).where(Bid.carrier_company_id == company_id,

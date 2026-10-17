@@ -117,10 +117,17 @@ def latest_snapshot(db: Session, deal_id) -> DealSnapshot | None:
 
 
 def create_deal_from_bid(db: Session, order: Order, bid: Bid) -> Deal:
+    from app.modules.fleet.reverify import ensure_allowed, on_assignment
+
+    ensure_allowed(db, bid.driver_id)
+    on_assignment(db, bid.driver_id)  # FR-KYC-09: a long break flags the driver; the deal goes on
     deal = Deal(order_id=order.id, bid_id=bid.id, number=next_number(db, "deal", "SD"),
                 client_company_id=order.client_company_id, carrier_company_id=bid.carrier_company_id,
                 price_minor=bid.price_minor, currency=bid.currency, vehicle_id=bid.vehicle_id, driver_id=bid.driver_id,
                 created_by=get_ctx().user_id)
+    from app.modules.platform.fx import fix_for_deal
+
+    fix_for_deal(db, deal)  # FR-LOC-04: the rate to tenge on the deal date is kept in the deal
     db.add(deal)
     db.flush()
     flow.transition(db, order, flow.ASSIGNED, actor=flow.SYSTEM, reason=f"bid {bid.id} accepted")
@@ -352,6 +359,9 @@ def decide_executor_change(db: Session, acc: DealAccess, ch: ExecutorChange, acc
         if ch.new_vehicle_id:
             acc.deal.vehicle_id = ch.new_vehicle_id
         if ch.new_driver_id:
+            from app.modules.fleet.reverify import ensure_allowed
+
+            ensure_allowed(db, ch.new_driver_id)
             acc.deal.driver_id = ch.new_driver_id
         prev = latest_snapshot(db, acc.deal.id)
         _write_snapshot(db, acc.deal, snapshot_payload(db, acc.deal, acc.order), reason=f"executor change {ch.id}",
@@ -375,6 +385,9 @@ def add_checkpoint(db: Session, acc: DealAccess, kind: str, *, lat=None, lng=Non
                      ).scalar_one_or_none()
     if dup:
         return dup  # FR-TRK-07: offline sync without duplicates
+    from app.modules.fleet import reverify
+
+    reverify.ensure_allowed(db, acc.deal.driver_id)  # FR-KYC-09: re-check pending — no checkpoints
     order = flow.lock_order(db, acc.deal.order_id)
     target = CHECKPOINT_TRANSITIONS.get(kind)
     if target and not flow.can(order.status, target, flow.DRIVER):
@@ -387,6 +400,7 @@ def add_checkpoint(db: Session, acc: DealAccess, kind: str, *, lat=None, lng=Non
                     created_by=get_ctx().user_id)
     db.add(cp)
     db.flush()
+    reverify.on_checkpoint(db, acc.deal, order, lat, lng)
     if target:
         flow.transition(db, order, target, actor=flow.DRIVER, reason=f"checkpoint {kind}")
     if kind == "unloaded":

@@ -105,7 +105,8 @@ def test_matching_ranks_and_invites(login, db):
     tok = _ctx()
     set_setting(db, "matching.weights", {"body": 0, "geo": 0, "history": 0, "rating": 0, "level": 1, "load": 0})
     db.flush()
-    assert next(m for m in matching.rank(db, order) if m.company.id == top.company.id).score == round(100 * 2 / 3)
+    level = top.company.verification_level
+    assert next(m for m in matching.rank(db, order) if m.company.id == top.company.id).score == round(100 * level / 3)
     db.rollback()
     reset_ctx(tok)
 

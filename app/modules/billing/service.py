@@ -36,6 +36,8 @@ from app.modules.platform.service import get_setting, next_number
 
 FEE_SUBJECT = ("услуги по предоставлению программно-технических возможностей платформы AbdEX "
                "для оформления сделки № {deal}")  # FR-PVD-03 — the only permitted wording
+FEE_SUBJECT_KK = ("№ {deal} мәмілені рәсімдеу үшін AbdEX платформасының бағдарламалық-техникалық "
+                  "мүмкіндіктерін ұсыну қызметтері")  # FR-LOC-05: the same wording in Kazakh
 
 
 def tariff_for(db: Session, company_id, on: date, deal_type: str = "any") -> Tariff:
@@ -88,7 +90,18 @@ def accrue_for_deal(db: Session, deal: Deal) -> Accrual | None:
         return existing
     on = (order.assigned_at or utcnow()).date()
     tariff = tariff_for(db, deal.client_company_id, on, "international" if order.is_international else "domestic")
-    amount, income, calc = compute_fee(tariff, deal.price_minor if deal.currency == tariff.currency else 0)
+    from app.modules.platform.fx import to_kzt_minor
+
+    base, fx_note = deal.price_minor, None
+    if deal.currency != tariff.currency:
+        # FR-LOC-04: a foreign-currency deal is valued in tenge at the rate fixed in the deal
+        base = to_kzt_minor(deal.price_minor, deal.currency, deal.fx_rate) if tariff.currency == "KZT" else None
+        fx_note = {"currency": deal.currency, "rate": deal.fx_rate, "date": str(deal.fx_date or ""),
+                   "status": "converted" if base is not None else "no_rate"}
+        base = base or 0
+    amount, income, calc = compute_fee(tariff, base)
+    if fx_note:
+        calc["fx"] = fx_note
     amount, calc = apply_promo(db, deal.client_company_id, on, amount, calc)
     client = db.get(Company, deal.client_company_id)
     invoice = Invoice(number=next_number(db, "fee_invoice", "СЧ"), company_id=client.id, deal_id=deal.id,
@@ -117,11 +130,13 @@ def _issue_documents(db: Session, invoice: Invoice, deal: Deal, client: Company)
     """FR-BIL-03: invoice and act generated automatically with the correct subject wording."""
     from app.modules.documents.service import generate
 
-    subject = FEE_SUBJECT.format(deal=deal.number)
+    kk = client.locale == "kk"
+    subject = (FEE_SUBJECT_KK if kk else FEE_SUBJECT).format(deal=deal.number)
     ctx = {"client_name": client.name, "client_bin": client.bin_iin, "subject": subject,
            "amount": format_money(invoice.amount_minor, invoice.currency), "deal_number": deal.number,
            "due_date": invoice.due_date.strftime("%d.%m.%Y") if invoice.due_date else "",
-           "vat_note": get_setting(db, "billing.vat_note", "Без НДС")}
+           "vat_note": "ҚҚС-сыз" if kk and get_setting(db, "billing.vat_note", "Без НДС") == "Без НДС"
+           else get_setting(db, "billing.vat_note", "Без НДС")}
     inv_doc = generate(db, "fee_invoice", ctx, deal_id=deal.id, company_id=client.id, locale=client.locale,
                        number=invoice.number)
     act_doc = generate(db, "fee_act", ctx, deal_id=deal.id, company_id=client.id, locale=client.locale)

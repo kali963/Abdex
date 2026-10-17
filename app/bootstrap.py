@@ -155,6 +155,11 @@ SETTINGS = {
     "calc.forecast_window_days": (365, "FR-CALC-06: за сколько дней брать сделки для прогноза"),
     "calc.forecast_min_deals": (3, "FR-CALC-06: минимум сделок по направлению для показа прогноза"),
     "calc.forecast_min_companies": (2, "FR-CALC-06: минимум разных заказчиков в выборке (цена одной компании не раскрывается)"),
+    "kyc.l3_required_for": (["international", "valuable"],
+                            "Раздел 8: какие грузы доступны только перевозчикам уровня L3 (international, valuable)"),
+    "kyc.reverify": ({"new_device": True, "geo_km": 300, "break_days": 90, "block_trips": True},
+                     "FR-KYC-09: признаки повторной проверки водителя — новое устройство, удаление от маршрута (км), "
+                     "перерыв в рейсах (дней); блокировать ли рейсы до проверки"),
     "customs.rules": ({"groups": {"eaeu": ["RU", "BY", "KG", "AM"], "china": ["CN"],
                                   "cis": ["UZ", "TJ", "TM", "AZ", "GE", "MD"]},
                        "eaeu": {"customs": False,
@@ -342,6 +347,43 @@ ${vat_note}
 Срок оплаты: до ${due_date}
 
 Основание: подключение цифрового модуля «${module}» на период ${period}."""),
+    # FR-LOC-05: the language of a financial document follows the recipient company's setting
+    ("fee_invoice", "kk"): (
+        "Төлем шоты № ${number}, ${date}",
+        """Жеткізуші: AbdEX — онлайн-алаң операторы
+Сатып алушы: ${client_name}, БСН ${client_bin}
+
+## Мәні
+${subject}
+
+Төленетін сома: ${amount}
+${vat_note}
+Төлеу мерзімі: ${due_date} дейін
+
+Негіздеме: алаңда рәсімделген № ${deal_number} мәміле."""),
+    ("fee_act", "kk"): (
+        "Көрсетілген қызметтер актісі № ${number}, ${date}",
+        """Орындаушы: AbdEX — онлайн-алаң операторы
+Тапсырыс беруші: ${client_name}, БСН ${client_bin}
+
+## Атауы
+${subject}
+
+Құны: ${amount}. ${vat_note}
+Қызметтер толық көлемде көрсетілді, тараптардың бір-біріне наразылығы жоқ."""),
+    ("module_invoice", "kk"): (
+        "Төлем шоты № ${number}, ${date}",
+        """Жеткізуші: AbdEX — онлайн-алаң операторы
+Сатып алушы: ${client_name}, БСН ${client_bin}
+
+## Мәні
+${subject}
+
+Төленетін сома: ${amount}
+${vat_note}
+Төлеу мерзімі: ${due_date} дейін
+
+Негіздеме: «${module}» цифрлық модулін ${period} кезеңге қосу."""),
     ("fee_act", "ru"): (
         "Акт оказанных услуг № ${number} от ${date}",
         """Исполнитель: AbdEX — оператор онлайн-площадки

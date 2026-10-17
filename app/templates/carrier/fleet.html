@@ -26,7 +26,7 @@
 <section>
   <h2>{{ _("fleet.drivers") }} ({{ drivers|length }})</h2>
   <div class="table-wrap"><table><thead><tr><th>{{ _("auth.full_name") }}</th><th>{{ _("fleet.license") }}</th><th>{{ _("common.status") }}</th><th></th></tr></thead><tbody>
-  {% for d in drivers %}<tr><td><b>{{ d.full_name }}</b>{% if d.user_id %} <span class="badge info">{{ _("fleet.has_app") }}</span>{% endif %}<br><small class="muted">{{ d.phone }}</small></td><td>{{ d.license_categories }}{% if d.license_until %}<br><small>{{ _("fleet.until") }} {{ fmt_date(d.license_until) }}</small>{% endif %}{% if d.adr_permit %} <span class="badge err">ADR</span>{% endif %}</td><td>{{ ui.status(d.status) }}</td>
+  {% for d in drivers %}<tr><td><b>{{ d.full_name }}</b>{% if d.user_id %} <span class="badge info">{{ _("fleet.has_app") }}</span>{% endif %}<br><small class="muted">{{ d.phone }}</small></td><td>{{ d.license_categories }}{% if d.license_until %}<br><small>{{ _("fleet.until") }} {{ fmt_date(d.license_until) }}</small>{% endif %}{% if d.adr_permit %} <span class="badge err">ADR</span>{% endif %}</td><td>{{ ui.status(d.status) }}{% if d.reverify_reason %}<br><span class="badge warn">{{ _("bio.reverify_short") }}</span>{% endif %}</td>
   <td><form method="post" action="/fleet/drivers/{{ d.id }}/delete" data-confirm="{{ _('common.confirm_delete') }}">{{ ui.csrf() }}<button class="btn small link">{{ _("action.remove") }}</button></form></td></tr>
   {% else %}<tr><td colspan="4" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
   <details class="card"><summary>+ {{ _("fleet.add_driver") }}</summary>

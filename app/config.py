@@ -80,6 +80,9 @@ class Settings:
     metrics_token: str = field(default_factory=lambda: os.getenv("METRICS_TOKEN", ""))  # NFR-OBS-01
     # GOV-DS-02: server-side verification of NCA RK signatures (NCANode); empty = development signer
     eds_ncanode_url: str = field(default_factory=lambda: os.getenv("EDS_NCANODE_URL", ""))
+    # FR-LOC-04: official rates feed, e.g. https://nationalbank.kz/rss/get_rates.cfm (empty: simulator in development,
+    # manual rates in production)
+    fx_rates_url: str = field(default_factory=lambda: os.getenv("FX_RATES_URL", ""))
     # FR-BIL-06: hosted-checkout payment provider; empty URL = development simulator
     payment_provider_url: str = field(default_factory=lambda: os.getenv("PAYMENT_PROVIDER_URL", ""))
     payment_provider_key: str = field(default_factory=lambda: os.getenv("PAYMENT_PROVIDER_KEY", ""))
@@ -111,7 +114,7 @@ def load_settings() -> Settings:
                 ("abdex-demo:" + os.environ["VERCEL_PROJECT_ID"]).encode()).hexdigest())
         else:
             object.__setattr__(s, "secret_key", secrets.token_urlsafe(48))
-    for name in ("eds_ncanode_url", "payment_provider_url"):  # external endpoints: http(s) only
+    for name in ("eds_ncanode_url", "payment_provider_url", "fx_rates_url"):  # external endpoints: http(s) only
         value = getattr(s, name)
         if value and not value.startswith(("https://", "http://")):
             raise RuntimeError(f"{name.upper()} must be an http(s) URL")

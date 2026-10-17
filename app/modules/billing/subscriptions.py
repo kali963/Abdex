@@ -35,6 +35,8 @@ from app.modules.platform.service import get_setting, next_number
 
 MODULE_SUBJECT = ("услуги по предоставлению доступа к цифровому модулю «{name}» платформы AbdEX "
                   "за период {start} — {end}")  # FR-PVD-03 wording, no transport services
+MODULE_SUBJECT_KK = ("{start} — {end} кезеңге AbdEX платформасының «{name}» цифрлық модуліне қол жеткізуді "
+                     "ұсыну қызметтері")  # FR-LOC-05
 AUDIENCES = ("any", "client", "carrier")
 MAX_CATCH_UP = 12  # periods charged at most in one renewal run
 
@@ -73,8 +75,9 @@ def _charge(db: Session, sub: Subscription, module: DigitalModule, company: Comp
     event = f"subscription:{sub.id}:{sub.period_start.isoformat()}"
     if db.execute(select(Accrual.id).where(Accrual.event == event)).first():
         return None
-    subject = MODULE_SUBJECT.format(name=module.name, start=sub.period_start.strftime("%d.%m.%Y"),
-                                    end=sub.period_end.strftime("%d.%m.%Y"))
+    kk = company.locale == "kk"
+    subject = (MODULE_SUBJECT_KK if kk else MODULE_SUBJECT).format(
+        name=module.name, start=sub.period_start.strftime("%d.%m.%Y"), end=sub.period_end.strftime("%d.%m.%Y"))
     invoice = Invoice(number=next_number(db, "fee_invoice", "СЧ"), company_id=company.id,
                       amount_minor=module.price_minor, currency=module.currency,
                       due_date=utcnow().date() + timedelta(days=int(get_setting(db, "billing.payment_days", 5))))
@@ -98,8 +101,9 @@ def _charge(db: Session, sub: Subscription, module: DigitalModule, company: Comp
            "due_date": invoice.due_date.strftime("%d.%m.%Y"), "vat_note": get_setting(db, "billing.vat_note", "Без НДС")}
     if module.price_minor == 0:
         invoice.status, invoice.paid_at = "paid", utcnow()
-    invoice.document_id = generate(db, "module_invoice", ctx, company_id=company.id, number=invoice.number).id
-    invoice.act_document_id = generate(db, "fee_act", ctx, company_id=company.id).id
+    invoice.document_id = generate(db, "module_invoice", ctx, company_id=company.id, number=invoice.number,
+                                   locale=company.locale).id
+    invoice.act_document_id = generate(db, "fee_act", ctx, company_id=company.id, locale=company.locale).id
     audit(db, "billing.accrued", object_type="subscription", object_id=sub.id,
           details={"amount": module.price_minor, "income": module.income_type})
     return invoice

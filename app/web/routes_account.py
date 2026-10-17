@@ -22,10 +22,12 @@ from app.modules.accounts.models import (
     UserSession,
 )
 from app.modules.accounts.permissions import roles_in_scope
+from app.modules.documents.eds import is_dev_signer
+from app.modules.fleet import level3
 from app.modules.fleet import service as fleet
 from app.modules.fleet.models import RegistryCheck, VerificationDocument, VerificationRequest
 from app.modules.notifications.models import ChannelLink, Notification
-from app.modules.platform.service import dictionary
+from app.modules.platform.service import dictionary, flag_enabled
 from app.web.deps import Principal, csrf_protect, get_principal, parse_uuid, redirect, render, require, set_flash
 
 router = APIRouter(dependencies=[Depends(csrf_protect)])
@@ -509,7 +511,38 @@ def verification(request: Request, db: Session = Depends(get_db), me: Principal 
                              .order_by(RegistryCheck.created_at.desc()).limit(5)).scalars())
     return render(request, "company/verification.html", {
         "docs": docs, "reqs": reqs, "checks": checks, "reasons": {i.code: i.name_ru for i in dictionary(db, "verification_reject_reasons")},
-        "vehicles": fleet.company_vehicles(db, me.company.id), "drivers": fleet.company_drivers(db, me.company.id)})
+        "vehicles": fleet.company_vehicles(db, me.company.id), "drivers": fleet.company_drivers(db, me.company.id),
+        "l3": level3.requirements(db, me.company),
+        "eds_enabled": flag_enabled(db, "qualified_signature", me.company.id),
+        "eds_mode": "dev" if is_dev_signer() else "ncalayer"})
+
+
+@router.post("/company/eds/challenge")
+def company_eds_challenge(db: Session = Depends(get_db), me: Principal = Depends(require("company.manage"))):
+    """L3: a one-time text the company signs with its qualified certificate."""
+    from fastapi.responses import JSONResponse
+
+    from app.modules.accounts.eds_login import new_challenge
+
+    challenge = new_challenge(db)
+    db.commit()
+    return JSONResponse({"challenge": challenge}, headers={"Cache-Control": "no-store"})
+
+
+@router.post("/company/eds/confirm")
+async def company_eds_confirm(request: Request, db: Session = Depends(get_db),
+                              me: Principal = Depends(require("company.manage"))):
+    form = await request.form()
+    company = db.get(Company, me.company.id)
+    try:
+        level3.confirm_eds(db, company, str(form.get("package", "")), str(form.get("challenge", "")))
+    except AppError as exc:
+        db.commit()
+        resp = redirect("/company/verification#l3")
+        set_flash(resp, "error", exc.message_key, **exc.params)
+        return resp
+    db.commit()
+    return redirect("/company/verification#l3", flash=("success", "l3.eds_confirmed"))
 
 
 @router.post("/company/verification/upload")

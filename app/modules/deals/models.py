@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, Float, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import BigInteger, Boolean, Date, Float, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import AppendOnly, AwareDateTime, Model
@@ -21,6 +21,9 @@ class Deal(Model):
     carrier_company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"), index=True)
     price_minor: Mapped[int] = mapped_column(BigInteger)
     currency: Mapped[str] = mapped_column(String(3), default="KZT")
+    # FR-LOC-04: the rate to tenge on the deal date is fixed in the deal and used by reports and the platform fee
+    fx_rate: Mapped[str] = mapped_column(String(24), default="1")
+    fx_date: Mapped[date | None] = mapped_column(Date)
     vehicle_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("vehicles.id"))
     driver_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("drivers.id"))
     trailer_plate: Mapped[str] = mapped_column(String(20), default="")
