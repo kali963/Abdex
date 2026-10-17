@@ -130,6 +130,9 @@ def attach_verification_document(db: Session, company: Company, *, subject_type:
                                doc_type=doc_type, file_id=file_id, expires_on=expires_on, created_by=get_ctx().user_id)
     db.add(doc)
     db.flush()
+    from app.modules.documents.recognition import recognize
+
+    recognize(db, doc, company)  # M6: read the document for the moderator, flag a BIN/plate mismatch
     audit(db, "verification.document_uploaded", object_type="verification_document", object_id=doc.id,
           details={"doc_type": doc_type})
     return doc

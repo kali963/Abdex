@@ -244,3 +244,19 @@ class RolePermission(Model):
 
     role: Mapped[str] = mapped_column(String(20), index=True)
     permission: Mapped[str] = mapped_column(String(40))
+
+
+class EgovSignSession(Model):
+    """FR-AUTH-09: one login attempt through eGov mobile (QR + signing in the app, mgovSign protocol).
+    Only hashes of the three secrets are stored: the QR token, the app's bearer token and the browser's cookie."""
+
+    __tablename__ = "egov_sign_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    auth_token_hash: Mapped[str] = mapped_column(String(64))
+    browser_hash: Mapped[str] = mapped_column(String(64))
+    challenge: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(10), default="pending")  # pending / signed / failed / used
+    user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id"))
+    error: Mapped[str] = mapped_column(String(100), default="")
+    expires_at: Mapped[datetime] = mapped_column(AwareDateTime)

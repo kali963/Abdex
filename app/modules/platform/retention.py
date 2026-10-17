@@ -28,6 +28,7 @@ DEFAULT_POLICIES = {
     "webhook_deliveries": 90,    # delivered / failed deliveries
     "invitations": 90,           # used, revoked or expired invitations
     "support_grants": 365,       # finished support access grants
+    "track_points": 90,          # telematics positions (FR-TRK-05): geodata is kept only as long as needed
 }
 
 
@@ -43,6 +44,7 @@ def run(db: Session) -> dict[str, int]:
     from app.modules.accounts.models import Invitation, OtpCode, SupportAccessGrant, UserSession
     from app.modules.notifications.models import Notification, OutboxMessage
     from app.modules.platform.models import DeviceEvent, IdempotencyKey, ProductEvent
+    from app.modules.deals.models import TrackPoint
     from app.modules.webhooks.models import WebhookDelivery
 
     now = utcnow()
@@ -64,6 +66,7 @@ def run(db: Session) -> dict[str, int]:
             WebhookDelivery.created_at < c, WebhookDelivery.status.in_(("delivered", "failed"))),
         "invitations": lambda c: delete(Invitation).where(Invitation.created_at < c, or_(
             Invitation.used_at.is_not(None), Invitation.revoked_at.is_not(None), Invitation.expires_at < now)),
+        "track_points": lambda c: delete(TrackPoint).where(TrackPoint.at < c),
         "support_grants": lambda c: delete(SupportAccessGrant).where(SupportAccessGrant.created_at < c, or_(
             SupportAccessGrant.revoked_at.is_not(None), and_(SupportAccessGrant.valid_until < now))),
     }

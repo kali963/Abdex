@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import BASE_DIR, settings
 from app.core.errors import AppError, NotFound, ValidationFailed
-from app.core.i18n import LOCALES
+from app.core.i18n import LOCALES, translate
 from app.core.security import verify_signed_payload
 from app.db import get_db
 from app.modules.accounts import service as accounts
@@ -52,7 +52,10 @@ def _eds_ctx(db: Session) -> dict:
     from app.modules.accounts import eds_login
     from app.modules.documents.eds import is_dev_signer
 
-    return {"eds_login": eds_login.enabled(db), "eds_mode": "dev" if is_dev_signer() else "ncalayer"}
+    from app.modules.accounts import egov_mobile
+
+    return {"eds_login": eds_login.enabled(db), "eds_mode": "dev" if is_dev_signer() else "ncalayer",
+            "egov_login": egov_mobile.enabled(db)}
 
 
 @router.get("/login")
@@ -123,6 +126,103 @@ async def login_eds(request: Request, db: Session = Depends(get_db)):
         set_flash(resp, "error", exc.message_key, **exc.params)
         return resp
     return _signed_in(db, user, nxt)
+
+
+# ------------------------------------------------------------------ eGov mobile (FR-AUTH-09)
+
+EGOV_COOKIE = "abdex_egov"
+
+
+def _public_base(request: Request) -> str:
+    import os
+
+    return (os.getenv("PUBLIC_BASE_URL") or str(request.base_url)).rstrip("/")
+
+
+@router.post("/login/egov/start")
+def egov_start(request: Request, db: Session = Depends(get_db)):
+    """A login attempt: a QR code for the eGov mobile app; the cookie ties the result to this browser."""
+    import segno
+    from fastapi.responses import JSONResponse
+
+    from app.modules.accounts import egov_mobile
+
+    if not egov_mobile.enabled(db):
+        raise NotFound()
+    token, browser = egov_mobile.start(db)
+    db.commit()
+    link = f"mobileSign:{_public_base(request)}/egov/mgov/{token}"
+    data = {"token": token, "link": link, "qr": segno.make(link, error="m").svg_data_uri(scale=4, border=2),
+            "status": f"/login/egov/{token}/status"}
+    if settings.is_dev:
+        data["dev_api"] = f"/egov/mgov/{token}"  # the in-browser test phone plays the app in development
+    resp = JSONResponse(data, headers={"Cache-Control": "no-store"})
+    resp.set_cookie(EGOV_COOKIE, browser, max_age=300, httponly=True, secure=settings.secure_cookies,
+                    samesite="strict", path="/login/egov")
+    return resp
+
+
+@router.get("/login/egov/{token}/status")
+def egov_status(token: str, request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import JSONResponse
+
+    from app.modules.accounts import egov_mobile
+
+    try:
+        state, user = egov_mobile.poll(db, token, request.cookies.get(EGOV_COOKIE, ""))
+    except NotFound:
+        raise  # an unknown attempt or another browser: nothing to tell
+    except AppError as exc:
+        db.commit()
+        return JSONResponse({"status": "failed", "message": translate(exc.message_key, **exc.params)})
+    if user is None:
+        db.commit()
+        return JSONResponse({"status": state})
+    redirect_resp = _signed_in(db, user, "/dashboard")
+    resp = JSONResponse({"status": "signed", "redirect": redirect_resp.headers["location"]})
+    for value in redirect_resp.headers.getlist("set-cookie"):
+        resp.headers.append("set-cookie", value)
+    resp.delete_cookie(EGOV_COOKIE, path="/login/egov")
+    return resp
+
+
+# The eGov mobile app calls these: no browser, no CSRF; access is the QR token plus the derived bearer token.
+mgov = APIRouter()
+
+
+@mgov.get("/egov/mgov/{token}")
+def mgov_describe(token: str, request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import JSONResponse
+
+    from app.modules.accounts import egov_mobile
+
+    if not egov_mobile.enabled(db):
+        raise NotFound()
+    return JSONResponse(egov_mobile.describe(db, token, _public_base(request)))
+
+
+@mgov.get("/egov/mgov/{token}/document")
+def mgov_document(token: str, request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import JSONResponse
+
+    from app.modules.accounts import egov_mobile
+
+    return JSONResponse(egov_mobile.document(db, token, request.headers.get("authorization", "")))
+
+
+@mgov.put("/egov/mgov/{token}/document")
+async def mgov_signed(token: str, request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import JSONResponse
+
+    from app.modules.accounts import egov_mobile
+
+    try:
+        body = await request.json()
+    except ValueError:
+        body = {}
+    egov_mobile.signed(db, token, request.headers.get("authorization", ""), body if isinstance(body, dict) else {})
+    db.commit()
+    return JSONResponse({"ok": True})
 
 
 @router.get("/login/2fa")

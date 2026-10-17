@@ -514,9 +514,28 @@ def company(request: Request, db: Session = Depends(get_db), me: Principal = Dep
     banks = list(db.execute(select(BankAccount).where(BankAccount.company_id == me.company.id)
                             .order_by(BankAccount.created_at.desc())).scalars())
     roles = roles_in_scope("client" if me.company.kind == "client" else "carrier")
+    from app.modules.deals.models import TelematicsConnection
+
+    telem = db.execute(select(TelematicsConnection).where(TelematicsConnection.company_id == me.company.id)
+                       ).scalar_one_or_none() if me.company.kind == "carrier" else None
     return render(request, "company/company.html", {"members": members, "invites": invites, "banks": banks,
-                                                     "roles": roles, "now": utcnow(),
+                                                     "roles": roles, "now": utcnow(), "telematics": telem,
                                                      "new_invite": request.query_params.get("invite")})
+
+
+@router.post("/company/telematics")
+async def company_telematics(request: Request, db: Session = Depends(get_db),
+                             me: Principal = Depends(require("company.manage"))):
+    """FR-TRK-05: the carrier's GPS system polled by the platform."""
+    from app.modules.deals import telematics
+
+    if me.company.kind != "carrier":
+        raise NotFound()
+    form = await request.form()
+    telematics.save_connection(db, me.company, str(form.get("url", "")), str(form.get("token", "")),
+                               active=bool(form.get("active")))
+    db.commit()
+    return redirect("/company#telematics", flash=("success", "msg.saved"))
 
 
 @router.post("/company")

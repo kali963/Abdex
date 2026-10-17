@@ -68,6 +68,7 @@ class VerificationDocument(Model):
     expires_on: Mapped[date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(20), default="uploaded")  # uploaded / approved / rejected
     reject_reason: Mapped[str] = mapped_column(String(300), default="")
+    recognized: Mapped[str] = mapped_column(Text, default="{}")  # M6: data read from the document for the moderator
 
 
 class VerificationRequest(Model):

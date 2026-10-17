@@ -16,6 +16,7 @@ from app.modules.accounts.models import Company, User
 from app.modules.billing.models import Invoice
 from app.modules.chat import service as chat
 from app.modules.deals import service as deals
+from app.modules.deals import telematics
 from app.modules.deals.tracking import trip_map
 from app.modules.documents import customs, transport
 from app.modules.documents.eds import is_dev_signer
@@ -85,7 +86,7 @@ def deal_card(did: str, request: Request, db: Session = Depends(get_db), me: Pri
         if acc.side == "client" and me.can("finance.view") else None,
         "show_finance": show_finance,
         "next_checkpoints": _next_checkpoints(o.status, deals.checkpoints(db, d.id)),
-        "trip_map": trip_map(d, o, deals.checkpoints(db, d.id)),
+        "trip_map": trip_map(d, o, deals.checkpoints(db, d.id), telematics.points_for(db, d.id)),
         "transport_regs": transport.registrations(db, d.id),
         "transport_types": transport.required_types(db, o),
         "fx_kzt": deal_kzt(d),

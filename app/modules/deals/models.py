@@ -7,7 +7,7 @@ from datetime import date, datetime
 from sqlalchemy import BigInteger, Boolean, Date, Float, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import AppendOnly, AwareDateTime, Model
+from app.db import AppendOnly, AwareDateTime, Encrypted, Model
 
 
 class Deal(Model):
@@ -141,3 +141,32 @@ class Dispute(Model):
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     resolved_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
     fault: Mapped[str] = mapped_column(String(10), default="")  # none / carrier / client — feeds the rating
+
+
+class TrackPoint(Model):
+    """FR-TRK-05: a GPS position from the carrier's telematics system, kept only for a deal on the way whose
+    driver/carrier agreed to share geodata (FR-TRK-03) and only for the retention period."""
+
+    __tablename__ = "track_points"
+    __table_args__ = (UniqueConstraint("deal_id", "at", name="uq_track_point_time"),)
+
+    deal_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("deals.id"), index=True)
+    vehicle_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("vehicles.id"))
+    at: Mapped[datetime] = mapped_column(AwareDateTime, index=True)
+    lat: Mapped[float] = mapped_column(Float)
+    lng: Mapped[float] = mapped_column(Float)
+    speed_kmh: Mapped[int] = mapped_column(Integer, default=0)
+    source: Mapped[str] = mapped_column(String(20), default="api")  # api / pull
+
+
+class TelematicsConnection(Model):
+    """A carrier's GPS system polled by the platform (generic HTTPS JSON contract, see telematics.py)."""
+
+    __tablename__ = "telematics_connections"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id"), unique=True)
+    url: Mapped[str] = mapped_column(String(500))
+    token: Mapped[str] = mapped_column(Encrypted("telematics_connections.token"), default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_sync_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+    last_error: Mapped[str] = mapped_column(String(300), default="")

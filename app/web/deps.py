@@ -279,6 +279,17 @@ def _status_label(status: str) -> str:
     return translate(f"status.{status}")
 
 
+def _from_json(text) -> dict:
+    try:
+        value = json.loads(text or "{}")
+    except (ValueError, TypeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+templates.env.filters["fromjson"] = _from_json
+
+
 def _sysmsg(body: str) -> str:
     try:
         data = json.loads(body)

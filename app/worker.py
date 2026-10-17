@@ -47,21 +47,29 @@ def tick() -> dict:
     from app.modules.platform.retention import run as retention
     from app.modules.platform.security import scan as security_scan
 
+    from app.modules.billing.esf import process as process_esf
+
     for name, job in (("outbox", process_outbox), ("bidding", expire_bidding), ("sla", escalate_overdue),
-                      ("webhooks", process_webhooks), ("security", security_scan), ("etd", process_etd)):
+                      ("security", security_scan), ("etd", process_etd), ("esf", process_esf),
+                      ("webhooks", process_webhooks)):  # outbound HTTP last: it must not delay the timers
         _run(name, job, stats)
     if time.time() - _last_hourly > 600:
         _last_hourly = time.time()
         from app.modules.billing.subscriptions import renew_due
 
-        for name, job in (("digests", process_digests), ("series", generate_due), ("subscriptions", renew_due)):
+        from app.modules.deals.telematics import pull_all as pull_telematics
+
+        for name, job in (("digests", process_digests), ("series", generate_due), ("subscriptions", renew_due),
+                          ("telematics", pull_telematics)):
             _run(name, job, stats)
     if time.time() - _last_daily > 6 * 3600:
         _last_daily = time.time()
         from app.modules.fleet.level3 import evaluate_all as evaluate_l3
+        from app.modules.bids.matching import learn as learn_matching
         from app.modules.platform.fx import load as load_fx
 
         for name, job in (("doc_expiry", check_document_expiry), ("debt", enforce_debt_limits), ("l3", evaluate_l3), ("fx", load_fx),
+                          ("matching_ai", learn_matching),
                           ("retention", retention)):
             _run(name, job, stats)
     return stats

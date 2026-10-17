@@ -266,7 +266,7 @@
 <aside class="stack">
 <section class="card" id="chat">
   <h2>{{ _("chat.title") }}</h2>
-  <div class="chat" data-chat="/deals/{{ deal.id }}/chat.json" data-chat-ws="/deals/{{ deal.id }}/chat/ws" data-last="{{ messages[-1].id if messages else '' }}" data-attachment="{{ _('chat.attachment') }}" data-sent="{{ _('chat.sent') }}" data-read="{{ _('chat.read') }}" aria-live="polite">
+  <div class="chat" tabindex="0" role="log" aria-label="{{ _('chat.title') }}" data-chat="/deals/{{ deal.id }}/chat.json" data-chat-ws="/deals/{{ deal.id }}/chat/ws" data-last="{{ messages[-1].id if messages else '' }}" data-attachment="{{ _('chat.attachment') }}" data-sent="{{ _('chat.sent') }}" data-read="{{ _('chat.read') }}" aria-live="polite">
   {% for m in messages %}
     {% if m.kind == "system" %}<div class="msg system" id="m-{{ m.id }}">{{ sysmsg(m.body) }}<span class="meta">{{ fmt_dt(m.created_at) }}</span></div>
     {% else %}<div class="msg {{ 'mine' if m.author_user_id == me.user.id }}" id="m-{{ m.id }}">{{ m.body }}{% if m.attachment_file_id %}<br><a href="{{ file_url(m.attachment_file_id) }}" target="_blank" rel="noopener">📎 {{ _("chat.attachment") }}</a>{% endif %}
@@ -287,4 +287,4 @@
 </aside>
 </div>
 {% endblock %}
-{% block scripts %}{% if eds_enabled %}<script src="/static/js/eds.js?v=3" defer></script>{% endif %}{% endblock %}
+{% block scripts %}{% if eds_enabled %}<script src="/static/js/eds.js?v=4" defer></script>{% endif %}{% endblock %}

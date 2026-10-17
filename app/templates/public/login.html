@@ -19,6 +19,17 @@
     <small class="muted" data-eds-status>{{ _("eds.login_note_dev") if eds_mode == "dev" else _("eds.login_note") }}</small>
   </div>
   {% endif %}
+  {% if egov_login %}
+  <div class="egov stack" id="egov-login" data-egov data-wait="{{ _('egov.wait') }}" data-fail="{{ _('eds.fail') }}" data-expired="{{ _('egov.expired') }}">
+    <button type="button" class="btn" data-egov-start>📱 {{ _("egov.login_btn") }}</button>
+    <div class="egov-qr" data-egov-panel hidden>
+      <img data-egov-qr alt="{{ _('egov.qr_alt') }}" width="200" height="200">
+      <p><small class="muted">{{ _("egov.scan") }}</small></p>
+      {% if eds_mode == "dev" %}<button type="button" class="btn small" data-egov-devphone>{{ _("egov.dev_phone") }}</button>{% endif %}
+    </div>
+    <small class="muted" data-egov-status></small>
+  </div>
+  {% endif %}
 </form>
 <div class="card note">
   <h2>{{ _("auth.new_here") }}</h2>
@@ -44,4 +55,4 @@
 </div>
 </div>
 {% endblock %}
-{% block scripts %}{% if eds_login %}<script src="/static/js/eds.js?v=3" defer></script>{% endif %}{% endblock %}
+{% block scripts %}{% if eds_login or egov_login %}<script src="/static/js/eds.js?v=4" defer></script>{% endif %}{% endblock %}

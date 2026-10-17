@@ -119,6 +119,27 @@ def _post(url: str, body: bytes, headers: dict) -> int:
         conn.close()
 
 
+def safe_get_json(url: str, headers: dict, *, max_bytes: int = 2_000_000):
+    """GET a JSON document from a customer-configured https URL with the same SSRF guards as webhooks: public
+    address only, resolved once and pinned, TLS checked against the host name, no redirects, bounded size."""
+    import json as _json
+
+    validate_url(url)
+    parts = urlsplit(url)
+    port = parts.port or 443
+    ip = _resolve_public(parts.hostname, port)
+    conn = _PinnedHTTPS(parts.hostname, ip, port)
+    try:
+        path = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
+        conn.request("GET", path, headers=headers)
+        resp = conn.getresponse()
+        if resp.status != 200:
+            raise RuntimeError(f"status {resp.status}")
+        return _json.loads(resp.read(max_bytes))
+    finally:
+        conn.close()
+
+
 # ------------------------------------------------------------------ endpoints
 
 

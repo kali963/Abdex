@@ -163,6 +163,7 @@ def create_app() -> FastAPI:
 
     app.include_router(routes_admin_ops.router, include_in_schema=False)
     app.include_router(routes_deals.ws_router, include_in_schema=False)  # FR-CHAT-06
+    app.include_router(routes_public.mgov, include_in_schema=False)  # FR-AUTH-09 eGov mobile app calls
     app.include_router(routes_api.html, include_in_schema=False)
     from app.web import routes_hooks
 

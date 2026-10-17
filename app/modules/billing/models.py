@@ -160,3 +160,19 @@ class Subscription(Model):
     period_end: Mapped[date] = mapped_column(Date, index=True)  # last day of the paid period
     periods: Mapped[int] = mapped_column(Integer, default=1)
     cancelled_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+
+
+class EsfSubmission(Model):
+    """FR-BIL-07: sending an electronic invoice (ЭСФ) or act (АВР) to the state system IS ESF."""
+
+    __tablename__ = "esf_submissions"
+    __table_args__ = (UniqueConstraint("invoice_id", "kind", name="uq_esf_invoice_kind"),)
+
+    invoice_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("invoices.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(10))  # invoice / act
+    status: Mapped[str] = mapped_column(String(12), default="pending", index=True)  # pending / accepted / error
+    registration_number: Mapped[str] = mapped_column(String(60), default="")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+    last_error: Mapped[str] = mapped_column(String(300), default="")
+    sent_at: Mapped[datetime | None] = mapped_column(AwareDateTime)

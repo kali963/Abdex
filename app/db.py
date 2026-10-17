@@ -133,6 +133,20 @@ def _make_engine():
 engine = _make_engine()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
+# FR-BI-06: heavy reports read from a replica when ANALYTICS_DATABASE_URL is set (a streaming replica of the main
+# PostgreSQL); without it they read the main database. Row-level security applies there just the same.
+_analytics_url = os.getenv("ANALYTICS_DATABASE_URL", "")
+analytics_engine = create_engine(_analytics_url, future=True, pool_pre_ping=True) if _analytics_url else engine
+AnalyticsSession = sessionmaker(bind=analytics_engine, autoflush=False, expire_on_commit=False)
+
+
+def get_analytics_db():
+    db = AnalyticsSession()
+    try:
+        yield db
+    finally:
+        db.close()
+
 
 def get_db():
     db = SessionLocal()

@@ -1,7 +1,7 @@
 /* AbdEX service worker (FR-MOB-02): offline cache of the app shell and key driver screens.
    Personal data pages are never cached (network-only); only static assets and /trips shell. */
-var CACHE = "abdex-v4";
-var SHELL = ["/static/css/app.css?v=5", "/static/js/app.js?v=4", "/static/icons/icon.svg", "/static/icons/sprite.svg", "/manifest.webmanifest"];
+var CACHE = "abdex-v5";
+var SHELL = ["/static/css/app.css?v=6", "/static/js/app.js?v=4", "/static/icons/icon.svg", "/static/icons/sprite.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }));

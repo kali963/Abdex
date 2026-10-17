@@ -38,10 +38,21 @@ def _project(points: list[tuple[float, float]]):
     return xy
 
 
-def trip_map(deal, order, checkpoints) -> dict | None:
+class _Gps:
+    """A telematics position seen as a checkpoint of kind "gps" by the map."""
+
+    kind = "gps"
+
+    def __init__(self, p):
+        self.lat, self.lng, self.happened_at = p.lat, p.lng, p.at
+
+
+def trip_map(deal, order, checkpoints, gps=()) -> dict | None:
     stops = [(p.city, _city(p.city)) for p in order.points]
     planned = [c for _, c in stops if c]
-    track = [(c.lat, c.lng, c) for c in checkpoints if c.lat is not None and c.lng is not None]
+    marks = [c for c in checkpoints if c.lat is not None and c.lng is not None] + [_Gps(p) for p in gps]
+    marks.sort(key=lambda c: c.happened_at)
+    track = [(c.lat, c.lng, c) for c in marks]
     if len(planned) < 2 and not track:
         return None
     all_pts = planned + [(t[0], t[1]) for t in track]
@@ -65,7 +76,8 @@ def trip_map(deal, order, checkpoints) -> dict | None:
         "track": " ".join(f"{x},{y}" for x, y in (xy((t[0], t[1])) for t in track)),
         "stops": [{"name": name, "xy": xy(c), "first": i == 0, "last": i == len(stops) - 1}
                   for i, (name, c) in enumerate(stops) if c],
-        "points": [{"xy": xy((t[0], t[1])), "kind": t[2].kind, "at": t[2].happened_at} for t in track],
+        "points": [{"xy": xy((t[0], t[1])), "kind": t[2].kind, "at": t[2].happened_at} for t in track
+                   if t[2].kind != "gps"],
         "current": xy((current[0], current[1])) if current else None,
         "current_at": current[2].happened_at if current else None,
         "eta": eta, "late": late, "remaining_km": remaining_km,

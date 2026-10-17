@@ -12,7 +12,7 @@
   <h2>{{ _("company.requisites") }}</h2>
   <div class="form-grid">
     {{ ui.field("name", _("company.name"), c.name, required=true) }}
-    <div class="field"><label>{{ _("auth.bin_iin") }}</label><input type="text" value="{{ c.bin_iin }}" disabled></div>
+    <div class="field"><label>{{ _("auth.bin_iin") }}</label><input type="text" value="{{ c.bin_iin }}" disabled aria-label="{{ _('auth.bin_iin') }}"></div>
     {{ ui.field("legal_form", _("company.legal_form"), c.legal_form) }}
     {{ ui.field("legal_address", _("company.legal_address"), c.legal_address) }}
     {{ ui.field("actual_address", _("company.actual_address"), c.actual_address) }}
@@ -62,4 +62,21 @@
     <form class="inline" method="post" action="/company/invite/{{ i.id }}/revoke">{{ ui.csrf() }}<button class="btn link">{{ _("company.revoke") }}</button></form></li>{% endfor %}</ul>{% endif %}
   {% endif %}
 </section>
+{% if me.company.kind == "carrier" %}
+<section class="card" id="telematics">
+  <h2>🛰 {{ _("telem.title") }}</h2>
+  <p class="muted">{{ _("telem.text") }} <a href="/developers#reference">{{ _("dev.title") }}</a></p>
+  {% if telematics %}<p><span class="badge {{ 'ok' if telematics.active and not telematics.last_error else 'warn' }}">{{ _("telem.last_sync", at=fmt_dt(telematics.last_sync_at) if telematics.last_sync_at else "—") }}</span>{% if telematics.last_error %} <small class="muted">{{ telematics.last_error }}</small>{% endif %}</p>{% endif %}
+  {% if me.can("company.manage") %}
+  <form method="post" action="/company/telematics" class="stack">{{ ui.csrf() }}
+    <div class="form-grid">
+      {{ ui.field("url", _("telem.url"), telematics.url if telematics else "", type="url", attrs='placeholder="https://"', hint=_("telem.url_hint")) }}
+      {{ ui.field("token", _("telem.token"), "", type="password", attrs='autocomplete="off"', hint=_("telem.token_hint")) }}
+    </div>
+    {{ ui.checkbox("active", _("telem.active"), telematics.active if telematics else true) }}
+    <div><button class="btn primary">{{ _("action.save") }}</button></div>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
 {% endblock %}

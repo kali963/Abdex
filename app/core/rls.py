@@ -42,6 +42,9 @@ POLICIES: dict[str, str] = {
     "sandbox_objects": f"company_id = {CUR}",
     "customs_dossiers": f"deal_id IN {_DEALS}",
     "transport_doc_registrations": f"deal_id IN {_DEALS}",
+    "track_points": f"deal_id IN {_DEALS}",
+    "telematics_connections": f"company_id = {CUR}",
+    "esf_submissions": f"invoice_id IN (SELECT i.id FROM invoices i WHERE i.company_id = {CUR})",  # noqa: S608
 }
 
 

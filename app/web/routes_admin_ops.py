@@ -2,6 +2,8 @@
 (FR-RAT-02) and support sessions "as the user" (FR-ADM-05)."""
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -395,6 +397,37 @@ def admin_esf_zip(request: Request, db: Session = Depends(get_db), me: Principal
                     headers={"Content-Disposition": f'attachment; filename="abdex-esf-{d1:%Y%m%d}-{d2:%Y%m%d}.zip"'})
 
 
+@router.post("/finance/esf/send")
+async def admin_esf_send(request: Request, db: Session = Depends(get_db),
+                         me: Principal = Depends(require("admin.finance"))):
+    """Queue the period's ЭСФ/АВР for IS ESF (statuses below on the finance page)."""
+    from app.modules.billing import accounting, esf
+
+    form = await request.form()
+    try:
+        d1, d2 = date.fromisoformat(str(form.get("date_from", ""))), date.fromisoformat(str(form.get("date_to", "")))
+    except ValueError:
+        raise ValidationFailed({"date_from": "error.date"})
+    if d2 < d1:
+        raise ValidationFailed({"date_to": "error.date_order"})
+    esf.queue_period(db, accounting.rows(db, d1, d2))
+    db.commit()
+    return redirect("/admin/finance#esf", flash=("success", "esf.queued"))
+
+
+@router.post("/finance/esf/{sid}/retry")
+def admin_esf_retry(sid: str, db: Session = Depends(get_db), me: Principal = Depends(require("admin.finance"))):
+    from app.modules.billing import esf
+    from app.modules.billing.models import EsfSubmission
+
+    sub = db.get(EsfSubmission, parse_uuid(sid))
+    if sub is None or sub.status != "error":
+        raise NotFound()
+    esf.retry(db, sub)
+    db.commit()
+    return redirect("/admin/finance#esf", flash=("success", "msg.saved"))
+
+
 # ------------------------------------------------------------------ link graph (SEC-FRD-04)
 
 
@@ -485,3 +518,29 @@ async def admin_fx_save(request: Request, db: Session = Depends(get_db), me: Pri
     fx.set_manual(db, on, str(form.get("code", "")), str(form.get("rate", "")))
     db.commit()
     return redirect("/admin/fx", flash=("success", "msg.saved"))
+
+
+# ------------------------------------------------------------------ AI matching (FR-BID-09)
+
+
+@router.get("/matching")
+def admin_matching(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("admin.settings"))):
+    from app.modules.bids import matching
+    from app.modules.platform.service import flag_enabled, get_setting
+
+    return render(request, "admin/matching.html", {
+        "defaults": matching.DEFAULT_WEIGHTS, "manual": get_setting(db, "matching.weights", {}) or {},
+        "learned": get_setting(db, "matching.learned", {}) or {}, "active": matching.weights(db),
+        "ai_on": flag_enabled(db, "matching.ai"), "min_samples": matching.MIN_SAMPLES})
+
+
+@router.post("/matching/learn")
+def admin_matching_learn(db: Session = Depends(get_db), me: Principal = Depends(require("admin.settings"))):
+    from app.core.audit import audit
+    from app.modules.bids import matching
+
+    res = matching.learn(db)
+    audit(db, "matching.learned", object_type="setting", object_id="matching.learned",
+          details={"samples": res["samples"]})
+    db.commit()
+    return redirect("/admin/matching", flash=("success", "msg.saved"))

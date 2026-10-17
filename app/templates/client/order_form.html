@@ -17,21 +17,21 @@
     {% for city in cities %}
       {% set i = loop.index0 %}
       <div class="point">
-        <div class="field"><label>{{ _("order.point_kind") }}</label><select name="point_kind">{% for k in ("load", "stop", "unload") %}<option value="{{ k }}" {{ 'selected' if (form.point_kind or [])[i] == k or (not form.point_kind and ((i == 0 and k == 'load') or (i > 0 and k == 'unload'))) }}>{{ _("point." ~ k) }}</option>{% endfor %}</select></div>
-        <div class="field"><label>{{ _("order.city") }} *</label><input type="text" name="point_city" value="{{ city }}" list="cities"></div>
-        <div class="field"><label>{{ _("order.address") }}</label><input type="text" name="point_address" value="{{ (form.point_address or [])[i] if (form.point_address or [])|length > i else '' }}"></div>
-        <div class="field"><label>{{ _("order.contact") }}</label><input type="text" name="point_contact_name" value="{{ (form.point_contact_name or [])[i] if (form.point_contact_name or [])|length > i else '' }}"></div>
-        <div class="field"><label>{{ _("order.contact_phone") }}</label><input type="tel" name="point_contact_phone" value="{{ (form.point_contact_phone or [])[i] if (form.point_contact_phone or [])|length > i else '' }}"></div>
+        <div class="field"><label>{{ _("order.point_kind") }}</label><select name="point_kind" aria-label="{{ _('order.point_kind') }}">{% for k in ("load", "stop", "unload") %}<option value="{{ k }}" {{ 'selected' if (form.point_kind or [])[i] == k or (not form.point_kind and ((i == 0 and k == 'load') or (i > 0 and k == 'unload'))) }}>{{ _("point." ~ k) }}</option>{% endfor %}</select></div>
+        <div class="field"><label>{{ _("order.city") }} *</label><input type="text" name="point_city" aria-label="{{ _('order.city') }}" value="{{ city }}" list="cities"></div>
+        <div class="field"><label>{{ _("order.address") }}</label><input type="text" name="point_address" aria-label="{{ _('order.address') }}" value="{{ (form.point_address or [])[i] if (form.point_address or [])|length > i else '' }}"></div>
+        <div class="field"><label>{{ _("order.contact") }}</label><input type="text" name="point_contact_name" aria-label="{{ _('order.contact') }}" value="{{ (form.point_contact_name or [])[i] if (form.point_contact_name or [])|length > i else '' }}"></div>
+        <div class="field"><label>{{ _("order.contact_phone") }}</label><input type="tel" name="point_contact_phone" aria-label="{{ _('order.contact_phone') }}" value="{{ (form.point_contact_phone or [])[i] if (form.point_contact_phone or [])|length > i else '' }}"></div>
         <button type="button" class="btn small" data-remove-point aria-label="{{ _('action.remove') }}">✕</button>
       </div>
     {% endfor %}
     </div>
     <template id="point-template"><div class="point">
-      <div class="field"><label>{{ _("order.point_kind") }}</label><select name="point_kind"><option value="stop">{{ _("point.stop") }}</option><option value="load">{{ _("point.load") }}</option><option value="unload">{{ _("point.unload") }}</option></select></div>
-      <div class="field"><label>{{ _("order.city") }}</label><input type="text" name="point_city" list="cities"></div>
-      <div class="field"><label>{{ _("order.address") }}</label><input type="text" name="point_address"></div>
-      <div class="field"><label>{{ _("order.contact") }}</label><input type="text" name="point_contact_name"></div>
-      <div class="field"><label>{{ _("order.contact_phone") }}</label><input type="tel" name="point_contact_phone"></div>
+      <div class="field"><label>{{ _("order.point_kind") }}</label><select name="point_kind" aria-label="{{ _('order.point_kind') }}"><option value="stop">{{ _("point.stop") }}</option><option value="load">{{ _("point.load") }}</option><option value="unload">{{ _("point.unload") }}</option></select></div>
+      <div class="field"><label>{{ _("order.city") }}</label><input type="text" name="point_city" aria-label="{{ _('order.city') }}" list="cities"></div>
+      <div class="field"><label>{{ _("order.address") }}</label><input type="text" name="point_address" aria-label="{{ _('order.address') }}"></div>
+      <div class="field"><label>{{ _("order.contact") }}</label><input type="text" name="point_contact_name" aria-label="{{ _('order.contact') }}"></div>
+      <div class="field"><label>{{ _("order.contact_phone") }}</label><input type="tel" name="point_contact_phone" aria-label="{{ _('order.contact_phone') }}"></div>
       <button type="button" class="btn small" data-remove-point>✕</button></div></template>
     <button type="button" class="btn small" data-add-point>+ {{ _("order.add_point") }}</button>
     <datalist id="cities">{% for c in ("Алматы", "Астана", "Шымкент", "Караганда", "Актобе", "Тараз", "Павлодар", "Усть-Каменогорск", "Семей", "Атырау", "Костанай", "Кызылорда", "Уральск", "Петропавловск", "Актау", "Талдыкорган", "Туркестан", "Кокшетау", "Хоргос", "Достык", "Ташкент", "Бишкек", "Москва", "Урумчи", "Екатеринбург", "Омск", "Новосибирск") %}<option value="{{ c }}">{% endfor %}</datalist>

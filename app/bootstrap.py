@@ -147,7 +147,7 @@ SETTINGS = {
                          "SEC-APP-07: лимиты действий {корзина: [число, окно в секундах]}"),
     "retention.policies": ({"otp_codes": 7, "sessions": 180, "notifications": 365, "outbox": 90, "device_events": 180,
                             "product_events": 400, "idempotency_keys": 30, "webhook_deliveries": 90,
-                            "invitations": 90, "support_grants": 365},
+                            "invitations": 90, "support_grants": 365, "track_points": 90},
                            "SEC-DAT-06: сроки хранения по категориям, дней (0 — не удалять)"),
     "security.thresholds": ({"failed_logins": 5, "bulk_exports_per_hour": 5, "access_denied_per_hour": 20,
                              "work_from": 8, "work_to": 20, "timezone": "Asia/Almaty"},
@@ -194,6 +194,9 @@ FLAGS = [
     ("online_payments", "Онлайн-оплата счетов через платежного провайдера", False),
     ("gov.etd", "Регистрация электронных транспортных документов в госсистеме", False),
     ("auth.eds_login", "Вход через ЭЦП НУЦ РК (FR-AUTH-09)", False),
+    ("auth.egov_mobile", "Вход через eGov mobile — QR и подпись в приложении (FR-AUTH-09)", False),
+    ("gov.esf", "Отправка ЭСФ и АВР в ИС ЭСФ (FR-BIL-07)", False),
+    ("matching.ai", "ИИ-подбор: веса подбора обучаются на истории выбора заказчиков (FR-BID-09)", False),
     ("calc.forecast", "Прогноз стоимости по направлению — включается подпиской на модуль (FR-CALC-06)", False),
 ]
 

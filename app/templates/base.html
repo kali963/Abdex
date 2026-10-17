@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0a3d7a">
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}{{ _("app.name") }}{% endblock %} — AbdEX</title>
-  <link rel="stylesheet" href="/static/css/app.css?v=5">
+  <link rel="stylesheet" href="/static/css/app.css?v=6">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icons/icon.svg">
@@ -29,7 +29,7 @@
     {% if me.can("admin.support") %}{% set _n = nav.append(("/admin/support", "admin.support", "help", p.startswith("/admin/support"))) %}{% endif %}
     {% if me.can("admin.dictionaries") %}{% set _n = nav.append(("/admin/dictionaries", "admin.dictionaries", "list", p.startswith("/admin/dictionaries"))) %}{% set _n = nav.append(("/admin/templates", "admin.templates", "deal", p.startswith("/admin/templates"))) %}{% endif %}
     {% if me.can("admin.finance") %}{% set _n = nav.append(("/admin/promo", "admin.promo", "tag", p.startswith("/admin/promo"))) %}{% endif %}
-    {% if me.can("admin.settings") %}{% set _n = nav.append(("/admin/flags", "admin.flags", "tag", p.startswith("/admin/flags"))) %}{% set _n = nav.append(("/admin/settings", "admin.settings", "gear", p.startswith("/admin/settings"))) %}{% set _n = nav.append(("/admin/permissions", "admin.permissions", "shield", p.startswith("/admin/permissions"))) %}{% set _n = nav.append(("/admin/processing", "admin.processing", "list", p.startswith("/admin/processing"))) %}{% endif %}
+    {% if me.can("admin.settings") %}{% set _n = nav.append(("/admin/flags", "admin.flags", "tag", p.startswith("/admin/flags"))) %}{% set _n = nav.append(("/admin/settings", "admin.settings", "gear", p.startswith("/admin/settings"))) %}{% set _n = nav.append(("/admin/permissions", "admin.permissions", "shield", p.startswith("/admin/permissions"))) %}{% set _n = nav.append(("/admin/processing", "admin.processing", "list", p.startswith("/admin/processing"))) %}{% set _n = nav.append(("/admin/matching", "ai.title", "chart", p.startswith("/admin/matching"))) %}{% endif %}
     {% if me.can("admin.kpi") %}{% set _n = nav.append(("/admin/funnels", "admin.funnels", "chart", p.startswith("/admin/funnels"))) %}{% endif %}
     {% if me.can("admin.audit") %}{% set _n = nav.append(("/admin/security", "admin.security", "alert", p.startswith("/admin/security"))) %}{% set _n = nav.append(("/admin/audit", "admin.audit", "shield", p.startswith("/admin/audit"))) %}{% set _n = nav.append(("/admin/integrations", "admin.integrations", "gear", p.startswith("/admin/integrations"))) %}{% endif %}
     {% set _n = nav.append(("/account/security", "nav.account", "user", p.startswith("/account"))) %}

@@ -41,7 +41,7 @@ router = APIRouter(prefix="/api/v1", tags=["v1"], dependencies=[Depends(csrf_pro
 html = APIRouter(dependencies=[Depends(csrf_protect)])
 
 MAX_PAGE = 100
-SCOPES = ("orders:read", "orders:write", "market:read", "bids:write", "dictionaries:read")
+SCOPES = ("orders:read", "orders:write", "market:read", "bids:write", "dictionaries:read", "telematics:write")
 
 
 class ApiCaller(BaseModel):
@@ -339,6 +339,42 @@ def create_bid(oid: str, body: BidIn, db: Session = Depends(get_db), caller: Api
     db.commit()
     return BidOut(id=str(bid.id), status=bid.status, price_minor=bid.price_minor, currency=bid.currency,
                   created_at=bid.created_at)
+
+
+# ------------------------------------------------------------------ telematics (FR-TRK-05)
+
+
+class PositionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    plate: str = Field(min_length=2, max_length=20)
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+    at: datetime
+    speed: int = Field(default=0, ge=0, le=300)
+
+
+class PositionsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    positions: list[PositionIn] = Field(min_length=1, max_length=500)
+
+
+class PositionsOut(BaseModel):
+    accepted: int
+    ignored: int
+
+
+@router.post("/telematics/positions", response_model=PositionsOut)
+def telematics_positions(body: PositionsIn, db: Session = Depends(get_db), caller: ApiCaller = Depends(api_caller)):
+    """GPS positions of the carrier's vehicles. Kept only for a vehicle on a deal that is loading or on the way
+    with the geodata consent; anything else is counted as ignored and not stored (FR-TRK-03)."""
+    from app.modules.deals import telematics
+
+    need(caller, "telematics:write", "fleet.manage")
+    ratelimit.hit("api", f"telematics:{caller.company.id}")
+    res = telematics.ingest(db, caller.company.id, [p.model_dump(mode="json") for p in body.positions],
+                            store=not caller.sandbox)
+    db.commit()
+    return PositionsOut(**res)
 
 
 # ------------------------------------------------------------------ sandbox controls (FR-API-05)
