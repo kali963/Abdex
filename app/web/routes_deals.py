@@ -187,7 +187,6 @@ def egov_sign_start(did: str, doc_id: str, request: Request, db: Session = Depen
                     me: Principal = Depends(require("deal.sign"))):
     """A QR code for eGov mobile / eGov Business: the app downloads this document and signs it with the user's
     (or the company's) key; the server verifies the signature exactly as for NCALayer."""
-    import segno
 
     from app.core.errors import AppError, Conflict
     from app.modules.accounts import egov_mobile
@@ -200,12 +199,13 @@ def egov_sign_start(did: str, doc_id: str, request: Request, db: Session = Depen
         raise Conflict("not_signable")
     if any(s.company_id == me.company.id for s in documents.signatures(db, doc.id)):
         raise Conflict("already_signed")
-    token, browser = egov_mobile.start(db, document=doc, user_id=me.user.id, company_id=me.company.id)
+    token, browser, show = egov_mobile.start_safely(db, document=doc, user_id=me.user.id, company_id=me.company.id,
+                                                    base=_public_base(request))
     db.commit()
-    link = f"mobileSign:{_public_base(request)}/egov/mgov/{token}"
-    data = {"token": token, "link": link, "qr": segno.make(link, error="m").svg_data_uri(scale=3, border=2),
-            "status": f"/deals/{acc.deal.id}/docs/{doc.id}/egov/{token}/status"}
-    if is_dev_signer():
+    if "launch" in show:
+        show.pop("launch")()  # SIGEX: wait for the signature in the background
+    data = egov_mobile.for_browser(token, show, f"/deals/{acc.deal.id}/docs/{doc.id}/egov/{token}/status", scale=3)
+    if is_dev_signer() and egov_mobile.provider() == "direct":
         data["dev_api"] = f"/egov/mgov/{token}"  # the in-browser test phone plays the app in development
     resp = JSONResponse(data, headers={"Cache-Control": "no-store"})
     from app.config import settings

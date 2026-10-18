@@ -361,6 +361,7 @@ def test_vercel_database_env():
     import app.config as config
 
     saved = dict(os.environ)
+    original = config.settings, config.ON_VERCEL
     try:
         os.environ.pop("DATABASE_URL", None)
         os.environ.update({"VERCEL": "1", "POSTGRES_URL": "postgres://u:p@db.example/neondb?sslmode=require"})
@@ -375,3 +376,4 @@ def test_vercel_database_env():
         os.environ.clear()
         os.environ.update(saved)
         importlib.reload(config)
+        config.settings, config.ON_VERCEL = original  # every module keeps seeing the same settings object

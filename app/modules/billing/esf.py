@@ -33,7 +33,7 @@ BACKOFF_MINUTES = (5, 30, 120, 360, 720)
 
 class EsfAdapter(Adapter):
     name = "esf"
-    timeout = 20.0
+    timeout = 30.0  # state systems may answer slowly under load; runs in the background worker
     retries = 0
 
     @property

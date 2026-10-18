@@ -76,7 +76,7 @@ def evaluate(db: Session, company: Company) -> int:
     return company.verification_level
 
 
-def confirm_eds(db: Session, company: Company, package: str, challenge: str) -> Company:
+def confirm_eds(db: Session, company: Company, package: str, challenge: str, binding: str = "") -> Company:
     """The challenge is signed with a certificate of the company: the owner check is the company's BIN."""
     from app.modules.accounts.eds_login import consume
     from app.modules.documents import eds
@@ -86,7 +86,7 @@ def confirm_eds(db: Session, company: Company, package: str, challenge: str) -> 
         raise AppError("qualified_signature_off", status_code=403)
     if not package or len(package) > 200_000:
         raise AppError("eds_invalid", status_code=422, checks="package")
-    consume(db, challenge)
+    consume(db, challenge, binding)
     revoked = set(get_setting(db, "eds.revoked_serials", []) or [])
     res = eds.verifier().verify(package, challenge.encode(), signed_at=utcnow(), expected_bin=company.bin_iin,
                                 revoked=revoked)

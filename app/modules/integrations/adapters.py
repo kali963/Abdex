@@ -16,6 +16,16 @@ from app.modules.integrations.base import Adapter
 
 log = logging.getLogger("abdex.integrations")
 
+
+def simulator_guard(name: str) -> None:
+    """A simulator must never answer "ok" in production: there it reports "not connected", and the callers fall
+    back to their manual path (moderator check, retry queue) until a real provider is plugged in."""
+    from app.config import settings
+    from app.modules.integrations.base import IntegrationUnavailable
+
+    if settings.is_production:
+        raise IntegrationUnavailable(f"{name}: provider not connected")
+
 # Approximate coordinates for the main logistics hubs; real geocoder replaces this.
 CITY_COORDS = {
     "алматы": (43.238, 76.889), "астана": (51.169, 71.449), "шымкент": (42.341, 69.590),
@@ -65,6 +75,8 @@ class RegistryAdapter(Adapter):
     source = "commercial-sim"
 
     def check_company(self, bin_iin: str, *, basis: str, initiator=None) -> dict:
+        simulator_guard("registry")
+
         def _do():
             valid = len(bin_iin) == 12 and bin_iin.isdigit()
             return {"status": "match" if valid else "not_found", "source": self.source,
@@ -74,6 +86,8 @@ class RegistryAdapter(Adapter):
         return self.call("check_company", _do, basis=basis, initiator=initiator, summary=f"bin:{bin_iin[:4]}****")
 
     def check_person(self, iin: str, *, basis: str, initiator=None) -> dict:
+        simulator_guard("registry")
+
         def _do():
             valid = len(iin) == 12 and iin.isdigit()
             return {"status": "match" if valid else "not_found", "source": self.source,
@@ -114,29 +128,99 @@ class _OutboundAdapter(Adapter):
         """Real transport; the base class is a no-op stub (dev / demo)."""
 
 
+def sms_provider() -> str:
+    """``SMS_PROVIDER``: mobizon | smsc | http; empty = derived from what is configured ("" = none)."""
+    import os
+
+    name = os.getenv("SMS_PROVIDER", "").strip().lower()
+    if name:
+        return name
+    if os.getenv("MOBIZON_API_KEY"):
+        return "mobizon"
+    if os.getenv("SMSC_LOGIN"):
+        return "smsc"
+    if os.getenv("SMS_GATEWAY_URL"):
+        return "http"
+    return ""
+
+
 class SmsAdapter(_OutboundAdapter):
-    """SMS through an HTTP gateway (``SMS_GATEWAY_URL`` + ``SMS_GATEWAY_TOKEN``): POST {"to", "text"} as JSON with
-    a bearer token — the common shape of Kazakh SMS aggregators; mapping a concrete one is this method only."""
+    """SMS (login and registration codes, alerts). Providers:
+
+    * ``mobizon`` — Mobizon.kz: ``MOBIZON_API_KEY``, optional ``SMS_SENDER`` (registered alpha name);
+    * ``smsc`` — SMSC.kz: ``SMSC_LOGIN``, ``SMSC_PASSWORD``, optional ``SMS_SENDER``;
+    * ``http`` — any gateway taking POST {"to", "text"} as JSON with a bearer token: ``SMS_GATEWAY_URL``,
+      ``SMS_GATEWAY_TOKEN``.
+
+    In production a provider is mandatory (start-up check): without it no one could register or sign in."""
 
     name = "sms"
     timeout = 10.0
 
     def _deliver(self, recipient: str, body: str) -> None:
+        provider = sms_provider()
+        if not provider:
+            return  # development: the message is only in the outbox
+        phone = "".join(ch for ch in (recipient or "") if ch.isdigit())
+        if provider == "mobizon":
+            self._mobizon(phone, body)
+        elif provider == "smsc":
+            self._smsc(phone, body)
+        elif provider == "http":
+            self._http("+" + phone, body)
+        else:
+            raise RuntimeError(f"unknown SMS_PROVIDER {provider}")
+
+    def _post(self, url: str, data: bytes, headers: dict) -> dict:
         import json as _json
-        import os
         import urllib.request
 
-        url = os.getenv("SMS_GATEWAY_URL", "")
-        if not url:
-            return
         if not url.startswith("https://"):
-            raise RuntimeError("SMS_GATEWAY_URL must be https")
-        req = urllib.request.Request(url, data=_json.dumps({"to": recipient, "text": body}).encode(), method="POST",  # noqa: S310 — https checked above
-                                     headers={"Content-Type": "application/json",
-                                              "Authorization": f"Bearer {os.getenv('SMS_GATEWAY_TOKEN', '')}"})
+            raise RuntimeError("SMS gateway URL must be https")
+        req = urllib.request.Request(url, data=data, method="POST", headers=headers)  # noqa: S310 — https checked
         with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 — configured https gateway
             if resp.status >= 300:
                 raise RuntimeError(f"sms gateway status {resp.status}")
+            raw = resp.read(65536)
+        try:
+            return _json.loads(raw or b"{}")
+        except ValueError:
+            return {}
+
+    def _mobizon(self, phone: str, body: str) -> None:
+        import os
+        from urllib.parse import urlencode
+
+        base = os.getenv("MOBIZON_API_URL", "https://api.mobizon.kz").rstrip("/")
+        query = urlencode({"output": "json", "api": "v1", "apiKey": os.getenv("MOBIZON_API_KEY", "")})
+        form = {"recipient": phone, "text": body}
+        if os.getenv("SMS_SENDER"):
+            form["from"] = os.getenv("SMS_SENDER", "")
+        out = self._post(f"{base}/service/message/sendsmsmessage?{query}", urlencode(form).encode(),
+                         {"Content-Type": "application/x-www-form-urlencoded"})
+        if str(out.get("code", "")) != "0":
+            raise RuntimeError(f"mobizon error {out.get('code')}: {str(out.get('message', ''))[:100]}")
+
+    def _smsc(self, phone: str, body: str) -> None:
+        import os
+        from urllib.parse import urlencode
+
+        form = {"login": os.getenv("SMSC_LOGIN", ""), "psw": os.getenv("SMSC_PASSWORD", ""), "phones": phone,
+                "mes": body, "fmt": "3", "charset": "utf-8"}
+        if os.getenv("SMS_SENDER"):
+            form["sender"] = os.getenv("SMS_SENDER", "")
+        url = os.getenv("SMSC_API_URL", "https://smsc.kz/sys/send.php")
+        out = self._post(url, urlencode(form).encode(), {"Content-Type": "application/x-www-form-urlencoded"})
+        if "error" in out or "id" not in out:
+            raise RuntimeError(f"smsc error {out.get('error_code')}: {str(out.get('error', ''))[:100]}")
+
+    def _http(self, recipient: str, body: str) -> None:
+        import json as _json
+        import os
+
+        self._post(os.getenv("SMS_GATEWAY_URL", ""), _json.dumps({"to": recipient, "text": body}).encode(),
+                   {"Content-Type": "application/json",
+                    "Authorization": f"Bearer {os.getenv('SMS_GATEWAY_TOKEN', '')}"})
 
 
 class EmailAdapter(_OutboundAdapter):
@@ -247,6 +331,7 @@ class BiometricsAdapter(Adapter):
     provider = "biometrics-sim-v1"
 
     def compare(self, selfie: bytes, selfie2: bytes, document: bytes, *, initiator=None) -> dict:
+        simulator_guard("biometrics")
         return self.call("compare", lambda: self._compare(selfie, selfie2, document), basis="consent",
                          initiator=initiator, summary="face-match")
 

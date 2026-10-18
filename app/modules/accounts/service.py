@@ -374,8 +374,9 @@ def change_password(db: Session, user: User, current: str, new: str) -> None:
     notify_user(db, user.id, "security.password_changed", {}, link="/account/security", critical=True)
 
 
-def start_password_reset(db: Session, login: str) -> None:
-    """SEC-AUT-09: the response never reveals whether the account exists."""
+def start_password_reset(db: Session, login: str) -> list:
+    """SEC-AUT-09: the response never reveals whether the account exists — neither by its text nor by its
+    timing: the messages are returned as callables that the caller sends after the response."""
     ratelimit.hit("password_reset", get_ctx().ip or "local")
     login = (login or "").strip()
     user = None
@@ -383,16 +384,20 @@ def start_password_reset(db: Session, login: str) -> None:
         user = db.execute(select(User).where(User.email == login.lower())).scalar_one_or_none()
     elif login:
         user = db.execute(select(User).where(User.phone == normalize_phone(login))).scalar_one_or_none()
-    if user is None:
-        return
+    if user is None or user.is_deleted:
+        return []
     raw = token(24)
     db.add(OtpCode(target=str(user.id), purpose="password_reset", code_hash=hash_token(raw),
                    expires_at=utcnow() + timedelta(minutes=30)))
-    link = f"/reset-password?u={user.id}&t={raw}"
+    from app.config import settings
+
+    link = f"{settings.public_base_url.rstrip('/')}/reset-password?u={user.id}&t={raw}"  # opened from SMS / e-mail
+    sends = []
     if user.email:
-        email_adapter.send(user.email, f"AbdEX: ссылка для восстановления пароля (30 минут): {link}")
-    sms_adapter.send(user.phone, f"AbdEX: ссылка для восстановления пароля: {link}")
+        sends.append(lambda: email_adapter.send(user.email, f"AbdEX: ссылка для восстановления пароля (30 минут): {link}"))
+    sends.append(lambda: sms_adapter.send(user.phone, f"AbdEX: ссылка для восстановления пароля: {link}"))
     audit(db, "auth.password_reset_requested", object_type="user", object_id=user.id, user_id=user.id)
+    return sends
 
 
 def finish_password_reset(db: Session, user_id: str, raw: str, new_password: str) -> None:

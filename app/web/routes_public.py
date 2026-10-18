@@ -98,18 +98,30 @@ def _signed_in(db: Session, user: User, nxt: str):
     return resp
 
 
-@router.post("/login/eds/challenge")
-def eds_challenge(db: Session = Depends(get_db)):
-    """FR-AUTH-09: a one-time text to sign (login or binding the EDS)."""
+def eds_challenge_response(db: Session, request: Request):
+    """A one-time text to sign, bound to this browser by a short-lived cookie (login, binding the EDS, the
+    company's L3 confirmation)."""
     from fastapi.responses import JSONResponse
 
     from app.modules.accounts import eds_login
 
+    binding = request.cookies.get(eds_login.BIND_COOKIE) or eds_login.new_binding()
+    challenge = eds_login.new_challenge(db, binding)
+    db.commit()
+    resp = JSONResponse({"challenge": challenge}, headers={"Cache-Control": "no-store"})
+    resp.set_cookie(eds_login.BIND_COOKIE, binding, max_age=600, httponly=True, secure=settings.secure_cookies,
+                    samesite="strict", path="/")
+    return resp
+
+
+@router.post("/login/eds/challenge")
+def eds_challenge(request: Request, db: Session = Depends(get_db)):
+    """FR-AUTH-09: a one-time text to sign (login or binding the EDS)."""
+    from app.modules.accounts import eds_login
+
     if not eds_login.enabled(db):
         raise NotFound()
-    challenge = eds_login.new_challenge(db)
-    db.commit()
-    return JSONResponse({"challenge": challenge}, headers={"Cache-Control": "no-store"})
+    return eds_challenge_response(db, request)
 
 
 @router.post("/login/eds")
@@ -119,7 +131,8 @@ async def login_eds(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     nxt = safe_next(str(form.get("next", "")), "/dashboard")
     try:
-        user = eds_login.authenticate(db, str(form.get("package", "")), str(form.get("challenge", "")))
+        user = eds_login.authenticate(db, str(form.get("package", "")), str(form.get("challenge", "")),
+                                      request.cookies.get(eds_login.BIND_COOKIE, ""))
     except AppError as exc:
         db.commit()
         resp = redirect("/login")
@@ -142,19 +155,18 @@ def _public_base(request: Request) -> str:
 @router.post("/login/egov/start")
 def egov_start(request: Request, db: Session = Depends(get_db)):
     """A login attempt: a QR code for the eGov mobile app; the cookie ties the result to this browser."""
-    import segno
     from fastapi.responses import JSONResponse
 
     from app.modules.accounts import egov_mobile
 
     if not egov_mobile.enabled(db):
         raise NotFound()
-    token, browser = egov_mobile.start(db)
+    token, browser, show = egov_mobile.start_safely(db, base=_public_base(request))
     db.commit()
-    link = f"mobileSign:{_public_base(request)}/egov/mgov/{token}"
-    data = {"token": token, "link": link, "qr": segno.make(link, error="m").svg_data_uri(scale=4, border=2),
-            "status": f"/login/egov/{token}/status"}
-    if settings.is_dev:
+    if "launch" in show:
+        show.pop("launch")()  # SIGEX: wait for the signature in the background
+    data = egov_mobile.for_browser(token, show, f"/login/egov/{token}/status")
+    if settings.is_dev and egov_mobile.provider() == "direct":
         data["dev_api"] = f"/egov/mgov/{token}"  # the in-browser test phone plays the app in development
     resp = JSONResponse(data, headers={"Cache-Control": "no-store"})
     resp.set_cookie(EGOV_COOKIE, browser, max_age=300, httponly=True, secure=settings.secure_cookies,
@@ -333,10 +345,26 @@ def forgot_form(request: Request):
 
 @router.post("/forgot-password")
 async def forgot(request: Request, db: Session = Depends(get_db)):
+    from starlette.background import BackgroundTasks
+
     form = await request.form()
-    accounts.start_password_reset(db, str(form.get("login", "")))
+    sends = accounts.start_password_reset(db, str(form.get("login", "")))
     db.commit()
-    return render(request, "public/forgot.html", {"sent": True})  # same answer either way (SEC-AUT-09)
+    resp = render(request, "public/forgot.html", {"sent": True})  # same answer either way (SEC-AUT-09)
+    tasks = BackgroundTasks()
+    for send in sends:  # after the response: its timing does not depend on whether the account exists
+        tasks.add_task(_quiet, send)
+    resp.background = tasks
+    return resp
+
+
+def _quiet(send) -> None:
+    import logging
+
+    try:
+        send()
+    except Exception:  # noqa: BLE001 — a failed delivery is logged by the adapter; the user may retry
+        logging.getLogger("abdex").warning("password reset message not delivered")
 
 
 @router.get("/reset-password")

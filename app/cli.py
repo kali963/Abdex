@@ -1,5 +1,10 @@
 """Operational commands.
 
+    python -m app.cli preflight              launch readiness report; exit code 1 while an ERROR remains
+    python -m app.cli create-staff --phone +7701... --name "Имя Фамилия" --role admin [--email a@b.kz]
+                                             create a platform employee (or give an existing user the role);
+                                             roles: admin, manager, moderator, finance, auditor; a one-time
+                                             password is printed — change it and set up 2FA at first login
     python -m app.cli rotate-keys            re-encrypt personal-data fields with the newest key (SEC-DAT-03)
     python -m app.cli anonymize --confirm    anonymise a COPY of the database for development / testing (SEC-DAT-09)
 
@@ -144,7 +149,86 @@ def check_data_origin(db) -> None:
         set_setting(db, "platform.data_origin", settings.app_env, "SEC-DAT-09: origin of the data in this database")
 
 
+def preflight() -> int:
+    from app.bootstrap import ensure_initialized
+    from app.core.preflight import ERROR, OK, report
+    from app.db import SessionLocal
+
+    db = None
+    try:
+        ensure_initialized()
+        db = SessionLocal()
+        items = report(db)
+    except Exception as exc:  # noqa: BLE001 — the database itself may be what is missing
+        from app.core.preflight import Item, check_env
+
+        items = check_env() + [Item(ERROR, "db", f"база данных недоступна: {type(exc).__name__}: {str(exc)[:200]}")]
+    finally:
+        if db is not None:
+            db.close()
+    marks = {OK: "  ok ", "WARN": " warn", ERROR: "ERROR"}
+    for i in items:
+        print(f"[{marks[i.level]}] {i.text}")
+    errors = sum(1 for i in items if i.level == ERROR)
+    print(f"\n{errors} error(s), {sum(1 for i in items if i.level == 'WARN')} warning(s)")
+    return 1 if errors else 0
+
+
+def _arg(argv: list[str], name: str) -> str:
+    if name in argv and argv.index(name) + 1 < len(argv):
+        return argv[argv.index(name) + 1]
+    return ""
+
+
+def create_staff(phone: str, name: str, role: str, email: str = "") -> str:
+    """Creates a staff member (or grants the role to an existing user); returns the one-time password, or ""
+    when an existing user keeps their own password."""
+    from sqlalchemy import select
+
+    from app.bootstrap import ensure_initialized
+    from app.core.audit import audit
+    from app.core.security import hash_password
+    from app.db import SessionLocal
+    from app.modules.accounts.models import STAFF_ROLES, User
+    from app.modules.accounts.service import normalize_phone
+
+    if role not in STAFF_ROLES:
+        raise SystemExit(f"role must be one of: {', '.join(STAFF_ROLES)}")
+    phone = normalize_phone(phone)
+    if len(phone) != 12:
+        raise SystemExit("phone: +7XXXXXXXXXX")
+    ensure_initialized()
+    db = SessionLocal()
+    try:
+        _system(db.connection())
+        user = db.execute(select(User).where(User.phone == phone)).scalar_one_or_none()
+        password = ""
+        if user is None:
+            if not name.strip():
+                raise SystemExit("--name is required for a new user")
+            password = secrets.token_urlsafe(12)
+            user = User(phone=phone, full_name=name.strip(), email=(email or "").strip().lower() or None,
+                        password_hash=hash_password(password), phone_verified=True)
+            db.add(user)
+            db.flush()
+        user.staff_role = role
+        audit(db, "admin.staff_granted", object_type="user", object_id=user.id, details={"role": role, "via": "cli"})
+        db.commit()
+        return password
+    finally:
+        db.close()
+
+
 def main(argv: list[str]) -> int:
+    if argv and argv[0] == "preflight":
+        return preflight()
+    if argv and argv[0] == "create-staff":
+        password = create_staff(_arg(argv, "--phone"), _arg(argv, "--name"), _arg(argv, "--role"),
+                                _arg(argv, "--email"))
+        print("staff member ready." + (f" One-time password: {password}" if password else
+                                       " Existing user: signs in with their own password."))
+        print("At first login: change the password and enable the authenticator app (2FA is required for staff).")
+        return 0
     if not argv or argv[0] not in ("rotate-keys", "anonymize"):
         print(__doc__)
         return 2
