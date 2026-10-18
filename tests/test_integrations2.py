@@ -338,3 +338,40 @@ def test_egov_mobile_document_signing(login, db):
         assert "/egov/start" not in carrier.get(f"/deals/{did}").text
     finally:
         _flag(db, "eds.egov_mobile", True)
+
+
+def test_db_storage_backend(client_app):
+    """Serverless hosting keeps file contents in the shared database (STORAGE_BACKEND=db)."""
+    from app.core.storage import DbStorage
+
+    st = DbStorage()
+    st.put("test/blob-1", b"%PDF-1.4 one")
+    st.put("test/blob-1", b"%PDF-1.4 two")  # overwrite
+    assert st.get("test/blob-1") == b"%PDF-1.4 two"
+    st.delete("test/blob-1")
+    with pytest.raises(FileNotFoundError):
+        st.get("test/blob-1")
+
+
+def test_vercel_database_env():
+    """On Vercel the Postgres variables of the Neon / Vercel Postgres integration are picked up."""
+    import importlib
+    import os
+
+    import app.config as config
+
+    saved = dict(os.environ)
+    try:
+        os.environ.pop("DATABASE_URL", None)
+        os.environ.update({"VERCEL": "1", "POSTGRES_URL": "postgres://u:p@db.example/neondb?sslmode=require"})
+        importlib.reload(config)
+        assert config.settings.database_url == "postgresql+psycopg://u:p@db.example/neondb?sslmode=require"
+        assert not config.settings.ephemeral_db
+        os.environ.pop("POSTGRES_URL")
+        os.environ.pop("DATABASE_URL")
+        importlib.reload(config)
+        assert config.settings.ephemeral_db and config.settings.database_url.startswith("sqlite")
+    finally:
+        os.environ.clear()
+        os.environ.update(saved)
+        importlib.reload(config)

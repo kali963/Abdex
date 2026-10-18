@@ -150,7 +150,7 @@ def test_driver_biometrics_keeps_only_the_result(login, db):
     check = db.execute(select(BiometricCheck).order_by(BiometricCheck.created_at.desc())).scalars().first()
     assert check.status == "passed" and check.match and check.liveness and check.valid_until
     selfie = db.get(StoredFile, check.selfie_file_id)
-    assert storage._path(selfie.storage_key).exists()
+    assert storage.get(selfie.storage_key)
     assert "Биометрическая проверка" in s.get("/trips/biometrics").text
     # same picture twice: liveness fails
     same = dict(files, selfie2=files["selfie"])
@@ -163,7 +163,8 @@ def test_driver_biometrics_keeps_only_the_result(login, db):
     db.commit()
     assert n >= 2
     db.expire_all()
-    assert not storage._path(selfie.storage_key).exists()
+    with pytest.raises(FileNotFoundError):
+        storage.get(selfie.storage_key)
     kept = db.get(BiometricCheck, check.id)
     assert kept.images_deleted_at and kept.selfie_file_id is None and kept.status == "passed"
     # revoking the consent deletes images of a fresh check immediately

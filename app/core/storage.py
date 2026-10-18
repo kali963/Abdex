@@ -64,7 +64,56 @@ class LocalStorage:
             p.unlink()
 
 
-storage = LocalStorage(settings.storage_dir)
+class DbStorage:
+    """Contents in the ``file_blobs`` table. Writes go in their own short transaction, so a file saved during a
+    request can be read back at once (as with the disk backend)."""
+
+    def put(self, key: str, data: bytes) -> None:
+        from sqlalchemy import delete, insert
+
+        from app.db import engine
+        from app.modules.documents.models import FileBlob
+
+        with engine.begin() as conn:
+            conn.execute(delete(FileBlob).where(FileBlob.key == key))
+            conn.execute(insert(FileBlob).values(key=key, data=data))
+
+    def get(self, key: str) -> bytes:
+        from sqlalchemy import select
+
+        from app.db import engine
+        from app.modules.documents.models import FileBlob
+
+        with engine.connect() as conn:
+            data = conn.execute(select(FileBlob.data).where(FileBlob.key == key)).scalar()
+        if data is None:
+            raise FileNotFoundError(key)
+        return bytes(data)
+
+    def delete(self, key: str) -> None:
+        from sqlalchemy import delete
+
+        from app.db import engine
+        from app.modules.documents.models import FileBlob
+
+        with engine.begin() as conn:
+            conn.execute(delete(FileBlob).where(FileBlob.key == key))
+
+
+def _make_storage():
+    """``STORAGE_BACKEND``: "disk" (default) or "db". On Vercel with a shared database the files go to the
+    database too, otherwise a document made by one instance could not be opened through another."""
+    import os
+
+    from app.config import ON_VERCEL
+
+    backend = os.getenv("STORAGE_BACKEND", "").strip().lower()
+    if backend == "db" or (not backend and ON_VERCEL and not settings.database_url.startswith("sqlite")):
+        return DbStorage()
+    return LocalStorage(settings.storage_dir)
+
+
+storage = _make_storage()
 
 
 class AntivirusAdapter:
