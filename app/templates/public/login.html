@@ -15,12 +15,12 @@
   <div class="actions"><button class="btn primary" type="submit">{{ _("auth.login_btn") }}</button><a class="btn link" href="/forgot-password">{{ _("auth.forgot") }}</a></div>
   {% if eds_login %}
   <div class="eds stack" id="eds-login"><hr>
-    <button type="button" class="btn" data-eds-auth data-mode="{{ eds_mode }}" data-challenge="/login/eds/challenge" data-action="/login/eds" data-next="{{ next }}" data-wait="{{ _('eds.wait') }}" data-fail="{{ _('eds.fail') }}">🔐 {{ _("eds.login_btn") }}</button>
+    <button type="button" class="btn" data-eds-auth data-key="auth" data-mode="{{ eds_mode }}" data-challenge="/login/eds/challenge" data-action="/login/eds" data-next="{{ next }}" data-wait="{{ _('eds.wait') }}" data-fail="{{ _('eds.fail') }}">🔐 {{ _("eds.login_btn") }}</button>
     <small class="muted" data-eds-status>{{ _("eds.login_note_dev") if eds_mode == "dev" else _("eds.login_note") }}</small>
   </div>
   {% endif %}
   {% if egov_login %}
-  <div class="egov stack" id="egov-login" data-egov data-wait="{{ _('egov.wait') }}" data-fail="{{ _('eds.fail') }}" data-expired="{{ _('egov.expired') }}">
+  <div class="egov stack" id="egov-login" data-egov data-start="/login/egov/start" data-wait="{{ _('egov.wait') }}" data-fail="{{ _('eds.fail') }}" data-expired="{{ _('egov.expired') }}">
     <button type="button" class="btn" data-egov-start>📱 {{ _("egov.login_btn") }}</button>
     <div class="egov-qr" data-egov-panel hidden>
       <img data-egov-qr alt="{{ _('egov.qr_alt') }}" width="200" height="200">
@@ -55,4 +55,4 @@
 </div>
 </div>
 {% endblock %}
-{% block scripts %}{% if eds_login or egov_login %}<script src="/static/js/eds.js?v=4" defer></script>{% endif %}{% endblock %}
+{% block scripts %}{% if eds_login or egov_login %}<script src="/static/js/eds.js?v=5" data-nolayer="{{ _('eds.no_ncalayer') }}" data-install="{{ _('eds.install_ncalayer') }}" defer></script>{% endif %}{% endblock %}

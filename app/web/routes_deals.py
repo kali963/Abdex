@@ -95,6 +95,8 @@ def deal_card(did: str, request: Request, db: Session = Depends(get_db), me: Pri
         "countries": dictionary(db, "countries"), "crossings": dictionary(db, "border_crossings"),
         "eds_enabled": bool(me.company) and flag_enabled(db, "qualified_signature", me.company.id),
         "eds_mode": "dev" if is_dev_signer() else "ncalayer",
+        "egov_sign": bool(me.company) and flag_enabled(db, "qualified_signature", me.company.id)
+        and flag_enabled(db, "eds.egov_mobile"),
         "can_dispute": acc.side in ("client", "carrier") and o.status in (flow.ASSIGNED, flow.IN_TRANSIT, flow.UNLOADED),
         "my_vehicles": company_vehicles(db, carrier.id) if acc.side == "carrier" else [],
         "my_drivers": company_drivers(db, carrier.id) if acc.side == "carrier" else [],
@@ -164,6 +166,80 @@ async def sign_eds(did: str, doc_id: str, request: Request, db: Session = Depend
     deals.on_document_signed(db, acc.deal)
     db.commit()
     return redirect(f"/deals/{did}/docs/{doc.id}/signatures", flash=("success", "msg.signed_eds"))
+
+
+# ------------------------------------------------------------------ FR-DOC-07: signing in eGov mobile / eGov Business
+
+EGOV_DOC_COOKIE = "abdex_egov_doc"
+
+
+def _signable_doc(db: Session, me: Principal, did: str, doc_id: str) -> tuple:
+    acc = deal_access(db, me, parse_uuid(did))
+    _ctx_side(acc, "client", "carrier")
+    doc = db.get(Document, parse_uuid(doc_id))
+    if doc is None or doc.deal_id != acc.deal.id:
+        raise NotFound()
+    return acc, doc
+
+
+@router.post("/deals/{did}/docs/{doc_id}/egov/start")
+def egov_sign_start(did: str, doc_id: str, request: Request, db: Session = Depends(get_db),
+                    me: Principal = Depends(require("deal.sign"))):
+    """A QR code for eGov mobile / eGov Business: the app downloads this document and signs it with the user's
+    (or the company's) key; the server verifies the signature exactly as for NCALayer."""
+    import segno
+
+    from app.core.errors import AppError, Conflict
+    from app.modules.accounts import egov_mobile
+    from app.web.routes_public import _public_base
+
+    acc, doc = _signable_doc(db, me, did, doc_id)
+    if not egov_mobile.signing_enabled(db) or not flag_enabled(db, "qualified_signature", me.company.id):
+        raise AppError("qualified_signature_off", status_code=403)
+    if not doc.requires_signatures:
+        raise Conflict("not_signable")
+    if any(s.company_id == me.company.id for s in documents.signatures(db, doc.id)):
+        raise Conflict("already_signed")
+    token, browser = egov_mobile.start(db, document=doc, user_id=me.user.id, company_id=me.company.id)
+    db.commit()
+    link = f"mobileSign:{_public_base(request)}/egov/mgov/{token}"
+    data = {"token": token, "link": link, "qr": segno.make(link, error="m").svg_data_uri(scale=3, border=2),
+            "status": f"/deals/{acc.deal.id}/docs/{doc.id}/egov/{token}/status"}
+    if is_dev_signer():
+        data["dev_api"] = f"/egov/mgov/{token}"  # the in-browser test phone plays the app in development
+    resp = JSONResponse(data, headers={"Cache-Control": "no-store"})
+    from app.config import settings
+
+    resp.set_cookie(EGOV_DOC_COOKIE, browser, max_age=300, httponly=True, secure=settings.secure_cookies,
+                    samesite="strict", path=f"/deals/{acc.deal.id}/docs/{doc.id}/egov")
+    return resp
+
+
+@router.get("/deals/{did}/docs/{doc_id}/egov/{token}/status")
+def egov_sign_status(did: str, doc_id: str, token: str, request: Request, db: Session = Depends(get_db),
+                     me: Principal = Depends(require("deal.sign"))):
+    from app.core.errors import AppError
+    from app.core.i18n import translate
+    from app.modules.accounts import egov_mobile
+
+    acc, doc = _signable_doc(db, me, did, doc_id)
+    try:
+        state = egov_mobile.poll_document(db, token, request.cookies.get(EGOV_DOC_COOKIE, ""),
+                                          user_id=me.user.id, document_id=doc.id)
+    except NotFound:
+        raise
+    except AppError as exc:
+        db.commit()
+        return JSONResponse({"status": "failed", "message": translate(exc.message_key, **exc.params)})
+    db.commit()
+    if state != "signed":
+        return JSONResponse({"status": state})
+    from app.web.deps import set_flash
+
+    resp = JSONResponse({"status": "signed", "redirect": f"/deals/{acc.deal.id}/docs/{doc.id}/signatures"})
+    set_flash(resp, "success", "msg.signed_eds")
+    resp.delete_cookie(EGOV_DOC_COOKIE, path=f"/deals/{acc.deal.id}/docs/{doc.id}/egov")
+    return resp
 
 
 @router.api_route("/deals/{did}/docs/{doc_id}/signatures", methods=["GET", "POST"])

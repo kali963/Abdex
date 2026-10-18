@@ -55,4 +55,4 @@
 <tbody>{% for d in docs %}<tr><td>{{ _("doc." ~ d.doc_type) }}</td><td>{{ _("kyc.subject_" ~ d.subject_type) }}</td><td>{{ fmt_date(d.expires_on) }}</td><td>{{ ui.status(d.status) }}{% if d.reject_reason %}<br><small>{{ d.reject_reason }}</small>{% endif %}</td><td><a href="{{ file_url(d.file_id) }}" target="_blank" rel="noopener">{{ _("action.open") }}</a></td></tr>
 {% else %}<tr><td colspan="5" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
 {% endblock %}
-{% block scripts %}{% if eds_enabled %}<script src="/static/js/eds.js?v=4" defer></script>{% endif %}{% endblock %}
+{% block scripts %}{% if eds_enabled %}<script src="/static/js/eds.js?v=5" data-nolayer="{{ _('eds.no_ncalayer') }}" data-install="{{ _('eds.install_ncalayer') }}" defer></script>{% endif %}{% endblock %}

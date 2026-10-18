@@ -46,7 +46,7 @@
   {% else %}
     <p><span class="badge">{{ _("account.2fa_off") }}</span></p>
     <div class="eds stack">
-      <button type="button" class="btn primary" data-eds-auth data-mode="{{ eds_mode }}" data-challenge="/login/eds/challenge" data-action="/account/eds/link" {% if eds_mode == "dev" %}data-cert="/dev/eds/login-certificate"{% endif %} data-wait="{{ _('eds.wait') }}" data-fail="{{ _('eds.fail') }}">{{ _("eds.link") }}</button>
+      <button type="button" class="btn primary" data-eds-auth data-key="auth" data-mode="{{ eds_mode }}" data-challenge="/login/eds/challenge" data-action="/account/eds/link" {% if eds_mode == "dev" %}data-cert="/dev/eds/login-certificate"{% endif %} data-wait="{{ _('eds.wait') }}" data-fail="{{ _('eds.fail') }}">{{ _("eds.link") }}</button>
       <small class="muted" data-eds-status>{{ _("eds.note_dev") if eds_mode == "dev" else _("eds.note") }}</small>
     </div>
   {% endif %}
@@ -78,4 +78,4 @@
 </section>
 </div>
 {% endblock %}
-{% block scripts %}{% if eds_login %}<script src="/static/js/eds.js?v=4" defer></script>{% endif %}{% endblock %}
+{% block scripts %}{% if eds_login %}<script src="/static/js/eds.js?v=5" data-nolayer="{{ _('eds.no_ncalayer') }}" data-install="{{ _('eds.install_ncalayer') }}" defer></script>{% endif %}{% endblock %}

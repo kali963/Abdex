@@ -72,7 +72,8 @@ def seed_demo(db) -> None:
     log.info("seeding demo data")
     from app.modules.platform.models import FeatureFlag
 
-    for key in ("qualified_signature", "online_payments", "auth.eds_login", "digital_modules", "subscriptions"):  # demo: show the integrations with their simulators
+    for key in ("qualified_signature", "online_payments", "auth.eds_login", "auth.egov_mobile", "eds.egov_mobile",
+                "digital_modules", "subscriptions"):  # demo: show the integrations with their simulators
         flag = db.execute(select(FeatureFlag).where(FeatureFlag.key == key)).scalar_one_or_none()
         if flag is not None:
             flag.enabled = True
