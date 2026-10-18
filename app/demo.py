@@ -11,6 +11,7 @@ from datetime import date, timedelta
 
 from sqlalchemy import select
 
+from app.core.timeutil import local_today
 from app.core.context import RequestContext, reset_ctx, set_ctx
 from app.core.i18n import to_local_input
 from app.core.security import hash_password
@@ -61,7 +62,7 @@ def _make_l3(db, company, vehicles, drivers) -> None:
                                     doc_type="tech_passport", file_id=f.id, status="approved"))
     for d in drivers:
         db.add(BiometricCheck(driver_id=d.id, company_id=company.id, provider="demo", match=True, liveness=True,
-                              score=96, status="passed", valid_until=date.today() + timedelta(days=365)))
+                              score=96, status="passed", valid_until=local_today() + timedelta(days=365)))
     company.eds_confirmed_at, company.eds_cert_serial = utcnow(), "demo"
     company.verification_level = 3
 
@@ -103,18 +104,18 @@ def seed_demo(db) -> None:
     for u, r in ((fleet_owner, "fleet_owner"), (dispatcher, "dispatcher"), (driver_user, "driver")):
         db.add(Membership(user_id=u.id, company_id=carrier.id, role=r))
     v1 = Vehicle(company_id=carrier.id, plate="777ABC01", vin="XLRTE47MS0E123456", body_type="tent", capacity_kg=20000,
-                 volume_m3=86, status="approved", insurance_until=date.today() + timedelta(days=200),
+                 volume_m3=86, status="approved", insurance_until=local_today() + timedelta(days=200),
                  international_permit=True)
     v2 = Vehicle(company_id=carrier.id, plate="555REF02", vin="WMA06XZZ1KM765432", body_type="refrigerator",
                  capacity_kg=18000, volume_m3=76, status="approved", adr_allowed=True,
-                 insurance_until=date.today() + timedelta(days=25))
+                 insurance_until=local_today() + timedelta(days=25))
     d1 = Driver(company_id=carrier.id, user_id=driver_user.id, full_name="Серик Водитель", iin=make_bin("85040130012"),
                 phone="+77020000003", license_number="KZ 123456", license_categories="C,CE",
-                license_until=date.today() + timedelta(days=900), status="approved", adr_permit=True)
+                license_until=local_today() + timedelta(days=900), status="approved", adr_permit=True)
     d2 = Driver(company_id=carrier.id, full_name="Нурлан Ахметов", iin=make_bin("79120230045"), phone="+77020000004",
                 license_categories="C,CE", status="approved")
     v4 = Vehicle(company_id=carrier.id, plate="888TNT03", vin="YS2R4X20005123456", body_type="tent", capacity_kg=20000,
-                 volume_m3=82, status="approved", insurance_until=date.today() + timedelta(days=300))
+                 volume_m3=82, status="approved", insurance_until=local_today() + timedelta(days=300))
     db.add_all([v1, v2, v4, d1, d2])
     db.flush()
     _make_l3(db, carrier, (v1, v2, v4), (d1, d2))

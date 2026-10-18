@@ -14,6 +14,7 @@ from datetime import timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.timeutil import local_today
 from app.core.audit import audit
 from app.core.errors import Forbidden, NotFound, ValidationFailed
 from app.core.storage import IMAGE_TYPES, save_upload, storage
@@ -60,7 +61,7 @@ def run_check(db: Session, user: User, *, selfie: bytes, selfie2: bytes, documen
         check.match, check.liveness, check.score = bool(res["match"]), bool(res["liveness"]), int(res["score"])
         check.status = "passed" if check.match and check.liveness else "failed"
         if check.status == "passed":
-            check.valid_until = utcnow().date() + timedelta(days=365)
+            check.valid_until = local_today() + timedelta(days=365)
     except IntegrationUnavailable:
         check.status = "unavailable"  # fallback: the moderator verifies the driver by documents
     # the second frame is only needed for liveness: delete it right away

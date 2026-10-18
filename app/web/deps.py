@@ -175,6 +175,7 @@ async def csrf_protect(request: Request) -> None:
         found = await run_in_threadpool(session_token)
         if found:
             expected.append(found)
+    stale_session = bool(raw) and not expected  # the browser's session is gone (expired, signed out elsewhere)
     if not expected:
         # the double-submit token is for anonymous forms only (login, registration): with a live session a planted
         # cookie must not be able to stand in for the session's own token
@@ -188,6 +189,8 @@ async def csrf_protect(request: Request) -> None:
             form = await request.form()
             sent = str(form.get("csrf_token", ""))
     if not sent or not any(hmac.compare_digest(e, sent) for e in expected if e):
+        if stale_session:  # not a forged form: the user simply has to sign in again
+            raise AppError("session_expired", status_code=401)
         raise AppError("csrf_failed", status_code=403)
 
 
@@ -247,6 +250,7 @@ def render(request: Request, name: str, ctx: dict[str, Any] | None = None, *, st
     data["flash"] = pop_flash(request)
     data["csrf_token"] = principal.session.csrf_token if principal else getattr(request.state, "pre_csrf", "")
     data["locale"] = get_ctx().locale
+    data.setdefault("request_id", get_ctx().request_id)
     if principal is not None:
         from app.db import SessionLocal, request_db
         from app.modules.notifications.service import unread_count

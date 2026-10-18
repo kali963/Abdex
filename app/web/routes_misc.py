@@ -6,10 +6,11 @@ from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.timeutil import local_today
 from app.core import ratelimit
 from app.core.audit import audit
 from app.core.errors import Forbidden, NotFound, ValidationFailed
-from app.db import get_analytics_db, get_db, utcnow
+from app.db import get_analytics_db, get_db
 from app.modules.analytics import service as analytics
 from app.modules.billing import service as billing
 from app.modules.calc import service as calc
@@ -31,7 +32,7 @@ def finance(request: Request, db: Session = Depends(get_db), me: Principal = Dep
         ctx["carrier"] = analytics.carrier_analytics(db, me.company.id)
     else:
         ctx["promos"] = billing.company_promos(db, me.company.id)
-    today = utcnow().date()
+    today = local_today()
     from app.modules.platform.service import flag_enabled
 
     ctx.update(today=today, month_start=today.replace(day=1),

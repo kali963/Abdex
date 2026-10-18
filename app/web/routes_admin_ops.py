@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.timeutil import local_today
 from app.config import settings
 from app.core.errors import NotFound, ValidationFailed
 from app.db import get_db
@@ -212,13 +213,12 @@ async def af_rule_save(rid: str, request: Request, db: Session = Depends(get_db)
 def _month(raw: str | None):
     from datetime import date
 
-    from app.db import utcnow
 
     try:
         y, m = (int(x) for x in (raw or "").split("-")[:2])
         return date(y, m, 1)
     except ValueError:
-        return utcnow().date().replace(day=1)
+        return local_today().replace(day=1)
 
 
 @router.get("/security")
@@ -355,9 +355,8 @@ def processing_toggle(rid: str, db: Session = Depends(get_db), me: Principal = D
 def _period(request: Request):
     from datetime import date
 
-    from app.db import utcnow
 
-    today = utcnow().date()
+    today = local_today()
     try:
         d1 = date.fromisoformat(request.query_params.get("date_from") or today.replace(day=1).isoformat())
         d2 = date.fromisoformat(request.query_params.get("date_to") or today.isoformat())
@@ -495,9 +494,8 @@ async def admin_module_save(mid: str, request: Request, db: Session = Depends(ge
 def admin_fx(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("admin.finance"))):
     from app.modules.platform import fx
 
-    from app.db import utcnow
 
-    return render(request, "admin/fx.html", {"rates": fx.latest(db), "currencies": fx.CURRENCIES, "today": utcnow().date(),
+    return render(request, "admin/fx.html", {"rates": fx.latest(db), "currencies": fx.CURRENCIES, "today": local_today(),
                                              "source": fx.source().provider if fx.source() else "manual"})
 
 

@@ -13,6 +13,7 @@ from datetime import timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.timeutil import local_today
 from app.core.context import get_ctx
 from app.db import utcnow
 from app.modules.platform.models import AntifraudRule, DeviceEvent
@@ -146,7 +147,7 @@ def apply_action(db: Session, r: Rule, alert) -> None:
     if has_restriction(db, company.id, (kind,)):
         return
     db.add(Restriction(company_id=company.id, kind=kind, reason=f"antifraud:{r.code}",
-                       until=None if kind == "block" else utcnow().date() + timedelta(days=7)))
+                       until=None if kind == "block" else local_today() + timedelta(days=7)))
     db.flush()
     audit(db, "antifraud.auto_restriction", object_type="company", object_id=company.id, role="system",
           details={"rule": r.code, "kind": kind, "alert": str(alert.id)})

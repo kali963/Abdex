@@ -444,3 +444,24 @@ def test_egov_login_through_sigex(monkeypatch):
         flag.enabled = was
         db.commit()
         db.close()
+
+
+def test_lost_session_leads_to_login_not_a_dead_end(client_app):
+    """A form sent with a session the server no longer knows (expired, another server's) is not a "forged form":
+    the user goes back, then to the sign-in page, with a clear message; the error page carries the support code."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from app.web.deps import SESSION_COOKIE
+
+    c = TestClient(app)
+    c.cookies.set(SESSION_COOKIE, "no-such-session")
+    r = c.post("/support/new", data={"csrf_token": "whatever", "subject": "x"},
+               headers={"referer": "http://testserver/support"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/support"
+    page = c.get("/login").text
+    assert "Сессия истекла" in page
+    # a real CSRF failure (no session at all) stays a 403 with the support code shown
+    anon = TestClient(app)
+    r = anon.post("/support/new", data={"csrf_token": "forged"}, headers={"X-Request-ID": "abc123"})
+    assert r.status_code == 403 and "abc123" in r.text

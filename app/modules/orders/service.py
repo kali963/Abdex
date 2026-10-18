@@ -8,6 +8,7 @@ from datetime import timedelta
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.timeutil import local_today
 from app.core import ratelimit
 from app.core.audit import audit
 from app.core.context import get_ctx
@@ -292,7 +293,7 @@ def _check_restrictions(db: Session, company: Company) -> None:
     active = db.execute(select(Restriction).where(Restriction.company_id == company.id,
                                                   Restriction.kind.in_(("block", "no_new_orders")),
                                                   Restriction.lifted_at.is_(None))).scalars().all()
-    today = utcnow().date()
+    today = local_today()
     if any(r.until is None or r.until >= today for r in active):
         raise Forbidden("company_restricted")
 

@@ -9,12 +9,13 @@ from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.timeutil import local_today
 from app.config import settings
 from app.core import ratelimit
 from app.core.audit import audit
 from app.core.errors import NotFound, ValidationFailed
 from app.core.i18n import translate
-from app.db import get_db, utcnow
+from app.db import get_db
 from app.modules.accounts import support_access
 from app.modules.accounts.models import Company, User
 from app.modules.bids import matching
@@ -107,7 +108,7 @@ def series_action(sid: str, action: str, db: Session = Depends(get_db), me: Prin
 
 @router.get("/fleet/schedule")
 def fleet_schedule(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("fleet.manage"))):
-    start = _parse_day(request.query_params.get("from"), utcnow().date())
+    start = _parse_day(request.query_params.get("from"), local_today())
     data = schedule.board(db, me.company.id, start, days=14)
     return render(request, "carrier/schedule.html", {"b": data, "start": start,
                                                      "prev": start - timedelta(days=14), "next": start + timedelta(days=14)})
@@ -162,7 +163,7 @@ def webhooks_action(wid: str, action: str, db: Session = Depends(get_db),
 
 @router.get("/documents/export.zip")
 def documents_export(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("export.bulk"))):
-    today = utcnow().date()
+    today = local_today()
     date_from = _parse_day(request.query_params.get("date_from"), today.replace(day=1))
     date_to = _parse_day(request.query_params.get("date_to"), today)
     ratelimit.hit("export", str(me.user.id))
@@ -247,7 +248,7 @@ def plan_periods(request: Request, db: Session = Depends(get_db), me: Principal 
     current = plans.get_plan(db, me.company.id, parse_uuid(pid)) if pid else (items[0] if items else None)
     return render(request, "client/plan_fact.html", {
         "items": items, "current": current, "pf": plans.plan_vs_fact(db, current) if current else None,
-        "columns": plans.COLUMNS, "today": utcnow().date()})
+        "columns": plans.COLUMNS, "today": local_today()})
 
 
 @router.get("/plan/periods/template.xlsx")
@@ -278,7 +279,7 @@ async def plan_upload(request: Request, db: Session = Depends(get_db), me: Princ
         items = plans.company_plans(db, me.company.id)
         return render(request, "client/plan_fact.html", {"items": items, "current": None, "pf": None,
                                                          "problems": problems, "columns": plans.COLUMNS,
-                                                         "today": utcnow().date()}, status_code=422)
+                                                         "today": local_today()}, status_code=422)
     db.commit()
     return redirect(f"/plan/periods?id={plan.id}", flash=("success", "planf.uploaded"))
 
@@ -397,7 +398,7 @@ def _acc_labels() -> dict:
 def finance_export(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("finance.view"))):
     from app.modules.billing import accounting
 
-    today = utcnow().date()
+    today = local_today()
     d1 = _parse_day(request.query_params.get("date_from"), today.replace(day=1))
     d2 = _parse_day(request.query_params.get("date_to"), today)
     ratelimit.hit("export", str(me.user.id))

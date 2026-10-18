@@ -147,7 +147,9 @@ def test_esf_sending_queue(login, db):
 
     _flag(db, "gov.esf")
     try:
-        today = utcnow().date()
+        from app.core.timeutil import local_today
+
+        today = local_today()
         n = esf.queue_period(db, accounting.rows(db, today - timedelta(days=60), today))
         db.commit()
         assert n >= 2
