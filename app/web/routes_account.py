@@ -165,7 +165,8 @@ async def eds_link(request: Request, db: Session = Depends(get_db), me: Principa
     form = await request.form()
     user = db.get(User, me.user.id)
     try:
-        eds_login.link(db, user, str(form.get("package", "")), str(form.get("challenge", "")))
+        eds_login.link(db, user, str(form.get("package", "")), str(form.get("challenge", "")),
+                       request.cookies.get(eds_login.BIND_COOKIE, ""))
     except AppError as exc:
         db.commit()
         resp = redirect("/account/security#eds")
@@ -615,15 +616,12 @@ def verification(request: Request, db: Session = Depends(get_db), me: Principal 
 
 
 @router.post("/company/eds/challenge")
-def company_eds_challenge(db: Session = Depends(get_db), me: Principal = Depends(require("company.manage"))):
+def company_eds_challenge(request: Request, db: Session = Depends(get_db),
+                          me: Principal = Depends(require("company.manage"))):
     """L3: a one-time text the company signs with its qualified certificate."""
-    from fastapi.responses import JSONResponse
+    from app.web.routes_public import eds_challenge_response
 
-    from app.modules.accounts.eds_login import new_challenge
-
-    challenge = new_challenge(db)
-    db.commit()
-    return JSONResponse({"challenge": challenge}, headers={"Cache-Control": "no-store"})
+    return eds_challenge_response(db, request)
 
 
 @router.post("/company/eds/confirm")
@@ -632,7 +630,10 @@ async def company_eds_confirm(request: Request, db: Session = Depends(get_db),
     form = await request.form()
     company = db.get(Company, me.company.id)
     try:
-        level3.confirm_eds(db, company, str(form.get("package", "")), str(form.get("challenge", "")))
+        from app.modules.accounts.eds_login import BIND_COOKIE
+
+        level3.confirm_eds(db, company, str(form.get("package", "")), str(form.get("challenge", "")),
+                           request.cookies.get(BIND_COOKIE, ""))
     except AppError as exc:
         db.commit()
         resp = redirect("/company/verification#l3")

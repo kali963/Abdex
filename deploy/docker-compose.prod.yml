@@ -1,0 +1,126 @@
+# AbdEX production stack for one server in Kazakhstan (personal data of RK citizens must be stored in RK).
+#
+#   cd deploy && cp .env.production.example .env.production   # fill it in (docs/launch.md)
+#   ./generate-secrets.sh                                     # once: field encryption keys
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#
+# Only Caddy is reachable from the internet (80/443, automatic Let's Encrypt certificates). Everything else
+# lives on the internal network.
+
+x-env: &env
+  APP_ENV: production
+  DATABASE_URL: postgresql+psycopg://abdex:${APP_DB_PASSWORD}@db:5432/abdex
+  REDIS_URL: redis://redis:6379/0
+  CLAMAV_HOST: clamav
+  EDS_NCANODE_URL: http://ncanode:14579
+  STORAGE_DIR: /data/storage
+  FIELD_ENCRYPTION_KEYS_FILE: /run/secrets/field_keys
+  TRUST_PROXY: "true"
+  TRUSTED_PROXY_HOPS: "1"
+  SECURE_COOKIES: "true"
+  SEED_DEMO_DATA: "false"
+  RUN_BACKGROUND_WORKER: "false"
+
+x-app: &app
+  build: ..
+  image: abdex:${ABDEX_VERSION:-latest}
+  restart: unless-stopped
+  env_file: .env.production
+  secrets:
+    - field_keys
+  volumes:
+    - storage:/data/storage
+  logging: &logging
+    driver: json-file
+    options: { max-size: "20m", max-file: "10" }
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app]
+    logging: *logging
+
+  app:
+    <<: *app
+    environment:
+      <<: *env
+      MIGRATE_ON_START: "true"
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+    expose: ["8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5).status == 200 else 1)"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "app.worker"]
+    environment:
+      <<: *env
+      MIGRATE_ON_START: "false"   # the app container migrates; the worker waits for it
+    healthcheck:
+      disable: true               # no web server in this container (the image check targets the app)
+    depends_on:
+      app: { condition: service_healthy }
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    command: ["postgres", "-c", "shared_buffers=512MB", "-c", "max_connections=200",
+              "-c", "log_min_duration_statement=1000", "-c", "idle_in_transaction_session_timeout=60000"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d abdex"]
+      interval: 5s
+      retries: 20
+    logging: *logging
+
+  redis:
+    image: redis:7.2-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb",
+              "--maxmemory-policy", "allkeys-lru"]
+    logging: *logging
+
+  clamav:
+    image: clamav/clamav:1.4
+    restart: unless-stopped
+    # loads the signature database at start (a few minutes, ~1.5 GB RAM); uploads wait with "try again later"
+    logging: *logging
+
+  ncanode:
+    image: malikzh/ncanode:latest   # pin the tested tag; needs outbound access to *.pki.gov.kz (OCSP, TSP, CRL)
+    restart: unless-stopped
+    expose: ["14579"]
+    logging: *logging
+
+secrets:
+  field_keys:
+    file: ./secrets/field_keys
+
+volumes:
+  pgdata:
+  storage:
+  caddy_data:
+  caddy_config:

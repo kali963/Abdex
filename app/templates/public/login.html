@@ -25,6 +25,7 @@
     <div class="egov-qr" data-egov-panel hidden>
       <img data-egov-qr alt="{{ _('egov.qr_alt') }}" width="200" height="200">
       <p><small class="muted">{{ _("egov.scan") }}</small></p>
+            <p class="row egov-links"><a class="btn small" data-egov-deeplink="mgov" hidden rel="noopener">{{ _("egov.open_mgov") }}</a> <a class="btn small" data-egov-deeplink="business" hidden rel="noopener">{{ _("egov.open_business") }}</a></p>
       {% if eds_mode == "dev" %}<button type="button" class="btn small" data-egov-devphone>{{ _("egov.dev_phone") }}</button>{% endif %}
     </div>
     <small class="muted" data-egov-status></small>
@@ -55,4 +56,4 @@
 </div>
 </div>
 {% endblock %}
-{% block scripts %}{% if eds_login or egov_login %}<script src="/static/js/eds.js?v=5" data-nolayer="{{ _('eds.no_ncalayer') }}" data-install="{{ _('eds.install_ncalayer') }}" defer></script>{% endif %}{% endblock %}
+{% block scripts %}{% if eds_login or egov_login %}<script src="/static/js/eds.js?v=7" data-nolayer="{{ _('eds.no_ncalayer') }}" data-install="{{ _('eds.install_ncalayer') }}" data-lna="{{ _('eds.lna') }}" defer></script>{% endif %}{% endblock %}

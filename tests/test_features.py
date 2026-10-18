@@ -93,9 +93,10 @@ def test_spoofed_forwarded_for_is_ignored(client_app):
     c = TestClient(app)
     tok = csrf_from(c.get("/login").text)
     codes = []
-    for i in range(12):  # a new fake IP every time must not reset the per-IP counter
-        codes.append(c.post("/login", data={"login": f"+7799900000{i % 10}", "password": "x" * 12, "csrf_token": tok},
-                            headers={"X-Forwarded-For": f"10.0.0.{i}"}).status_code)
+    limit = ratelimit.LIMITS["login"][0]
+    for i in range(limit + 2):  # a new fake IP every time must not reset the per-IP counter
+        codes.append(c.post("/login", data={"login": f"+779990{i:05d}", "password": "x" * 12, "csrf_token": tok},
+                            headers={"X-Forwarded-For": f"10.0.{i // 250}.{i % 250}"}).status_code)
     assert 429 in codes
     ratelimit.reset_all()
 

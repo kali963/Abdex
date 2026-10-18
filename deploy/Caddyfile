@@ -1,0 +1,38 @@
+# HTTPS in front of AbdEX: automatic Let's Encrypt certificates, HTTP/3, compression.
+# Caddy replaces X-Forwarded-For with the real client address (clients cannot spoof it), so the app runs with
+# TRUST_PROXY=true and TRUSTED_PROXY_HOPS=1. The application sets its own security headers (CSP, HSTS, ...).
+{
+	email {$ACME_EMAIL}
+}
+
+(common) {
+	encode zstd gzip
+	request_body {
+		max_size 25MB
+	}
+	# One upstream: no active health checks — under a burst a slow /healthz would make Caddy declare the only
+	# backend dead and answer 503 to everybody. Docker restarts an unhealthy app container instead.
+	reverse_proxy app:8000 {
+		transport http {
+			read_timeout 90s
+			write_timeout 90s
+		}
+	}
+	log {
+		output stdout
+		format json
+	}
+}
+
+{$SITE_DOMAIN}, www.{$SITE_DOMAIN} {
+	@www host www.{$SITE_DOMAIN}
+	redir @www https://{$SITE_DOMAIN}{uri} permanent
+	import common
+}
+
+# The admin interface answers only on this host (ADMIN_HOST); restrict it to the office network if possible:
+#   @outside not remote_ip 203.0.113.0/24
+#   respond @outside 404
+{$ADMIN_DOMAIN} {
+	import common
+}

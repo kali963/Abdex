@@ -36,6 +36,7 @@ from app.core.context import get_ctx
 from app.core.errors import AppError, NotFound
 from app.db import utcnow
 from app.modules.accounts.models import EgovSignSession, User
+from app.modules.integrations.base import Adapter, IntegrationUnavailable
 
 TTL = timedelta(minutes=5)
 
@@ -56,19 +57,221 @@ def signing_enabled(db: Session) -> bool:
     return flag_enabled(db, "eds.egov_mobile")
 
 
-def start(db: Session, *, document=None, user_id=None, company_id=None) -> tuple[str, str]:
-    """Returns (token for the QR link, browser secret for the cookie). With ``document`` the attempt signs that
-    deal document on behalf of ``user_id`` / ``company_id`` (checked by the caller)."""
+def provider() -> str:
+    """``EGOV_PROVIDER``: "direct" — the platform's own mgovSign endpoints (needs the Smart Bridge registration
+    of the QR-signing service); "sigex" — through the SIGEX QR-signing API (no Smart Bridge registration; the
+    signature still comes back to us and is verified by NCANode like any other)."""
+    import os
+
+    name = os.getenv("EGOV_PROVIDER", "direct").strip().lower()
+    return name if name in ("direct", "sigex") else "direct"
+
+
+def start(db: Session, *, document=None, user_id=None, company_id=None, base: str = "") -> tuple[str, str, dict]:
+    """Returns (token, browser secret for the cookie, what the browser shows: QR image, QR text, deep links).
+    With ``document`` the attempt signs that deal document on behalf of ``user_id`` / ``company_id`` (checked by
+    the caller). For SIGEX the returned ``launch`` callable must be called after the commit."""
     ratelimit.hit("eds_challenge", get_ctx().ip or "local")
     token, browser = secrets.token_urlsafe(24), secrets.token_urlsafe(24)
     purpose = "document" if document is not None else "login"
     challenge = f"AbdEX {purpose} via eGov mobile {utcnow():%Y-%m-%dT%H:%M:%SZ} {secrets.token_hex(16)}"
-    db.add(EgovSignSession(token_hash=_h(token), auth_token_hash=_h(_auth_token(token)), browser_hash=_h(browser),
-                           challenge=challenge, expires_at=utcnow() + TTL, purpose=purpose,
-                           document_id=document.id if document is not None else None,
-                           user_id=user_id if document is not None else None, company_id=company_id))
+    s = EgovSignSession(token_hash=_h(token), auth_token_hash=_h(_auth_token(token)), browser_hash=_h(browser),
+                        challenge=challenge, expires_at=utcnow() + TTL, purpose=purpose,
+                        document_id=document.id if document is not None else None,
+                        user_id=user_id if document is not None else None, company_id=company_id)
+    db.add(s)
     db.flush()
-    return token, browser
+    if provider() == "sigex":
+        return token, browser, _sigex_start(db, s)
+    lk = links(base, token)
+    return token, browser, {"qr_text": lk["qr"], "deeplinks": lk["deeplinks"]}
+
+
+def for_browser(token: str, show: dict, status_url: str, *, scale: int = 4) -> dict:
+    """What the page needs: the QR image, the deep links and where to poll."""
+    import segno
+
+    if show.get("qr_png"):
+        qr = "data:image/png;base64," + show["qr_png"]
+    else:
+        qr = segno.make(show["qr_text"], error="m").svg_data_uri(scale=scale, border=2)
+    return {"token": token, "link": show.get("qr_text", ""), "qr": qr, "deeplinks": show.get("deeplinks", {}),
+            "status": status_url}
+
+
+def start_safely(db: Session, **kwargs) -> tuple[str, str, dict]:
+    """``start`` with an outage of the signing operator turned into a clear message."""
+    try:
+        return start(db, **kwargs)
+    except IntegrationUnavailable as exc:
+        db.rollback()
+        raise AppError("egov_unavailable", status_code=503) from exc
+
+
+# ------------------------------------------------------------------ SIGEX QR-signing API
+
+
+def _sigex_base() -> str:
+    import os
+
+    return os.getenv("SIGEX_URL", "https://sigex.kz").rstrip("/")
+
+
+class SigexAdapter(Adapter):
+    """SIGEX QR signing (https://sigex.kz, reference client sigex-qr-signing-client): register the procedure,
+    hand the data over (the call returns once eGov mobile has fetched it), wait for the signatures."""
+
+    name = "sigex"
+    personal_data = True  # the signed document goes to the operator: processing register record "egov_sign"
+    timeout = 30.0
+    retries = 1
+
+    def _http(self, method: str, url: str, body: dict | None, timeout: float) -> dict:
+        import urllib.request
+
+        if not url.startswith(_sigex_base() + "/"):
+            raise RuntimeError("unexpected SIGEX url")  # only addresses of the configured service are called
+        req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None,  # noqa: S310 — checked above
+                                     headers={"Content-Type": "application/json"}, method=method)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — configured https service
+            return json.loads(resp.read(2_000_000) or b"{}")
+
+    def register(self, description: str) -> dict:
+        out = self.call("register", lambda: self._http("POST", f"{_sigex_base()}/api/egovQr",
+                                                       {"description": description[:500]}, self.timeout),
+                        summary="egovQr")
+        if out.get("message") or not out.get("dataURL") or not out.get("signURL"):
+            raise IntegrationUnavailable(f"sigex: {str(out.get('message', 'no urls'))[:100]}")
+        return out
+
+    def exchange(self, reg: dict, documents: list, wait: float) -> dict:
+        """Blocking: send the data (returns when the app took it), then wait for the signatures."""
+        sent = self._http("POST", reg["dataURL"], {"signMethod": "CMS_SIGN_ONLY", "version": 1,
+                                                   "documentsToSign": documents}, wait)
+        if sent.get("message"):
+            return {"error": str(sent["message"])[:100]}
+        return self._http("GET", reg["signURL"], None, wait)
+
+
+sigex = None
+
+
+def _sigex():
+    global sigex
+    if sigex is None:
+        sigex = SigexAdapter()
+    return sigex
+
+
+def _to_sign(db: Session, s: EgovSignSession) -> list:
+    """The documents for the app, in the mgovSign format (the same for SIGEX and our own API №2)."""
+    if s.purpose == "document":
+        ru, kk, en = _doc_title(db, s)
+        data, mime = base64.b64encode(_document_bytes(db, s)).decode(), "@file/pdf"
+    else:
+        ru, kk, en = "Вход в AbdEX", "AbdEX-ке кіру", "Sign in to AbdEX"
+        data, mime = base64.b64encode(s.challenge.encode()).decode(), ""
+    return [{"id": 1, "nameRu": ru, "nameKz": kk, "nameEn": en, "meta": [], "document": {"file": {"mime": mime,
+                                                                                              "data": data}}}]
+
+
+def _description(db: Session, s: EgovSignSession) -> str:
+    if s.purpose == "document":
+        ru, kk, en = _doc_title(db, s)
+        return f"Подписание: {ru} / Қол қою: {kk} / Signing: {en}"
+    return "Вход в AbdEX / AbdEX-ке кіру / Sign in to AbdEX"
+
+
+def _sigex_start(db: Session, s: EgovSignSession) -> dict:
+    import threading
+
+    import re
+
+    reg = _sigex().register(_description(db, s))
+    if not re.fullmatch(r"[A-Za-z0-9+/]+={0,2}", str(reg.get("qrCode", ""))):  # a PNG in base64, nothing else
+        raise IntegrationUnavailable("sigex: no QR image")
+    for key in ("eGovMobileLaunchLink", "eGovBusinessLaunchLink"):  # only the eGov launcher, never another site
+        if reg.get(key) and not str(reg[key]).startswith("https://m.egov.kz/"):
+            reg[key] = None
+    documents = _to_sign(db, s)
+    session_id, wait = s.id, TTL.total_seconds() + 15
+
+    def launch():
+        threading.Thread(target=_sigex_wait, args=(session_id, reg, documents, wait), daemon=True,
+                         name=f"sigex-{session_id}").start()
+
+    return {"qr_png": reg.get("qrCode", ""), "deeplinks": {k: v for k, v in (
+        ("mgov", reg.get("eGovMobileLaunchLink")), ("business", reg.get("eGovBusinessLaunchLink"))) if v},
+        "launch": launch}
+
+
+def _sigex_wait(session_id, reg: dict, documents: list, wait: float) -> None:
+    """Background: wait for the user to sign in the app, then verify exactly as with our own endpoints."""
+    import logging
+
+    from app.core.context import RequestContext, reset_ctx, set_ctx
+    from app.db import SessionLocal
+
+    try:
+        out = _sigex().exchange(reg, documents, wait)
+    except Exception as exc:  # noqa: BLE001 — timeouts, network: the attempt simply fails
+        logging.getLogger("abdex.integrations").warning("sigex exchange failed: %s", type(exc).__name__)
+        out = {"error": "unavailable"}
+    tok = set_ctx(RequestContext(request_id=f"sigex-{session_id}"))
+    db = SessionLocal()
+    try:
+        s = db.execute(select(EgovSignSession).where(EgovSignSession.id == session_id).with_for_update()
+                       ).scalar_one_or_none()
+        if s is None or s.status != "pending" or s.expires_at < utcnow():
+            return
+        if out.get("status") == "CANCELED":
+            s.status, s.error = "failed", "cancelled"
+        elif out.get("error") or out.get("message"):
+            s.status, s.error = "failed", "egov_unavailable"
+        else:
+            try:
+                data_b64 = str(out["documentsToSign"][0]["document"]["file"]["data"])
+            except (KeyError, IndexError, TypeError):
+                s.status, s.error = "failed", "malformed"
+            else:
+                _complete(db, s, data_b64)
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        logging.getLogger("abdex.integrations").exception("sigex result not processed")
+    finally:
+        db.close()
+        reset_ctx(tok)
+
+
+# Cross-signing on the same phone: the "API №1" address handed to the eGov launcher. The format is the one the
+# apps accept today (as issued by SIGEX for eGov mobile / eGov Business: the old *.page.link dynamic links of
+# the Smart Bridge documentation stopped working with Firebase Dynamic Links in 2025). Configurable in case it
+# changes again; {link} is the API №1 address with the "?mgovSign" marker.
+DEEPLINKS = {
+    "mgov": ("EGOV_DEEPLINK_MGOV", "https://m.egov.kz/mobileSign/?link={link}"),
+    "business": ("EGOV_DEEPLINK_BUSINESS", "https://m.egov.kz/businessSign/?link={link}"),
+}
+
+
+def links(base: str, token: str) -> dict:
+    """QR content (``mobileSign:`` + API №1) and the deep links for signing on the same phone."""
+    import os
+
+    api1 = f"{base}/egov/mgov/{token}"
+    out = {"api": api1, "qr": f"mobileSign:{api1}", "deeplinks": {}}
+    for name, (env, default) in DEEPLINKS.items():
+        template = os.getenv(env, default)
+        if template and "{link}" in template:
+            out["deeplinks"][name] = template.replace("{link}", f"{api1}?mgovSign")
+    return out
+
+
+def _organisation() -> dict:
+    import os
+
+    name = os.getenv("EGOV_ORG_NAME", "AbdEX")
+    return {"nameRu": name, "nameKz": name, "nameEn": name, "bin": os.getenv("EGOV_ORG_BIN", "")}
 
 
 def _active(db: Session, s: EgovSignSession) -> bool:
@@ -115,14 +318,9 @@ def describe(db: Session, token: str, base: str) -> dict:
     if s.status != "pending" or not _active(db, s):
         raise NotFound()
     auth = _auth_token(token)
-    if s.purpose == "document":
-        ru, kk, en = _doc_title(db, s)
-        description = f"Подписание: {ru} / Қол қою: {kk} / Signing: {en}"
-    else:
-        description = "Вход в AbdEX / AbdEX-ке кіру / Sign in to AbdEX"
-    return {"description": description,
+    return {"description": _description(db, s),
             "expiry_date": s.expires_at.isoformat(),
-            "organisation": {"nameRu": "AbdEX", "nameKz": "AbdEX", "nameEn": "AbdEX", "bin": ""},
+            "organisation": _organisation(),
             "document": {"uri": f"{base}/egov/mgov/{token}/document", "auth_type": "Token", "auth_token": auth}}
 
 
@@ -138,16 +336,7 @@ def document(db: Session, token: str, authorization: str) -> dict:
     _authorize(s, authorization)
     if s.status != "pending" or not _active(db, s):
         raise NotFound()
-    if s.purpose == "document":
-        ru, kk, en = _doc_title(db, s)
-        data = base64.b64encode(_document_bytes(db, s)).decode()
-        return {"signMethod": "CMS_SIGN_ONLY", "documentsToSign": [{
-            "id": 1, "nameRu": ru, "nameKz": kk, "nameEn": en, "meta": [],
-            "document": {"file": {"mime": "@file/pdf", "data": data}}}]}
-    data = base64.b64encode(s.challenge.encode()).decode()
-    return {"signMethod": "CMS_SIGN_ONLY", "documentsToSign": [{
-        "id": 1, "nameRu": "Вход в AbdEX", "nameKz": "AbdEX-ке кіру", "nameEn": "Sign in to AbdEX", "meta": [],
-        "document": {"file": {"mime": "", "data": data}}}]}
+    return {"signMethod": "CMS_SIGN_ONLY", "documentsToSign": _to_sign(db, s)}
 
 
 def _document_bytes(db: Session, s: EgovSignSession) -> bytes:
@@ -209,10 +398,6 @@ def _package(data_b64: str) -> str:
 
 def signed(db: Session, token: str, authorization: str, body: dict) -> None:
     """Step 4: the signed document comes back; the signature is verified and the IIN found."""
-    from app.core.crypto import blind_index
-    from app.modules.documents import eds
-    from app.modules.platform.service import get_setting
-
     s = _get(db, token, lock=True)
     _authorize(s, authorization)
     if s.status != "pending" or not _active(db, s):
@@ -222,6 +407,18 @@ def signed(db: Session, token: str, authorization: str, body: dict) -> None:
         if not data_b64 or len(data_b64) > 200_000:
             raise ValueError
     except (KeyError, IndexError, TypeError, ValueError):
+        s.status, s.error = "failed", "malformed"
+        return
+    _complete(db, s, data_b64)
+
+
+def _complete(db: Session, s: EgovSignSession, data_b64: str) -> None:
+    """The signature is back (from the app or from SIGEX): verify it and record the outcome on the attempt."""
+    from app.core.crypto import blind_index
+    from app.modules.documents import eds
+    from app.modules.platform.service import get_setting
+
+    if not data_b64 or len(data_b64) > 200_000:
         s.status, s.error = "failed", "malformed"
         return
     if s.purpose == "document":
@@ -256,9 +453,19 @@ def poll(db: Session, token: str, browser_secret: str) -> tuple[str, User | None
         audit(db, "auth.login_egov", object_type="user", object_id=user.id, user_id=user.id)
         return "signed", user
     if s.status == "failed":
-        raise AppError("eds_not_linked" if s.error == "not_linked" else "eds_invalid", status_code=422,
-                       checks=s.error)
+        raise _failure(s.error)
     return s.status, None
+
+
+def _failure(error: str) -> AppError:
+    if error == "not_linked":
+        return AppError("eds_not_linked", status_code=422)
+    if error in ("cancelled", "egov_unavailable"):
+        return AppError("egov_cancelled" if error == "cancelled" else "egov_unavailable", status_code=422)
+    code, sep, checks = error.partition(":")
+    if not sep:  # malformed answer from the app, rights lost, failed checks of a login
+        code, checks = "eds_invalid", error
+    return AppError(code, status_code=422, checks=checks)
 
 
 def _sign_document(db: Session, s: EgovSignSession, package: str) -> None:
@@ -299,8 +506,5 @@ def poll_document(db: Session, token: str, browser_secret: str, *, user_id, docu
         s.status = "used"
         return "signed"
     if s.status == "failed":
-        code, sep, checks = s.error.partition(":")
-        if not sep:  # malformed answer from the app, rights lost
-            code, checks = "eds_invalid", s.error
-        raise AppError(code, status_code=422, checks=checks)
+        raise _failure(s.error)
     return s.status

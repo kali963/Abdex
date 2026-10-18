@@ -164,28 +164,52 @@ class DevVerifier(Adapter):
         return res
 
 
+def _looks_like_cms(package: str) -> bool:
+    """Base64 of a DER structure (CMS ContentInfo is an ASN.1 SEQUENCE) of a plausible size."""
+    import binascii
+
+    try:
+        raw = base64.b64decode("".join((package or "").split()), validate=True)  # line breaks allowed
+    except (binascii.Error, ValueError):
+        return False
+    return 64 <= len(raw) <= 150_000 and raw[0] == 0x30
+
+
 class NcaNodeVerifier(Adapter):
     """Production verifier: NCANode (CMS, OCSP, TSP) for certificates of NCA RK. The response mapping follows
     NCANode 3.x `/cms/verify`; the exact contract is confirmed when the service is deployed (INT-GEN)."""
 
     name = "eds"
     provider = "ncanode"
-    timeout = 15.0
+    timeout = 30.0  # OCSP and TSP of NCA RK can be slow under load; the circuit breaker guards against outages
     retries = 1
 
     def verify(self, package: str, data: bytes, *, signed_at: datetime, expected_bin: str,
                revoked: set[str]) -> VerifyResult:
+        # A malformed package is the signer's problem, not an outage: answered here, without calling NCANode,
+        # so junk cannot trip the circuit breaker and switch signing off for everybody.
+        if not _looks_like_cms(package):
+            return VerifyResult(valid=False, provider=self.provider, signed_at=signed_at, error="malformed_package",
+                                checks={"integrity": False})
+        package = "".join(package.split())
         return self.call("verify", lambda: self._verify(package, data, signed_at, expected_bin, revoked),
                          summary="cms-verify")
 
     def _verify(self, package, data, signed_at, expected_bin, revoked=frozenset()) -> VerifyResult:
+        import urllib.error
         import urllib.request
 
         body = json.dumps({"cms": package, "data": base64.b64encode(data).decode(), "revocationCheck": ["OCSP"]}).encode()
         req = urllib.request.Request(settings.eds_ncanode_url.rstrip("/") + "/cms/verify", data=body,  # noqa: S310 — scheme checked in config
                                      headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 — configured internal URL
-            out = json.loads(resp.read())
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 — configured internal URL
+                out = json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            if 400 <= exc.code < 500:  # NCANode could not read the signature: invalid, not an outage
+                return VerifyResult(valid=False, provider=self.provider, signed_at=signed_at,
+                                    error="malformed_package", checks={"integrity": False})
+            raise
         signer = (out.get("signers") or [{}])[0]
         cert = signer.get("certificates", [{}])[0] if signer.get("certificates") else signer.get("certificate", {})
         subject = cert.get("subject", {})

@@ -161,13 +161,20 @@ async def csrf_protect(request: Request) -> None:
     expected: list[str] = []
     raw = request.cookies.get(SESSION_COOKIE)
     if raw:
-        db = SessionLocal()
-        try:
-            sess = db.execute(select(UserSession).where(UserSession.token_hash == hash_token(raw))).scalar_one_or_none()
-            if sess is not None and sess.revoked_at is None:
-                expected.append(sess.csrf_token)
-        finally:
-            db.close()
+        from starlette.concurrency import run_in_threadpool
+
+        def session_token() -> str | None:  # in a worker thread: the event loop is never blocked by the database
+            db = SessionLocal()
+            try:
+                sess = db.execute(select(UserSession).where(UserSession.token_hash == hash_token(raw))
+                                  ).scalar_one_or_none()
+                return sess.csrf_token if sess is not None and sess.revoked_at is None else None
+            finally:
+                db.close()
+
+        found = await run_in_threadpool(session_token)
+        if found:
+            expected.append(found)
     if not expected:
         # the double-submit token is for anonymous forms only (login, registration): with a live session a planted
         # cookie must not be able to stand in for the session's own token
@@ -241,10 +248,13 @@ def render(request: Request, name: str, ctx: dict[str, Any] | None = None, *, st
     data["csrf_token"] = principal.session.csrf_token if principal else getattr(request.state, "pre_csrf", "")
     data["locale"] = get_ctx().locale
     if principal is not None:
-        from app.db import SessionLocal
+        from app.db import SessionLocal, request_db
         from app.modules.notifications.service import unread_count
 
-        db = SessionLocal()
+        own = request_db(request)  # reuse the request's connection (see get_db)
+        if own is not None and not own.is_active:
+            own.rollback()
+        db = own or SessionLocal()
         try:
             data["unread"] = unread_count(db, principal.user.id)
             data["my_companies"] = memberships(db, principal.user.id)
@@ -252,7 +262,8 @@ def render(request: Request, name: str, ctx: dict[str, Any] | None = None, *, st
                 staff = db.get(User, principal.session.impersonator_id)
                 data["impersonator"] = staff.full_name if staff else "—"
         finally:
-            db.close()
+            if own is None:
+                db.close()
     resp = templates.TemplateResponse(request, name, data, status_code=status_code)
     if getattr(request.state, "clear_flash", False):
         resp.delete_cookie(FLASH_COOKIE)

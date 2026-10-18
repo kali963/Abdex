@@ -45,6 +45,9 @@ class EtdAdapter(Adapter):
     provider = "etd-sim"
 
     def register(self, data: dict) -> dict:
+        from app.modules.integrations.adapters import simulator_guard
+
+        simulator_guard("etd")
         return self.call("register", lambda: self._send(data), basis="law", summary=data.get("number", ""))
 
     def _send(self, data: dict) -> dict:

@@ -84,6 +84,8 @@ async def run_forever(interval: float = 20.0) -> None:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     from app.bootstrap import init_db
+    from app.core.preflight import enforce
 
+    enforce()
     init_db()
     asyncio.run(run_forever())

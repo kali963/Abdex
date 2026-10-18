@@ -53,8 +53,19 @@ def create_app() -> FastAPI:
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         from app.bootstrap import ensure_initialized
+        from app.core.preflight import enforce
 
+        enforce()  # production refuses to start half-configured (SMS, keys, https address...)
         ensure_initialized()
+        if not settings.database_url.startswith("sqlite"):
+            # no more request threads than database connections: under a burst requests queue up for a thread
+            # instead of failing on an exhausted pool (see db.py)
+            import os
+
+            import anyio.to_thread
+
+            limit = int(os.getenv("DB_POOL_SIZE", "10")) + int(os.getenv("DB_MAX_OVERFLOW", "15"))
+            anyio.to_thread.current_default_thread_limiter().total_tokens = max(4, limit - 2)
         task = None
         if settings.run_background_worker:
             from app.worker import run_forever
@@ -251,6 +262,27 @@ def _install_error_handlers(app: FastAPI) -> None:
             return _error_json(request, code, translate(f"error.{code}"), exc.status_code)
         return render(request, "error.html", {"code": exc.status_code, "message": translate(f"error.{code}")},
                       status_code=exc.status_code)
+
+    from sqlalchemy.exc import TimeoutError as PoolTimeout
+
+    @app.exception_handler(PoolTimeout)
+    async def _busy(request: Request, exc: PoolTimeout):
+        """Overload: every database connection is busy. A short "try again" without touching the database
+        (an error page that needs a connection would wait in the same queue)."""
+        from html import escape
+
+        from fastapi.responses import HTMLResponse
+
+        logging.getLogger("abdex").warning("database pool exhausted: %s %s", request.method, request.url.path)
+        headers = {"Retry-After": "5", "Cache-Control": "no-store"}
+        if _is_api(request):
+            resp = _error_json(request, "busy", translate("error.busy"), 503)
+            resp.headers.update(headers)
+            return resp
+        text = escape(translate("error.busy"))
+        return HTMLResponse(f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+                            f'<title>AbdEX</title><p style="font:16px system-ui;margin:2rem">{text}</p>',
+                            status_code=503, headers=headers)
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception):

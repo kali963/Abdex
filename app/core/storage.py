@@ -117,12 +117,48 @@ storage = _make_storage()
 
 
 class AntivirusAdapter:
-    """SEC-FIL-02. Production: ClamAV (clamd INSTREAM). Dev: EICAR signature check only."""
+    """SEC-FIL-02. With ``CLAMAV_HOST`` (and ``CLAMAV_PORT``, default 3310) every upload is scanned by clamd
+    (INSTREAM); if clamd cannot answer the upload is refused ("try again later") — a file is never stored
+    unchecked. Without it (development) only the EICAR test signature is recognised."""
 
     EICAR = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+    CHUNK = 64 * 1024
 
     def scan(self, data: bytes) -> str:
-        return "infected" if self.EICAR in data else "clean"
+        import os
+
+        host = os.getenv("CLAMAV_HOST", "")
+        if not host:
+            return "infected" if self.EICAR in data else "clean"
+        try:
+            reply = self._clamd(host, int(os.getenv("CLAMAV_PORT", "3310")), data)
+        except (OSError, ValueError) as exc:
+            log.error("antivirus unavailable: %s", type(exc).__name__)
+            raise AppError("antivirus_unavailable", status_code=503) from exc
+        if reply.endswith("OK"):
+            return "clean"
+        if reply.endswith("FOUND"):
+            return "infected"
+        log.error("antivirus answered: %s", reply[:100])
+        raise AppError("antivirus_unavailable", status_code=503)
+
+    def _clamd(self, host: str, port: int, data: bytes) -> str:
+        import socket
+        import struct
+
+        with socket.create_connection((host, port), timeout=30) as sock:
+            sock.sendall(b"zINSTREAM\0")
+            for i in range(0, len(data), self.CHUNK):
+                part = data[i:i + self.CHUNK]
+                sock.sendall(struct.pack("!L", len(part)) + part)
+            sock.sendall(struct.pack("!L", 0))
+            reply = b""
+            while not reply.endswith(b"\0"):
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                reply += chunk
+        return reply.rstrip(b"\0").decode(errors="replace").strip()
 
 
 antivirus = AntivirusAdapter()

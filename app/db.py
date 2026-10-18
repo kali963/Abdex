@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Boolean, DateTime, Text, Uuid, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 from sqlalchemy.types import TypeDecorator
+from starlette.requests import HTTPConnection
 
 from app.config import settings
 
@@ -128,6 +129,14 @@ def _make_engine():
             kwargs["poolclass"] = NullPool
             # no server-side prepared statements: a transaction-mode pooler may switch backends between them
             kwargs["connect_args"] = {"prepare_threshold": None}
+        else:
+            # Per process. A request uses one connection (pages and checks share it, see get_db), so the pool must
+            # cover the request threads of one process; past that a request fails fast instead of hanging.
+            # Size it with PostgreSQL max_connections in mind: processes × (size + overflow) + worker + admin.
+            kwargs["pool_size"] = int(os.getenv("DB_POOL_SIZE", "10"))
+            kwargs["max_overflow"] = int(os.getenv("DB_MAX_OVERFLOW", "15"))
+            kwargs["pool_timeout"] = float(os.getenv("DB_POOL_TIMEOUT", "10"))
+            kwargs["pool_recycle"] = 1800
     eng = create_engine(url, **kwargs)
     if url.startswith("sqlite"):
         @event.listens_for(eng, "connect")
@@ -156,9 +165,20 @@ def get_analytics_db():
         db.close()
 
 
-def get_db():
+def get_db(conn: HTTPConnection):
+    """The request's database session. It is also kept on ``request.state.db`` so the page renderer and the
+    CSRF check reuse it instead of taking a second connection: two connections per request would let a burst of
+    requests hold every connection of the pool while each waits for its second one."""
     db = SessionLocal()
+    conn.state.db = db
     try:
         yield db
     finally:
+        conn.state.db = None
         db.close()
+
+
+def request_db(conn) -> Session | None:
+    """The session of the current request, if the route has one (see ``get_db``)."""
+    state = getattr(conn, "state", None)
+    return getattr(state, "db", None) if state is not None else None

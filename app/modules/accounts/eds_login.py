@@ -5,7 +5,9 @@
   with a blind index for the lookup (NFR-DB-08).
 * Login: the browser asks for a fresh challenge, signs it locally (NCALayer; the key never leaves the
   device), and the server verifies the signature and finds the user by the IIN in the certificate.
-* Challenges live five minutes and are single-use (replay protection); only their hash is stored.
+* Challenges live five minutes and are single-use (replay protection); only their hash is stored. Each one is
+  bound to the browser that asked for it (a cookie secret, ``BIND_COOKIE``): a challenge handed to someone
+  else and signed by them cannot be used to sign in from the first browser's place, nor the other way round.
 * The second factor policy still applies after an EDS login (SEC-AUT-05), as after a password login.
 * Switched by the ``auth.eds_login`` flag: available once the state signature services are connected.
 """
@@ -28,6 +30,7 @@ from app.modules.accounts.models import OtpCode, User
 
 PURPOSE = "eds_challenge"
 TTL = timedelta(minutes=5)
+BIND_COOKIE = "abdex_eds"
 
 
 def enabled(db: Session) -> bool:
@@ -40,24 +43,33 @@ def _hash(challenge: str) -> str:
     return hashlib.sha256(challenge.encode()).hexdigest()
 
 
-def new_challenge(db: Session) -> str:
+def new_binding() -> str:
+    """The browser secret a challenge is bound to (set as ``BIND_COOKIE`` by the route)."""
+    return secrets.token_urlsafe(24)
+
+
+def new_challenge(db: Session, binding: str = "") -> str:
+    """A 192-bit nonce in a readable text; ``binding`` is the requesting browser's secret."""
     ratelimit.hit("eds_challenge", get_ctx().ip or "local")
     challenge = f"AbdEX login {utcnow():%Y-%m-%dT%H:%M:%SZ} {secrets.token_hex(24)}"
     db.add(OtpCode(target=f"eds:{_hash(challenge)[:48]}", purpose=PURPOSE, code_hash=_hash(challenge),
-                   expires_at=utcnow() + TTL))
+                   expires_at=utcnow() + TTL, context=_hash(binding)[:64]))
     db.flush()
     return challenge
 
 
-def consume(db: Session, challenge: str) -> None:
+def consume(db: Session, challenge: str, binding: str = "") -> None:
     row = db.execute(select(OtpCode).where(OtpCode.target == f"eds:{_hash(challenge or '')[:48]}",
                                            OtpCode.purpose == PURPOSE).with_for_update()).scalar_one_or_none()
-    if row is None or row.used_at is not None or row.expires_at < utcnow() or row.code_hash != _hash(challenge):
+    if (row is None or row.used_at is not None or row.expires_at < utcnow() or row.code_hash != _hash(challenge)
+            or not secrets.compare_digest(row.context or "", _hash(binding)[:64])):
+        if row is not None and row.used_at is None:
+            row.used_at = utcnow()  # a failed attempt burns the challenge: no guessing the binding
         raise AppError("eds_challenge", status_code=400)
     row.used_at = utcnow()
 
 
-def _verify(db: Session, package: str, challenge: str) -> dict:
+def _verify(db: Session, package: str, challenge: str, binding: str = "") -> dict:
     """Returns the signer data of a valid signature over the challenge; the owner check does not apply here —
     the certificate itself names the person."""
     from app.modules.documents import eds
@@ -65,7 +77,7 @@ def _verify(db: Session, package: str, challenge: str) -> dict:
 
     if not package or len(package) > 200_000:
         raise AppError("eds_invalid", status_code=422, checks="package")
-    consume(db, challenge)
+    consume(db, challenge, binding)
     revoked = set(get_setting(db, "eds.revoked_serials", []) or [])
     res = eds.verifier().verify(package, challenge.encode(), signed_at=utcnow(), expected_bin="", revoked=revoked)
     checks = {k: v for k, v in res.checks.items() if k != "owner"}
@@ -79,12 +91,12 @@ def _verify(db: Session, package: str, challenge: str) -> dict:
     return res.signer
 
 
-def link(db: Session, user: User, package: str, challenge: str) -> User:
+def link(db: Session, user: User, package: str, challenge: str, binding: str = "") -> User:
     from app.core.crypto import blind_index
 
     if not enabled(db):
         raise Forbidden("eds_login_off")
-    signer = _verify(db, package, challenge)
+    signer = _verify(db, package, challenge, binding)
     other = db.execute(select(User.id).where(User.iin_index == blind_index(signer["iin"], "iin"),
                                              User.id != user.id)).first()
     if other:
@@ -100,13 +112,13 @@ def unlink(db: Session, user: User) -> None:
     audit(db, "auth.eds_unlinked", object_type="user", object_id=user.id)
 
 
-def authenticate(db: Session, package: str, challenge: str) -> User:
+def authenticate(db: Session, package: str, challenge: str, binding: str = "") -> User:
     from app.core.crypto import blind_index
 
     if not enabled(db):
         raise Forbidden("eds_login_off")
     ratelimit.hit("login", get_ctx().ip or "local")
-    signer = _verify(db, package, challenge)
+    signer = _verify(db, package, challenge, binding)
     user = db.execute(select(User).where(User.iin_index == blind_index(signer["iin"], "iin"),
                                          User.is_deleted.is_(False))).scalar_one_or_none()
     if user is None or not user.eds_linked_at:

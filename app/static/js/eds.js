@@ -12,27 +12,48 @@
     return btoa(bin);
   }
 
-  /* NCALayer (pki.gov.kz) listens on the user's computer. The "basics" module is the current API; older
-     installations only have commonUtils, so the call falls back to it. "sign" keys (RSA/GOST) sign documents,
-     "auth" keys sign the login challenge. */
-  var NCALAYER = "wss://127.0.0.1:13579/";
+  /* NCALayer (NCA RK, https://ncl.pki.gov.kz/) listens on the user's computer. The protocol follows the reference
+     client ncalayer-js-client (sigex-kz): connect, wait for the version banner, send one request, read one
+     answer. The "basics" module is the current API (status / body.result; no result = cancelled by the user);
+     older installations only have commonUtils (code "200" / responseObject), so the call falls back to it.
+     "sign" keys (RSA/GOST, extKeyUsage 1.3.6.1.5.5.7.3.4) sign documents, "auth" keys (1.3.6.1.5.5.7.3.2) sign
+     the login challenge; any key storage is allowed (file, KAZTOKEN, ID card, eToken, aKey...). */
+  var NCALAYER = "wss://127.0.0.1:13579";
+  var INSTALL_URL = "https://ncl.pki.gov.kz/";
   var OIDS = { sign: "1.3.6.1.5.5.7.3.4", auth: "1.3.6.1.5.5.7.3.2" };
   var me = document.currentScript || document.querySelector('script[src*="/static/js/eds.js"]');
   var NOLAYER = (me && me.getAttribute("data-nolayer")) || "NCALayer is not running.";
   var INSTALL = (me && me.getAttribute("data-install")) || "Install NCALayer";
+  var LNA = (me && me.getAttribute("data-lna")) || "Allow this site to access the local network (NCALayer) in the browser.";
+
+  /* Chrome asks the user before a site may reach 127.0.0.1 (Local Network Access). */
+  function lnaBlocked() {
+    var q = function (name) { return navigator.permissions.query({ name: name }).then(function (p) {
+      return p.state === "prompt" || p.state === "denied"; }); };
+    if (!navigator.permissions || !navigator.permissions.query) return Promise.resolve(false);
+    return q("loopback-network").catch(function () { return q("local-network-access"); }).catch(function () { return false; });
+  }
 
   function ncalayerCall(payload) {
     return new Promise(function (resolve, reject) {
-      var ws, done = false;
+      var ws, done = false, sent = false;
       var fail = function (e) { if (!done) { done = true; reject(e); } };
-      try { ws = new WebSocket(NCALAYER); } catch (e) { var err = new Error(NOLAYER); err.nolayer = true; fail(err); return; }
-      ws.onerror = function () { var err = new Error(NOLAYER); err.nolayer = true; fail(err); };
+      var noLayer = function () {
+        lnaBlocked().then(function (blocked) {
+          var err = new Error(blocked ? LNA : NOLAYER);
+          err.nolayer = !blocked;
+          fail(err);
+        });
+      };
+      var send = function () { if (!sent) { sent = true; ws.send(JSON.stringify(payload)); } };
+      try { ws = new WebSocket(NCALAYER); } catch (e) { noLayer(); return; }
+      ws.onerror = function () { if (!done) noLayer(); };
       ws.onclose = function () { fail(new Error("signing cancelled")); };
-      ws.onopen = function () { ws.send(JSON.stringify(payload)); };
+      ws.onopen = function () { setTimeout(function () { if (!done) send(); }, 1500); };  // banner normally comes first
       ws.onmessage = function (m) {
         var r;
         try { r = JSON.parse(m.data); } catch (e) { return; }
-        if (r && r.result && r.result.version) return;  // version banner sent on connect
+        if (r && r.result && r.result.version) { send(); return; }  // version banner: now the request
         done = true;
         ws.close();
         resolve(r || {});
@@ -45,11 +66,13 @@
     var payload = b64(data);
     return ncalayerCall({
       module: "kz.gov.pki.knca.basics", method: "sign",
-      args: { allowedStorages: ["PKCS12", "AKKaztokenStore", "AKKZIDCardStore", "AKJaCartaStore"], format: "cms",
-              data: payload, signingParams: { decode: true, encapsulate: false, digested: false, tsaProfile: {} },
-              signerParams: { extKeyUsageOids: [OIDS[key]], chain: [] }, locale: document.documentElement.lang || "ru" }
+      args: { allowedStorages: null, format: "cms", data: payload,
+              signingParams: { decode: true, encapsulate: false, digested: false, tsaProfile: {} },
+              signerParams: { extKeyUsageOids: [OIDS[key]] }, locale: document.documentElement.lang || "ru" }
     }).then(function (r) {
       if (r.status === true && r.body && r.body.result) return Array.isArray(r.body.result) ? r.body.result[0] : r.body.result;
+      if (r.status === true) throw new Error("signing cancelled");
+      if (r.status === false) throw new Error([r.code, r.message, r.details].filter(Boolean).join(": "));
       if (r.status === undefined && r.code !== undefined) {
         return ncalayerCall({ module: "kz.gov.pki.knca.commonUtils", method: "createCMSSignatureFromBase64",
                               args: ["PKCS12", key === "auth" ? "AUTHENTICATION" : "SIGNATURE", payload, false] })
@@ -68,7 +91,7 @@
     status.textContent = prefix + " " + (e && e.message ? e.message : "");
     if (e && e.nolayer) {
       var a = document.createElement("a");
-      a.href = "https://pki.gov.kz/ncalayer/";
+      a.href = INSTALL_URL;
       a.target = "_blank";
       a.rel = "noopener";
       a.textContent = INSTALL;
@@ -191,6 +214,10 @@
         .then(function (j) {
           started = j;
           egov.querySelector("[data-egov-qr]").src = j.qr;
+          egov.querySelectorAll("[data-egov-deeplink]").forEach(function (a) {  // signing on this very phone
+            var href = (j.deeplinks || {})[a.getAttribute("data-egov-deeplink")];
+            if (href) { a.href = href; a.hidden = false; } else { a.hidden = true; }
+          });
           egov.querySelector("[data-egov-panel]").hidden = false;
           esay(egov.getAttribute("data-wait"));
           if (timer) clearInterval(timer);
