@@ -32,7 +32,7 @@ ALLOWED_WRITE_PATTERNS = (r"^/orders/[0-9a-f-]{36}/(edit|template|submit)$", r"^
 FORBIDDEN_PREFIXES = ("/account/password", "/account/2fa", "/account/delete", "/account/sessions",
                       "/account/consents", "/account/support-access", "/company/bank", "/company/api-keys",
                       "/company/webhooks", "/company/members", "/company/invite")  # kept for reference / tests
-FORBIDDEN_SUFFIXES = ("/sign", "/sign-code", "/sign-eds", "/accept")
+FORBIDDEN_SUFFIXES = ("/sign", "/sign-code", "/sign-eds", "/egov/start", "/accept")
 
 
 def active_grant(db: Session, user_id) -> SupportAccessGrant | None:

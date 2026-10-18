@@ -196,8 +196,6 @@ def mgov_describe(token: str, request: Request, db: Session = Depends(get_db)):
 
     from app.modules.accounts import egov_mobile
 
-    if not egov_mobile.enabled(db):
-        raise NotFound()
     return JSONResponse(egov_mobile.describe(db, token, _public_base(request)))
 
 

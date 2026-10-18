@@ -247,7 +247,8 @@ class RolePermission(Model):
 
 
 class EgovSignSession(Model):
-    """FR-AUTH-09: one login attempt through eGov mobile (QR + signing in the app, mgovSign protocol).
+    """FR-AUTH-09 / FR-DOC-07: one login or document-signing attempt through eGov mobile or eGov Business
+    (QR + signing in the app, mgovSign protocol).
     Only hashes of the three secrets are stored: the QR token, the app's bearer token and the browser's cookie."""
 
     __tablename__ = "egov_sign_sessions"
@@ -260,3 +261,7 @@ class EgovSignSession(Model):
     user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id"))
     error: Mapped[str] = mapped_column(String(100), default="")
     expires_at: Mapped[datetime] = mapped_column(AwareDateTime)
+    # FR-DOC-07: the same QR flow signs a deal document — "login" or "document"
+    purpose: Mapped[str] = mapped_column(String(10), default="login", server_default="login")
+    document_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("documents.id"))
+    company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("companies.id"))

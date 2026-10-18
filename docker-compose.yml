@@ -40,6 +40,17 @@ services:
     depends_on:
       - app
 
+  # GOV-DS-02: verification of NCA RK signatures (NCALayer, eGov mobile, eGov Business) — CMS, chain, OCSP, TSP.
+  # Start with:  docker compose --profile eds up -d   and set EDS_NCANODE_URL=http://ncanode:14579 in .env.
+  # NCANode needs outbound access to ocsp.pki.gov.kz, tsp.pki.gov.kz and crl.pki.gov.kz; it is never exposed
+  # to the internet (only the app talks to it). Pin the image tag you have tested.
+  ncanode:
+    image: malikzh/ncanode:latest
+    profiles: ["eds"]
+    restart: unless-stopped
+    expose:
+      - "14579"
+
 volumes:
   pgdata:
   storage:

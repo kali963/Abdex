@@ -195,6 +195,7 @@ FLAGS = [
     ("gov.etd", "Регистрация электронных транспортных документов в госсистеме", False),
     ("auth.eds_login", "Вход через ЭЦП НУЦ РК (FR-AUTH-09)", False),
     ("auth.egov_mobile", "Вход через eGov mobile — QR и подпись в приложении (FR-AUTH-09)", False),
+    ("eds.egov_mobile", "Подписание документов сделки в eGov mobile / eGov Business по QR (FR-DOC-07)", False),
     ("gov.esf", "Отправка ЭСФ и АВР в ИС ЭСФ (FR-BIL-07)", False),
     ("matching.ai", "ИИ-подбор: веса подбора обучаются на истории выбора заказчиков (FR-BID-09)", False),
     ("calc.forecast", "Прогноз стоимости по направлению — включается подпиской на модуль (FR-CALC-06)", False),

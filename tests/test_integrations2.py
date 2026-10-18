@@ -238,3 +238,103 @@ def test_ai_matching_weights_and_replica(login, db):
     s = next(get_analytics_db())
     assert s.execute(select(1)).scalar() == 1
     assert login("+77010000001").get("/analytics").status_code == 200
+
+
+# ------------------------------------------------------------------ FR-DOC-07: eGov mobile / eGov Business signing
+
+
+def _new_deal_with_contract(db):
+    from app.demo import _form
+    from app.modules.bids.service import accept, place_bid
+    from app.modules.orders.service import create_order, submit
+
+    client = db.execute(select(Company).where(Company.kind == "client")).scalars().first()
+    carrier = db.execute(select(Company).where(Company.name.contains("Жол Транс"))).scalar_one()
+    tok = set_ctx(RequestContext(request_id="test-setup", company_id=client.id, extra={"rls_bypass": True}))
+    try:
+        order = create_order(db, client, _form([("Алматы", "ул. Тестовая, 5"), ("Астана", "ул. Приемная, 6")],
+                                               "eGov подпись", 4000, 0, 6), rate_limited=False)
+        submit(db, order)
+        deal = accept(db, place_bid(db, order.id, carrier, {"price": "210000"}).id, client)
+        db.commit()
+        return deal.id
+    finally:
+        reset_ctx(tok)
+
+
+def _phone_sign(phone, start, sign_bytes):
+    """What the eGov mobile app does: describe → download the document → PUT the detached signature back."""
+    meta = phone.get(f"/egov/mgov/{start['token']}").json()
+    assert meta["description"].startswith("Подписание")
+    uri = meta["document"]["uri"].split("testserver", 1)[-1]
+    bearer = {"Authorization": "Bearer " + meta["document"]["auth_token"]}
+    doc = phone.get(uri, headers=bearer).json()
+    file = doc["documentsToSign"][0]["document"]["file"]
+    assert file["mime"] == "@file/pdf"
+    pkg = sign_bytes(base64.b64decode(file["data"]))
+    file["data"] = base64.b64encode(pkg.encode()).decode()
+    assert phone.put(uri, headers=bearer, json=doc).status_code == 200
+
+
+def test_egov_mobile_document_signing(login, db):
+    from app.core.storage import storage
+    from app.modules.documents.models import Document, QualifiedSignature, Signature, StoredFile
+
+    did = _new_deal_with_contract(db)
+    doc = db.execute(select(Document).where(Document.deal_id == did, Document.doc_type == "contract_order")
+                     ).scalars().first()
+    data = storage.get(db.get(StoredFile, doc.file_id).storage_key)
+    owner = login("+77010000001")
+    page = owner.get(f"/deals/{did}").text
+    assert f"/deals/{did}/docs/{doc.id}/egov/start" in page
+
+    def browser_like(s):
+        def sign(payload: bytes, *, tamper=False) -> str:
+            key = ec.generate_private_key(ec.SECP256R1())
+            spki = key.public_key().public_bytes(serialization.Encoding.DER,
+                                                 serialization.PublicFormat.SubjectPublicKeyInfo)
+            cert = s.post("/dev/eds/certificate", data={"public_key": base64.b64encode(spki).decode()}).json()
+            sig = key.sign(payload + (b"x" if tamper else b""), ec.ECDSA(hashes.SHA256()))
+            return json.dumps({"cert": cert["certificate"], "sig": base64.b64encode(sig).decode()})
+        return sign
+
+    phone = TestClient(app)
+    # a forged signature: refused, the browser learns why, nothing is stored
+    start = owner.post(f"/deals/{did}/docs/{doc.id}/egov/start").json()
+    assert start["link"].startswith("mobileSign:") and start["status"].endswith("/status")
+    assert owner.get(start["status"]).json()["status"] == "pending"
+    sign = browser_like(owner)
+    _phone_sign(phone, start, lambda b: sign(b, tamper=True))
+    res = owner.get(start["status"]).json()
+    assert res["status"] == "failed" and "integrity" in res["message"]
+    db.expire_all()
+    assert not db.execute(select(Signature).where(Signature.document_id == doc.id)).first()
+
+    # the real flow
+    start = owner.post(f"/deals/{did}/docs/{doc.id}/egov/start").json()
+    carrier = login("+77020000001")  # another user cannot pick up the result, nor start on a foreign doc side
+    assert carrier.get(start["status"]).status_code == 404
+    _phone_sign(phone, start, sign)
+    assert phone.get(f"/egov/mgov/{start['token']}").status_code == 404  # used: the app cannot replay it
+    res = owner.get(start["status"]).json()
+    assert res["status"] == "signed" and res["redirect"].endswith("/signatures")
+    assert owner.get(start["status"]).status_code == 404  # learned once
+    db.expire_all()
+    sig = db.execute(select(Signature).where(Signature.document_id == doc.id)).scalar_one()
+    q = db.execute(select(QualifiedSignature).where(QualifiedSignature.signature_id == sig.id)).scalar_one()
+    assert sig.kind == "qualified" and sig.document_hash == doc.sha256 and q.document_hash == doc.sha256
+    assert json.loads(q.verify_result)["valid"] is True
+    assert data == storage.get(db.get(StoredFile, doc.file_id).storage_key)
+
+    # already signed by this company: no new attempt
+    assert owner.post(f"/deals/{did}/docs/{doc.id}/egov/start",
+                      headers={"Accept": "application/json"}).status_code == 409
+
+    # flag off: the app endpoints disappear and the button is gone
+    _flag(db, "eds.egov_mobile", False)
+    try:
+        cstart = carrier.post(f"/deals/{did}/docs/{doc.id}/egov/start", headers={"Accept": "application/json"})
+        assert cstart.status_code == 403
+        assert "/egov/start" not in carrier.get(f"/deals/{did}").text
+    finally:
+        _flag(db, "eds.egov_mobile", True)
