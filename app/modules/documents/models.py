@@ -4,10 +4,20 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import AppendOnly, AwareDateTime, Model
+from app.db import AppendOnly, AwareDateTime, Base, Model
+
+
+class FileBlob(Base):
+    """File contents kept in the database (``STORAGE_BACKEND=db``): for serverless hosting, where the local
+    disk belongs to one short-lived instance. Access goes through ``StoredFile`` and its checks only."""
+
+    __tablename__ = "file_blobs"
+
+    key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    data: Mapped[bytes] = mapped_column(LargeBinary)
 
 
 class StoredFile(Model):

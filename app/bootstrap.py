@@ -444,8 +444,22 @@ def init_db() -> None:
     ratelimit.loader = _ratelimit_loader
     if settings.database_url.startswith("sqlite"):
         Base.metadata.create_all(engine)
-    elif settings.auto_migrate:
-        _migrate()  # otherwise PostgreSQL is migrated by `alembic upgrade head` at deploy
+        _init_data()
+        return
+    # PostgreSQL: several instances may start at once (serverless cold starts, rolling deploys); one at a time
+    # migrates and seeds, the others wait and then find everything in place.
+    from sqlalchemy import text
+
+    # A transaction-level lock: also correct behind a transaction-mode pooler (Neon, PgBouncer); it is released
+    # when this transaction ends, whatever happens below.
+    with engine.connect() as lock_conn, lock_conn.begin():
+        lock_conn.execute(text("SELECT pg_advisory_xact_lock(7302915)"))
+        if settings.auto_migrate:
+            _migrate()  # otherwise PostgreSQL is migrated by `alembic upgrade head` at deploy
+        _init_data()
+
+
+def _init_data() -> None:
     db = SessionLocal()
     try:
         seed_reference(db)

@@ -120,6 +120,14 @@ def _make_engine():
         kwargs["connect_args"] = {"check_same_thread": False}
     else:
         kwargs["pool_pre_ping"] = True
+        from app.config import ON_VERCEL
+
+        if ON_VERCEL:  # serverless: instances come and go, the provider's pooler keeps the connections
+            from sqlalchemy.pool import NullPool
+
+            kwargs["poolclass"] = NullPool
+            # no server-side prepared statements: a transaction-mode pooler may switch backends between them
+            kwargs["connect_args"] = {"prepare_threshold": None}
     eng = create_engine(url, **kwargs)
     if url.startswith("sqlite"):
         @event.listens_for(eng, "connect")

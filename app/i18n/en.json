@@ -575,6 +575,7 @@
  "demo.client_owner": "Client company owner",
  "demo.dispatcher": "Carrier dispatcher",
  "demo.driver": "Driver",
+ "demo.ephemeral_db": "Demo without a persistent database: every Vercel instance keeps its own copy, so sign-in and changes may be lost. Attach PostgreSQL — see docs/vercel.md.",
  "demo.finance": "Finance operator",
  "demo.manager": "Platform manager",
  "demo.moderator": "Verification moderator",

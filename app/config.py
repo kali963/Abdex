@@ -18,6 +18,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # long-running processes, so defaults change. Persistent data needs DATABASE_URL (PostgreSQL).
 ON_VERCEL = bool(os.getenv("VERCEL"))
 if ON_VERCEL:
+    # Vercel Postgres / Neon integration fill these in; every instance must share one database, otherwise a
+    # request served by another instance does not find the session and the user is sent back to the login page.
+    for _name in ("POSTGRES_URL", "POSTGRES_PRISMA_URL", "NEON_DATABASE_URL"):
+        if not os.getenv("DATABASE_URL") and os.getenv(_name):
+            os.environ["DATABASE_URL"] = os.environ[_name]
     os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/abdex.db")
     os.environ.setdefault("STORAGE_DIR", "/tmp/abdex-storage")  # noqa: S108 — only writable, per-instance dir on Vercel
     os.environ.setdefault("RUN_BACKGROUND_WORKER", "false")
@@ -99,6 +104,12 @@ class Settings:
     @property
     def is_dev(self) -> bool:
         return self.app_env in {"development", "test"}
+
+    @property
+    def ephemeral_db(self) -> bool:
+        """A serverless instance with its own throw-away SQLite: logins and data do not survive between
+        instances. Only a demo; the site shows a warning (docs/vercel.md explains how to attach PostgreSQL)."""
+        return ON_VERCEL and self.database_url.startswith("sqlite")
 
 
 def load_settings() -> Settings:
