@@ -3,7 +3,7 @@
 {% block content %}
 <div class="card empty">
   <b>{{ code }} · {{ message }}</b>
-  <p class="muted">{{ _("error.request_id") }}: <code>{{ request.headers.get('x-request-id', '') }}</code></p>
-  <div class="actions center"><a class="btn" href="/dashboard">{{ _("nav.dashboard") }}</a><a class="btn primary" href="/">{{ _("action.home") }}</a></div>
+  <p class="muted">{{ _("error.request_id") }}: <code>{{ request_id }}</code></p>
+  <div class="actions center">{% if code == 401 %}<a class="btn primary" href="/login">{{ _("nav.login") }}</a>{% elif me %}<a class="btn primary" href="/dashboard">{{ _("nav.dashboard") }}</a>{% else %}<a class="btn primary" href="/">{{ _("action.home") }}</a>{% endif %}</div>
 </div>
 {% endblock %}

@@ -16,6 +16,7 @@ from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from sqlalchemy import select
 
 from app.core.context import RequestContext, reset_ctx, set_ctx
+from app.core.timeutil import local_today
 from app.db import SessionLocal
 from app.modules.accounts.models import Company
 from app.modules.billing.models import Invoice, Payment, PaymentIntent
@@ -183,7 +184,7 @@ def client_app_post(body: bytes, signature: str):
 
 def test_accounting_export_and_esf(login, db):
     owner = login("+77010000001")
-    today = datetime.now(timezone.utc).date()
+    today = local_today()  # business days are days in Kazakhstan
     r = owner.get(f"/finance/export.xlsx?date_from={(today - timedelta(days=30)).isoformat()}&date_to={today.isoformat()}")
     assert r.status_code == 200 and r.content[:2] == b"PK"
     fin = login("finance@abdex.kz")

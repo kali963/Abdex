@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.timeutil import local_today
 from app.config import settings
 from app.core import ratelimit
 from app.core.audit import audit
@@ -537,7 +538,7 @@ async def tariff_create(request: Request, db: Session = Depends(get_db), me: Pri
     payload = {"name": str(form.get("name", "")).strip()[:200] or "Тариф", "model": model, "fixed_minor": money("fixed"),
                "percent_bp": percent_bp, "min_minor": money("min"), "max_minor": money("max"),
                "company_id": str(company_id) if company_id else "", "deal_type": deal_type,
-               "valid_from": _d(str(form.get("valid_from", "")), date.today()).isoformat(),
+               "valid_from": _d(str(form.get("valid_from", "")), local_today()).isoformat(),
                "valid_to": valid_to.isoformat() if valid_to else ""}
     from app.modules.platform import approvals
 
@@ -550,8 +551,8 @@ async def tariff_create(request: Request, db: Session = Depends(get_db), me: Pri
 @router.get("/reports/pvd")
 def pvd(request: Request, date_from: str = "", date_to: str = "", db: Session = Depends(get_db),
         me: Principal = Depends(require("admin.finance"))):
-    df = _d(date_from, date.today().replace(day=1))
-    dt = _d(date_to, date.today())
+    df = _d(date_from, local_today().replace(day=1))
+    dt = _d(date_to, local_today())
     report = billing.pvd_report(db, df, dt)
     return render(request, "admin/pvd.html", {"r": report, "labels": dictionary_map(db, "income_types")})
 
@@ -560,7 +561,7 @@ def pvd(request: Request, date_from: str = "", date_to: str = "", db: Session = 
 def pvd_export(fmt: str, date_from: str = "", date_to: str = "", db: Session = Depends(get_db),
                me: Principal = Depends(require("admin.finance"))):
     ratelimit.hit("export", str(me.user.id))
-    report = billing.pvd_report(db, _d(date_from, date.today().replace(day=1)), _d(date_to, date.today()))
+    report = billing.pvd_report(db, _d(date_from, local_today().replace(day=1)), _d(date_to, local_today()))
     labels = dictionary_map(db, "income_types")
     audit(db, "export.pvd_report", object_type="report", object_id="pvd", details={"fmt": fmt})
     db.commit()
@@ -590,7 +591,7 @@ def kpi(request: Request, date_from: str = "", date_to: str = "", db: Session = 
 @router.post("/kpi/snapshot")
 async def kpi_snapshot(request: Request, db: Session = Depends(get_db), me: Principal = Depends(require("admin.kpi"))):
     form = await request.form()
-    analytics.fix_snapshot(db, _d(str(form.get("report_date", "")), date.today()))
+    analytics.fix_snapshot(db, _d(str(form.get("report_date", "")), local_today()))
     audit(db, "staff.kpi_fixed", object_type="kpi", object_id=str(form.get("report_date", "")))
     db.commit()
     return redirect("/admin/kpi", flash=("success", "msg.saved"))
@@ -660,7 +661,7 @@ async def template_save(request: Request, db: Session = Depends(get_db),
     form = await request.form()
     documents.save_template_version(db, str(form.get("doc_type", "")), str(form.get("locale", "ru")),
                                     str(form.get("title", "")), str(form.get("body", "")),
-                                    _d(str(form.get("valid_from", "")), date.today()))
+                                    _d(str(form.get("valid_from", "")), local_today()))
     db.commit()
     return redirect("/admin/templates", flash=("success", "msg.saved"))
 
@@ -673,7 +674,7 @@ async def template_preview(request: Request, db: Session = Depends(get_db),
 
     form = await request.form()
     documents.validate_template_body(str(form.get("doc_type", "")), str(form.get("body", "")))
-    sample = {"number": "ДЗ-2026-000001", "date": date.today().strftime("%d.%m.%Y"), "deal_number": "SD-2026-000001",
+    sample = {"number": "ДЗ-2026-000001", "date": local_today().strftime("%d.%m.%Y"), "deal_number": "SD-2026-000001",
               "order_number": "AX-2026-000001", "client_name": "ТОО «Тестовый клиент»", "client_bin": "123456789012",
               "carrier_name": "ТОО «Тестовый перевозчик»", "carrier_bin": "210987654321", "route": "Алматы → Астана",
               "cargo": "Тестовый груз", "weight": "20000", "price": "450 000 ₸", "amount": "35 000 ₸",
@@ -747,14 +748,12 @@ def audit_log(request: Request, user: str = "", action: str = "", obj: str = "",
         stmt = stmt.where(AuditLog.action.contains(action))
     if obj:
         stmt = stmt.where(AuditLog.object_id == obj)
-    if date_from:
-        from datetime import datetime, time, timezone
+    from app.core.timeutil import day_bounds
 
-        stmt = stmt.where(AuditLog.created_at >= datetime.combine(_d(date_from, date.today()), time.min, timezone.utc))
+    if date_from:  # the dates are days in Kazakhstan, the journal is in UTC
+        stmt = stmt.where(AuditLog.created_at >= day_bounds(_d(date_from, local_today()), local_today())[0])
     if date_to:
-        from datetime import datetime, time, timezone
-
-        stmt = stmt.where(AuditLog.created_at <= datetime.combine(_d(date_to, date.today()), time.max, timezone.utc))
+        stmt = stmt.where(AuditLog.created_at <= day_bounds(local_today(), _d(date_to, local_today()))[1])
     items = list(db.execute(stmt.order_by(AuditLog.created_at.desc()).limit(500)).scalars())
     users = {u.id: u.full_name for u in db.execute(select(User)).scalars()}
     return render(request, "admin/audit.html", {"items": items, "users": users, "f": {

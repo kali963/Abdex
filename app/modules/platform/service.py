@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.timeutil import local_today
 from app.core.context import get_ctx
 from app.db import utcnow
 from app.modules.documents.models import DocumentCounter
@@ -188,5 +189,5 @@ def has_restriction(db: Session, company_id, kinds: tuple[str, ...]) -> bool:
 
     active = db.execute(select(Restriction).where(Restriction.company_id == company_id, Restriction.kind.in_(kinds),
                                                   Restriction.lifted_at.is_(None))).scalars().all()
-    today = utcnow().date()
+    today = local_today()
     return any(r.until is None or r.until >= today for r in active)

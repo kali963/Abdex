@@ -8,8 +8,9 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.timeutil import local_today
 from app.core.errors import NotFound, ValidationFailed
-from app.db import get_db, utcnow
+from app.db import get_db
 from app.modules.accounts.models import Company
 from app.modules.bids import service as bids
 from app.modules.bids.models import Bid
@@ -151,7 +152,7 @@ def order_view(oid: str, request: Request, db: Session = Depends(get_db), me: Pr
         "order": order, "bids": bid_rows, "deal": deal, "versions": versions, "history": history(db, order.id),
         "matches": [m for m in matches if m.company.id not in bidders],
         "invited": matching.invited_ids(db, order.id) if open_for_bids else set(),
-        "today": utcnow().date(),
+        "today": local_today(),
         "can_edit": order.status in (flow.DRAFT, flow.PUBLISHED, flow.BIDDING),
         "can_cancel": flow.can(order.status, flow.CANCELLED, flow.CLIENT),
         "can_submit": order.status == flow.DRAFT, "role_text": localized_setting(db, "platform.role_explanation"),
@@ -267,9 +268,9 @@ def bid_reject(bid_id: str, db: Session = Depends(get_db), me: Principal = Depen
 def plan(request: Request, week: str = "", db: Session = Depends(get_db), me: Principal = Depends(require("plan.view"))):
     """FR-PLAN-01: calendar of planned and confirmed loadings by day."""
     try:
-        start = date.fromisoformat(week) if week else date.today()
+        start = date.fromisoformat(week) if week else local_today()
     except ValueError:
-        start = date.today()
+        start = local_today()
     start = start - timedelta(days=start.weekday())
     days = [start + timedelta(days=i) for i in range(14)]
     begin = datetime.combine(days[0], time.min, tzinfo=timezone.utc) - timedelta(hours=6)

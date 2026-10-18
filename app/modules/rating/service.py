@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.timeutil import local_today
 from app.core import events
 from app.core.audit import audit
 from app.core.context import get_ctx
@@ -115,7 +116,7 @@ def _enforce_breakdown_limit(db: Session, company_id) -> None:
     count = breakdowns(db, company_id, int(limit["days"]))
     if count < int(limit["count"]):
         return
-    today = utcnow().date()
+    today = local_today()
     active = db.execute(select(Restriction).where(Restriction.company_id == company_id, Restriction.kind == "no_bids",
                                                   Restriction.lifted_at.is_(None))).scalars().all()
     if any(r.until is None or r.until >= today for r in active):
