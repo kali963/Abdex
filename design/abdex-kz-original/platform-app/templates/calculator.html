@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ t("calc.page_title") }}{% endblock %}
+{% block content %}
+<h1>{{ t("calc.title") }}</h1>
+{% if commission %}
+<p class="muted">{{ t("calc.intro") }}</p>
+
+<div style="display:flex; gap:16px; margin-bottom:22px;">
+  <div class="field" style="flex:1; margin-bottom:0;">
+    <label for="calc_loading_country">{{ t("orders.field_loading_country") }}</label>
+    <select id="calc_loading_country">
+      {% for code, label in country_options %}<option value="{{ code }}" {% if code == "KZ" %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field" style="flex:1; margin-bottom:0;">
+    <label for="calc_unloading_country">{{ t("orders.field_unloading_country") }}</label>
+    <select id="calc_unloading_country">
+      {% for code, label in country_options %}<option value="{{ code }}" {% if code != "KZ" %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+</div>
+
+<div style="border-top:1px solid var(--border-soft); border-bottom:1px solid var(--border-soft); padding:24px 0; margin-bottom:8px;">
+  <div class="route">
+    <span class="city" id="calc-from-label">Қазақстан</span>
+    <span class="line"></span>
+    <span class="city" id="calc-to-label">Россия</span>
+  </div>
+  <div class="route-meta" id="calc-route-kind">{{ t("calc.route_international") }}</div>
+  <div style="margin-top:18px;">
+    <span class="num" style="font-size:2.4rem; font-weight:700;" id="calc-amount">{{ commission.international }}</span>
+    <span class="muted" style="display:block; margin-top:2px;">{{ t("calc.payer_note") }}</span>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var loadingSelect = document.getElementById("calc_loading_country");
+    var unloadingSelect = document.getElementById("calc_unloading_country");
+    var amount = document.getElementById("calc-amount");
+    var kindLabel = document.getElementById("calc-route-kind");
+    var fromLabel = document.getElementById("calc-from-label");
+    var toLabel = document.getElementById("calc-to-label");
+    var domesticAmount = {{ commission.domestic|tojson }};
+    var internationalAmount = {{ commission.international|tojson }};
+    var domesticLabel = {{ t("calc.route_domestic")|tojson }};
+    var internationalLabel = {{ t("calc.route_international")|tojson }};
+    function countryLabel(select) {
+      return select.options[select.selectedIndex].text;
+    }
+    function update() {
+      var isInternational = loadingSelect.value !== unloadingSelect.value;
+      amount.textContent = isInternational ? internationalAmount : domesticAmount;
+      kindLabel.textContent = isInternational ? internationalLabel : domesticLabel;
+      fromLabel.textContent = countryLabel(loadingSelect);
+      toLabel.textContent = countryLabel(unloadingSelect);
+    }
+    loadingSelect.addEventListener("change", update);
+    unloadingSelect.addEventListener("change", update);
+    update();
+  })();
+</script>
+{% else %}
+<p class="muted">{{ t("calc.not_configured") }}</p>
+{% endif %}
+<p class="muted" style="margin-top:20px;"><a href="/register">{{ t("calc.cta_register") }}</a></p>
+{% endblock %}

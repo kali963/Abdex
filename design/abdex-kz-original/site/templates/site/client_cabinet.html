@@ -1,0 +1,841 @@
+{% extends "site/base.html" %}
+{% block title %}Кабинет клиента | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+  <section class="cab-wrap">
+
+    <div class="cab-head">
+      <div>
+        <h1 class="cab-title">Кабинет клиента</h1>
+        <p class="cab-sub">Создавайте заявки, отслеживайте статус и документы.</p>
+      </div>
+    </div>
+
+    <div class="cab-layout">
+
+      <!-- LEFT NAV -->
+      <aside class="cab-nav">
+        <a class="cab-link {% if tab=='create' %}active{% endif %}" href="/client/cabinet?tab=create">Создать заявку</a>
+        <a class="cab-link {% if tab=='my' %}active{% endif %}" href="/client/cabinet?tab=my">Мои заявки</a>
+        <a class="cab-link {% if tab=='active' %}active{% endif %}" href="/client/cabinet?tab=active">Активные</a>
+        <a class="cab-link {% if tab=='archive' %}active{% endif %}" href="/client/cabinet?tab=archive">Архив</a>
+        <a class="cab-link {% if tab in ['plan', 'plan_create'] %}active{% endif %}" href="/client/cabinet?tab=plan">План отгрузок</a>
+        <a class="cab-link {% if tab=='docs' %}active{% endif %}" href="/client/cabinet?tab=docs">Документы</a>
+        <a class="cab-link {% if tab=='company' %}active{% endif %}" href="/client/cabinet?tab=company">Компания</a>
+        <a class="cab-link" href="/client/support">Техподдержка</a>
+      </aside>
+
+      <!-- MAIN -->
+      <main class="cab-main">
+
+        <!-- stats -->
+        {% if tab in ["create", "my", "active", "archive", "plan", "plan_create"] %}
+          <div class="cab-stats">
+            <div class="cab-stat">
+              <div class="cab-stat-label">Активные заявки</div>
+              <div class="cab-stat-val">{{ active_cnt }}</div>
+            </div>
+            <div class="cab-stat">
+              <div class="cab-stat-label">Новых предложений</div>
+              <div class="cab-stat-val">{{ new_offers_cnt }}</div>
+            </div>
+            <div class="cab-stat">
+              <div class="cab-stat-label">В работе</div>
+              <div class="cab-stat-val">{{ in_work_cnt }}</div>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if tab in ["create", "plan_create"] %}
+          <!-- ================= CREATE / PLAN CREATE ================= -->
+          {% set is_plan_mode = (tab == "plan_create") %}
+          {% set f = form if form is defined else None %}
+
+          <div class="cab-card {{ 'cab-card--plan' if is_plan_mode else '' }}">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+              <div>
+                <div class="cab-card-title">{{ "Создать план отгрузки" if is_plan_mode else "Создать заявку" }}</div>
+                <p class="cab-text">
+                  {{ "После сохранения план появится в разделе «План отгрузок»." if is_plan_mode else "После публикации заявка появится в разделе «Мои заявки». Можно прикрепить документы сразу." }}
+                </p>
+              </div>
+
+              {% if not is_plan_mode %}
+                <a class="btn-outline"
+                  href="/client/cabinet?tab=create&repeat_last=1"
+                  style="width:auto;padding:10px 14px;border-radius:14px;text-decoration:none;white-space:nowrap;">
+                  ↻ Повторить последнюю заявку
+                </a>
+              {% endif %}
+            </div>
+
+            <form class="req-form {{ 'req-form--plan' if is_plan_mode else '' }}"
+                  action="/client/requests/create"
+                  method="post"
+                  enctype="multipart/form-data">
+
+              <input type="hidden" name="entry_kind" value="{{ 'plan' if is_plan_mode else 'request' }}">
+
+              {# ---- hidden fields for city suggest ---- #}
+              <input type="hidden" name="origin_label" value="{{ f.origin_label if f else '' }}">
+              <input type="hidden" name="origin_lat" value="{{ f.origin_lat if f else '' }}">
+              <input type="hidden" name="origin_lon" value="{{ f.origin_lon if f else '' }}">
+
+              <input type="hidden" name="destination_label" value="{{ f.destination_label if f else '' }}">
+              <input type="hidden" name="destination_lat" value="{{ f.destination_lat if f else '' }}">
+              <input type="hidden" name="destination_lon" value="{{ f.destination_lon if f else '' }}">
+              {# --------------------------------------- #}
+
+              <div class="req-grid">
+
+                <div class="req-field req-field--route">
+                  <label>Откуда *</label>
+                  <input type="text"
+                         name="origin"
+                         class="js-city-suggest"
+                         placeholder="Город/регион"
+                         required
+                         value="{{ f.origin if f else '' }}">
+                </div>
+
+                <div class="req-field req-field--route">
+                  <label>Куда *</label>
+                  <input type="text"
+                         name="destination"
+                         class="js-city-suggest"
+                         placeholder="Город/регион"
+                         required
+                         value="{{ f.destination if f else '' }}">
+                </div>
+
+                {% if is_plan_mode %}
+                  <div class="req-field req-wide req-field--period">
+                    <label>Период отгрузок</label>
+
+                    <div class="abd-cal js-abd-cal" data-mode="range">
+                      <input type="hidden" name="load_date" class="js-abd-cal-anchor" value="{{ f.load_date if f else '' }}">
+                      <input type="hidden" name="load_date_from" class="js-abd-cal-from" value="{{ f.load_date_from if f else '' }}">
+                      <input type="hidden" name="load_date_to" class="js-abd-cal-to" value="{{ f.load_date_to if f else '' }}">
+
+                      <button type="button" class="abd-cal-trigger js-abd-cal-trigger">
+                        <span class="js-abd-cal-label">
+                          {% if f and f.load_date_from and f.load_date_to %}
+                            {{ f.load_date_from }} — {{ f.load_date_to }}
+                          {% elif f and f.load_date_from %}
+                            {{ f.load_date_from }} — ...
+                          {% else %}
+                            Выберите период
+                          {% endif %}
+                        </span>
+                        <span class="abd-cal-trigger-icon">📅</span>
+                      </button>
+
+                      <div class="abd-cal-hint">Выбери первую и последнюю дату. Весь диапазон окрасится в синий.</div>
+
+                      <div class="abd-cal-popup js-abd-cal-popup" hidden>
+                        <div class="abd-cal-toolbar">
+                          <div class="abd-cal-month js-abd-cal-month"></div>
+
+                          <div class="abd-cal-navs">
+                            <button type="button" class="abd-cal-nav js-abd-cal-prev">‹</button>
+                            <button type="button" class="abd-cal-nav js-abd-cal-next">›</button>
+                          </div>
+                        </div>
+
+                        <div class="abd-cal-weekdays">
+                          <span>Пн</span>
+                          <span>Вт</span>
+                          <span>Ср</span>
+                          <span>Чт</span>
+                          <span>Пт</span>
+                          <span>Сб</span>
+                          <span>Вс</span>
+                        </div>
+
+                        <div class="abd-cal-grid js-abd-cal-grid"></div>
+
+                        <div class="abd-cal-actions">
+                          <button type="button" class="btn-outline js-abd-cal-clear" style="width:auto;padding:8px 12px;border-radius:12px;text-decoration:none;">
+                            Очистить
+                          </button>
+                          <button type="button" class="btn-main js-abd-cal-apply" style="width:auto;padding:8px 12px;border-radius:12px;">
+                            Готово
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                {% else %}
+                  <div class="req-field">
+                    <label>Дата загрузки</label>
+
+                    <div class="abd-cal js-abd-cal" data-mode="single">
+                      <input type="hidden" name="load_date" class="js-abd-cal-value" value="{{ f.load_date if f else '' }}">
+
+                      <button type="button" class="abd-cal-trigger js-abd-cal-trigger">
+                        <span class="js-abd-cal-label">
+                          {{ f.load_date if f and f.load_date else "Выберите дату" }}
+                        </span>
+                        <span class="abd-cal-trigger-icon">📅</span>
+                      </button>
+
+                      <div class="abd-cal-popup js-abd-cal-popup" hidden>
+                        <div class="abd-cal-toolbar">
+                          <div class="abd-cal-month js-abd-cal-month"></div>
+
+                          <div class="abd-cal-navs">
+                            <button type="button" class="abd-cal-nav js-abd-cal-prev">‹</button>
+                            <button type="button" class="abd-cal-nav js-abd-cal-next">›</button>
+                          </div>
+                        </div>
+
+                        <div class="abd-cal-weekdays">
+                          <span>Пн</span>
+                          <span>Вт</span>
+                          <span>Ср</span>
+                          <span>Чт</span>
+                          <span>Пт</span>
+                          <span>Сб</span>
+                          <span>Вс</span>
+                        </div>
+
+                        <div class="abd-cal-grid js-abd-cal-grid"></div>
+
+                        <div class="abd-cal-actions">
+                          <button type="button" class="btn-outline js-abd-cal-clear" style="width:auto;padding:8px 12px;border-radius:12px;text-decoration:none;">
+                            Очистить
+                          </button>
+                          <button type="button" class="btn-main js-abd-cal-apply" style="width:auto;padding:8px 12px;border-radius:12px;">
+                            Готово
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                {% endif %}
+
+                {% if is_plan_mode %}
+                  <div class="req-field req-wide req-field--schedule js-plan-builder"
+                       data-init-schedule-type="{{ f.schedule_type if f else 'weekly' }}"
+                       data-init-weekdays="{{ f.schedule_weekdays if f else '' }}"
+                       data-init-month-days="{{ f.schedule_month_days if f else '' }}"
+                       data-init-custom-dates="{{ f.schedule_custom_dates if f else '' }}">
+                    <label>Как часто нужны машины в этом периоде</label>
+
+                    <input type="hidden" name="schedule_weekdays" value="{{ f.schedule_weekdays if f else '' }}" class="js-plan-weekdays-input">
+                    <input type="hidden" name="schedule_month_days" value="{{ f.schedule_month_days if f else '' }}" class="js-plan-month-days-input">
+                    <input type="hidden" name="schedule_custom_dates" value="{{ f.schedule_custom_dates if f else '' }}" class="js-plan-custom-dates-input">
+
+                    <div class="plan-mode-switch js-plan-mode-switch">
+                      <button type="button" class="plan-mode-btn js-plan-mode-btn" data-value="weekly">Еженедельно</button>
+                      <button type="button" class="plan-mode-btn js-plan-mode-btn" data-value="monthly">Ежемесячно</button>
+                      <button type="button" class="plan-mode-btn js-plan-mode-btn" data-value="custom_dates">Произвольные даты</button>
+                    </div>
+                    <input type="hidden" name="schedule_type" value="{{ f.schedule_type if f else 'weekly' }}" class="js-plan-schedule-type">
+
+                    <div class="plan-panel js-plan-panel" data-panel="weekly">
+                      <div class="plan-subtitle">Выбери дни недели</div>
+                      <div class="plan-chip-row js-plan-weekdays">
+                        {% for wd_val, wd_label in [('1','Пн'),('2','Вт'),('3','Ср'),('4','Чт'),('5','Пт'),('6','Сб'),('7','Вс')] %}
+                          <button type="button" class="plan-chip js-plan-weekday" data-value="{{ wd_val }}">{{ wd_label }}</button>
+                        {% endfor %}
+                      </div>
+
+                      <div class="plan-inline-grid">
+                        <div>
+                          <div class="plan-subtitle">Повторять</div>
+                          <select name="schedule_interval_weeks">
+                            {% set weekly_interval = f.schedule_interval_weeks if f else '1' %}
+                            <option value="1" {% if weekly_interval == '1' %}selected{% endif %}>каждую неделю</option>
+                            <option value="2" {% if weekly_interval == '2' %}selected{% endif %}>каждые 2 недели</option>
+                            <option value="3" {% if weekly_interval == '3' %}selected{% endif %}>каждые 3 недели</option>
+                            <option value="4" {% if weekly_interval == '4' %}selected{% endif %}>каждые 4 недели</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="plan-panel js-plan-panel" data-panel="monthly" hidden>
+                      <div class="plan-sub-switch js-plan-monthly-mode-switch">
+                        <button type="button" class="plan-sub-btn js-plan-monthly-mode-btn" data-value="dates">По числам</button>
+                        <button type="button" class="plan-sub-btn js-plan-monthly-mode-btn" data-value="weekday">По дню недели</button>
+                      </div>
+                      <input type="hidden" name="schedule_monthly_mode" value="{{ f.schedule_monthly_mode if f else 'dates' }}" class="js-plan-monthly-mode">
+
+                      <div class="plan-panel js-plan-monthly-panel" data-monthly-panel="dates">
+                        <div class="plan-subtitle">Числа месяца</div>
+                        <div class="plan-chip-row js-plan-month-days">
+                          {% for day in [1,5,10,15,20,25,28,30] %}
+                            <button type="button" class="plan-chip js-plan-month-day" data-value="{{ day }}">{{ day }}</button>
+                          {% endfor %}
+                        </div>
+                        <div class="plan-note">Можно выбрать одно или несколько чисел.</div>
+                      </div>
+
+                      <div class="plan-panel js-plan-monthly-panel" data-monthly-panel="weekday" hidden>
+                        <div class="plan-inline-grid">
+                          <div>
+                            <div class="plan-subtitle">Какая неделя месяца</div>
+                            <select name="schedule_month_position">
+                              {% set month_position = f.schedule_month_position if f else '1' %}
+                              <option value="1" {% if month_position == '1' %}selected{% endif %}>1-я</option>
+                              <option value="2" {% if month_position == '2' %}selected{% endif %}>2-я</option>
+                              <option value="3" {% if month_position == '3' %}selected{% endif %}>3-я</option>
+                              <option value="4" {% if month_position == '4' %}selected{% endif %}>4-я</option>
+                              <option value="-1" {% if month_position == '-1' %}selected{% endif %}>Последняя</option>
+                            </select>
+                          </div>
+                          <div>
+                            <div class="plan-subtitle">День недели</div>
+                            <select name="schedule_month_weekday">
+                              {% set month_weekday = f.schedule_month_weekday if f else '1' %}
+                              <option value="1" {% if month_weekday == '1' %}selected{% endif %}>Понедельник</option>
+                              <option value="2" {% if month_weekday == '2' %}selected{% endif %}>Вторник</option>
+                              <option value="3" {% if month_weekday == '3' %}selected{% endif %}>Среда</option>
+                              <option value="4" {% if month_weekday == '4' %}selected{% endif %}>Четверг</option>
+                              <option value="5" {% if month_weekday == '5' %}selected{% endif %}>Пятница</option>
+                              <option value="6" {% if month_weekday == '6' %}selected{% endif %}>Суббота</option>
+                              <option value="7" {% if month_weekday == '7' %}selected{% endif %}>Воскресенье</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="plan-panel js-plan-panel" data-panel="custom_dates" hidden>
+                      <div class="plan-subtitle">Добавь точечные даты</div>
+                      <div class="plan-custom-add">
+                        <input type="date" class="js-plan-custom-date-picker">
+                        <button type="button" class="btn-outline js-plan-custom-date-add" style="width:auto;padding:10px 14px;border-radius:12px;text-decoration:none;">Добавить дату</button>
+                      </div>
+                      <div class="plan-chip-row js-plan-custom-dates-list"></div>
+                    </div>
+
+                    <div class="plan-settings-grid">
+                      <div>
+                        <div class="plan-subtitle">Машин на каждую дату</div>
+                        <input type="number" min="1" max="99" name="trucks_per_occurrence" value="{{ f.trucks_per_occurrence if f else '1' }}">
+                      </div>
+                      <div>
+                        <div class="plan-subtitle">Получить документы до погрузки за :</div>
+                        <select name="lead_days">
+                          {% set lead_days = f.lead_days if f else '1' %}
+                          <option value="1" {% if (lead_days ~ '') == '1' %}selected{% endif %}>1 день</option>
+                          <option value="2" {% if (lead_days ~ '') == '2' %}selected{% endif %}>2 дня</option>
+                          <option value="3" {% if (lead_days ~ '') == '3' %}selected{% endif %}>3 дня</option>
+                          <option value="4" {% if (lead_days ~ '') == '4' %}selected{% endif %}>4 дня</option>
+                          <option value="5" {% if (lead_days ~ '') == '5' %}selected{% endif %}>5 дней</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div class="plan-subtitle">Окно подачи: с</div>
+                        <input type="time" name="load_time_from" value="{{ f.load_time_from if f else '' }}">
+                      </div>
+                      <div>
+                        <div class="plan-subtitle">Окно подачи: до</div>
+                        <input type="time" name="load_time_to" value="{{ f.load_time_to if f else '' }}">
+                      </div>
+                    </div>
+
+                    <div class="plan-preview-box">
+                      <div class="plan-preview-head">
+                        <div>Предпросмотр графика</div>
+                        <div class="plan-preview-meta js-plan-preview-meta">Пока пусто</div>
+                      </div>
+                      <div class="plan-preview-list js-plan-preview-list">Сначала выбери условия.</div>
+                    </div>
+                  </div>
+                {% endif %}
+
+                <div class="req-section-title">Параметры перевозки</div>
+
+                <div class="req-field">
+                  <label>Тип авто</label>
+                  <select name="car_type">
+                    <option value="" {% if not f or not f.car_type %}selected{% endif %}>Любая</option>
+                    <option value="Крытая" {% if f and f.car_type == 'Крытая' %}selected{% endif %}>Крытая</option>
+                    <option value="Открытая" {% if f and f.car_type == 'Открытая' %}selected{% endif %}>Открытая</option>
+                    <option value="Тент" {% if f and f.car_type == 'Тент' %}selected{% endif %}>Тент</option>
+                    <option value="Платформа" {% if f and f.car_type == 'Платформа' %}selected{% endif %}>Платформа</option>
+                    <option value="Рефрижератор" {% if f and f.car_type == 'Рефрижератор' %}selected{% endif %}>Рефрижератор</option>
+                    <option value="Изотерм" {% if f and f.car_type == 'Изотерм' %}selected{% endif %}>Изотерм</option>
+                    <option value="Бортовой" {% if f and f.car_type == 'Бортовой' %}selected{% endif %}>Бортовой</option>
+                    <option value="Автобус" {% if f and f.car_type == 'Автобус' %}selected{% endif %}>Автобус</option>
+                    <option value="Автовоз" {% if f and f.car_type == 'Автовоз' %}selected{% endif %}>Автовоз</option>
+                    <option value="Автовышка" {% if f and f.car_type == 'Автовышка' %}selected{% endif %}>Автовышка</option>
+                    <option value="Автотранспортер" {% if f and f.car_type == 'Автотранспортер' %}selected{% endif %}>Автотранспортер</option>
+                    <option value="Балковоз" {% if f and f.car_type == 'Балковоз' %}selected{% endif %}>Балковоз</option>
+                    <option value="Бензовоз" {% if f and f.car_type == 'Бензовоз' %}selected{% endif %}>Бензовоз</option>
+                    <option value="Бетоновоз" {% if f and f.car_type == 'Бетоновоз' %}selected{% endif %}>Бетоновоз</option>
+                    <option value="Битумовоз" {% if f and f.car_type == 'Битумовоз' %}selected{% endif %}>Битумовоз</option>
+                    <option value="Газовоз" {% if f and f.car_type == 'Газовоз' %}selected{% endif %}>Газовоз</option>
+                    <option value="Зерновоз" {% if f and f.car_type == 'Зерновоз' %}selected{% endif %}>Зерновоз</option>
+                    <option value="Конт.площадка" {% if f and f.car_type == 'Конт.площадка' %}selected{% endif %}>Конт.площадка</option>
+                    <option value="Кормовоз" {% if f and f.car_type == 'Кормовоз' %}selected{% endif %}>Кормовоз</option>
+                    <option value="Кран" {% if f and f.car_type == 'Кран' %}selected{% endif %}>Кран</option>
+                    <option value="Лесовоз" {% if f and f.car_type == 'Лесовоз' %}selected{% endif %}>Лесовоз</option>
+                    <option value="Манипулятор" {% if f and f.car_type == 'Манипулятор' %}selected{% endif %}>Манипулятор</option>
+                    <option value="Микроавтобус" {% if f and f.car_type == 'Микроавтобус' %}selected{% endif %}>Микроавтобус</option>
+                    <option value="Муковоз" {% if f and f.car_type == 'Муковоз' %}selected{% endif %}>Муковоз</option>
+                    <option value="Открытый Конт." {% if f and f.car_type == 'Открытый Конт.' %}selected{% endif %}>Открытый Конт.</option>
+                    <option value="Панелевоз" {% if f and f.car_type == 'Панелевоз' %}selected{% endif %}>Панелевоз</option>
+                    <option value="Погрузчик" {% if f and f.car_type == 'Погрузчик' %}selected{% endif %}>Погрузчик</option>
+                    <option value="Самосвал" {% if f and f.car_type == 'Самосвал' %}selected{% endif %}>Самосвал</option>
+                    <option value="Седельный Тягач" {% if f and f.car_type == 'Седельный Тягач' %}selected{% endif %}>Седельный Тягач</option>
+                    <option value="Скотовоз" {% if f and f.car_type == 'Скотовоз' %}selected{% endif %}>Скотовоз</option>
+                    <option value="Трал" {% if f and f.car_type == 'Трал' %}selected{% endif %}>Трал</option>
+                    <option value="Трубовоз" {% if f and f.car_type == 'Трубовоз' %}selected{% endif %}>Трубовоз</option>
+                    <option value="Цельнометалл." {% if f and f.car_type == 'Цельнометалл.' %}selected{% endif %}>Цельнометалл.</option>
+                    <option value="Цементовоз" {% if f and f.car_type == 'Цементовоз' %}selected{% endif %}>Цементовоз</option>
+                    <option value="Цистерна" {% if f and f.car_type == 'Цистерна' %}selected{% endif %}>Цистерна</option>
+                    <option value="Шаланда" {% if f and f.car_type == 'Шаланда' %}selected{% endif %}>Шаланда</option>
+                    <option value="Щеповоз" {% if f and f.car_type == 'Щеповоз' %}selected{% endif %}>Щеповоз</option>
+                    <option value="Эвакуатор" {% if f and f.car_type == 'Эвакуатор' %}selected{% endif %}>Эвакуатор</option>
+                    <option value="Экскаватор" {% if f and f.car_type == 'Экскаватор' %}selected{% endif %}>Экскаватор</option>
+                  </select>
+                </div>
+
+                <div class="req-field">
+                  <label>Груз</label>
+                  <input type="text"
+                         name="cargo_type"
+                         placeholder="Напр. оборудование"
+                         required
+                         value="{{ f.cargo_type if f else '' }}">
+                </div>
+
+                <div class="req-section-title">Стороны и контакты</div>
+
+                <div class="req-field">
+                  <label>Грузоотправитель *</label>
+                  <input type="text"
+                         name="sender"
+                         required
+                         placeholder="Фирма или ФИО"
+                         value="{{ f.sender if f else '' }}">
+                </div>
+
+                <div class="req-field">
+                  <label>Грузополучатель *</label>
+                  <input type="text"
+                         name="receiver"
+                         required
+                         placeholder="Фирма или ФИО"
+                         value="{{ f.receiver if f else '' }}">
+                </div>
+
+                <div class="req-field">
+                  <label>Температурный режим</label>
+                  <input type="text"
+                         name="temperature"
+                         placeholder="Напр. +5...+10"
+                         value="{{ f.temperature if f else '' }}">
+                </div>
+
+                <div class="req-field">
+                  <label>Стоимость груза</label>
+                  <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="text"
+                           name="cargo_value"
+                           inputmode="numeric"
+                           placeholder="Напр.: 24000000"
+                           style="flex:1;"
+                           value="{{ f.cargo_value if f else '' }}">
+                    <select name="cargo_value_currency" style="max-width:120px;">
+                      <option value="KZT" {% if not f or (f.cargo_value_currency or 'KZT') == 'KZT' %}selected{% endif %}>₸ KZT</option>
+                      <option value="RUB" {% if f and f.cargo_value_currency == 'RUB' %}selected{% endif %}>₽ RUB</option>
+                      <option value="USD" {% if f and f.cargo_value_currency == 'USD' %}selected{% endif %}>$ USD</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="req-field">
+                  <label>Контакт на погрузке *</label>
+                  <input type="text"
+                         name="contact_load"
+                         required
+                         placeholder="Имя, телефон"
+                         value="{{ f.contact_load if f else '' }}">
+                </div>
+
+                <div class="req-field">
+                  <label>Контакт на выгрузке *</label>
+                  <input type="text"
+                         name="contact_unload"
+                         required
+                         placeholder="Имя, телефон"
+                         value="{{ f.contact_unload if f else '' }}">
+                </div>
+
+                <div class="req-field">
+                  <label>Тип оплаты</label>
+                  <select name="pay_type">
+                    <option value="" {% if not f or not f.pay_type %}selected{% endif %}>Выбери тип оплаты</option>
+                    <option value="Наличный расчет" {% if f and f.pay_type == 'Наличный расчет' %}selected{% endif %}>Наличный расчет</option>
+                    <option value="Безналичный расчет" {% if f and f.pay_type == 'Безналичный расчет' %}selected{% endif %}>Безналичный расчет</option>
+                  </select>
+                </div>
+
+                <div class="req-field">
+                  <label>Вес (кг)</label>
+                  <input type="number"
+                         step="0.1"
+                         name="weight_kg"
+                         placeholder="12000"
+                         value="{{ f.weight_kg if f else '' }}">
+                </div>
+
+                <div class="req-field">
+                  <label>Объём (м³)</label>
+                  <input type="number"
+                         step="0.1"
+                         name="volume_m3"
+                         placeholder="42.5"
+                         value="{{ f.volume_m3 if f else '' }}">
+                </div>
+
+                <div class="req-field">
+                  <label>Габариты</label>
+                  <input type="text"
+                         name="dims"
+                         placeholder="Д×Ш×В"
+                         value="{{ f.dims if f else '' }}">
+                </div>
+
+                <div class="req-field">
+                  <label>Мест</label>
+                  <input type="number"
+                         step="1"
+                         name="places"
+                         placeholder="10"
+                         value="{{ f.places if f else '' }}">
+                </div>
+
+                <div class="req-section-title">Адреса и бюджет</div>
+
+                <div class="req-field">
+                  <label>Адрес погрузки (опц.)</label>
+                  <input type="text"
+                         name="from_address"
+                         placeholder="точный адрес"
+                         value="{{ f.from_address if f else '' }}">
+                </div>
+
+                <div class="req-field">
+                  <label>Адрес выгрузки (опц.)</label>
+                  <input type="text"
+                         name="to_address"
+                         placeholder="точный адрес"
+                         value="{{ f.to_address if f else '' }}">
+                </div>
+
+                <div class="req-field">
+                  <label>Бюджет (₸)</label>
+                  <input type="number"
+                         step="1"
+                         name="budget"
+                         placeholder="500000"
+                         value="{{ f.budget if f else '' }}">
+                </div>
+
+                {% if not is_plan_mode %}
+                  <div class="req-field">
+                    <label>Документы (если есть)</label>
+                    <input type="file" name="documents" multiple>
+                  </div>
+                {% endif %}
+
+                <div class="req-section-title">Дополнительно</div>
+
+                <div class="req-field req-wide">
+                  <label>Комментарий</label>
+                  <textarea name="comments" placeholder="Детали по грузу, условия">{{ f.comments if f else '' }}</textarea>
+                </div>
+
+              </div>
+
+              <div class="req-actions">
+                <button class="btn-main" type="submit">
+                  {{ "Создать план" if is_plan_mode else "Создать заявку" }}
+                </button>
+              </div>
+            </form>
+          </div>
+
+        {% elif tab == "my" %}
+          <!-- ================= MY REQUESTS ================= -->
+          <div class="cab-card">
+            <div class="cab-card-title">Мои заявки</div>
+            <p class="cab-text">«Открыть» — просмотр карточки. «Редактировать» — форма, пока заявка в обработке.</p>
+
+            {% if error %}
+              <div class="cab-empty" style="background:#ffe9e9;border:1px solid #ffb3b3;color:#7a1a1a;">
+                {{ error }}
+              </div>
+            {% endif %}
+
+            <div class="cab-list">
+              {% if requests and requests|length > 0 %}
+                {% for r in requests %}
+                  <div class="cab-row" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                    <div class="cab-row-left" style="flex:1;min-width:0;">
+                      <div class="cab-row-title">Заявка #{{ r.id }}</div>
+
+                      <div class="cab-row-sub">
+                        {{ r.origin_label or r.origin or "—" }} → {{ r.destination_label or r.destination or "—" }}
+                        {% if r.distance_km %} • {{ r.distance_km }} км{% endif %}
+                        {% if r.weight_kg %} • {{ (r.weight_kg / 1000) | round(2) }} т{% endif %}
+                        {% if r.volume_m3 %} • {{ r.volume_m3 | round(2) }} м³{% endif %}
+                      </div>
+                    </div>
+
+                    <div class="cab-row-right" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center;">
+                      <span class="cab-badge">{{ r.status|status_ru }}</span>
+
+                      <a class="cab-badge"
+                         href="/client/requests/{{ r.id }}?back=my"
+                         style="text-decoration:none;">
+                        Открыть
+                      </a>
+
+                      {% if r.status in ["processing", "estimating"] %}
+                        <a class="cab-badge"
+                           href="/client/requests/{{ r.id }}/edit"
+                           style="text-decoration:none;">
+                          Редактировать
+                        </a>
+                      {% endif %}
+                    </div>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <div class="cab-empty">Заявок пока нет</div>
+              {% endif %}
+            </div>
+          </div>
+
+        {% elif tab == "active" %}
+          <!-- ================= ACTIVE ================= -->
+          <div class="cab-card">
+            <div class="cab-card-title">Активные перевозки</div>
+            <p class="cab-text">Здесь отображаются заявки клиента со статусом «В пути».</p>
+
+            <div class="cab-list">
+              {% if active_requests and active_requests|length > 0 %}
+                {% for r in active_requests %}
+                  <div class="cab-row" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                    <div class="cab-row-left" style="flex:1;min-width:0;">
+                      <div class="cab-row-title">Заявка #{{ r.id }}</div>
+
+                      <div class="cab-row-sub">
+                        {{ r.origin_label or r.origin or "—" }} → {{ r.destination_label or r.destination or "—" }}
+                        {% if r.distance_km %} • {{ r.distance_km }} км{% endif %}
+                        {% if r.weight_kg %} • {{ (r.weight_kg / 1000) | round(2) }} т{% endif %}
+                        {% if r.volume_m3 %} • {{ r.volume_m3 | round(2) }} м³{% endif %}
+                      </div>
+                    </div>
+
+                    <div class="cab-row-right" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center;">
+                      <span class="cab-badge">{{ r.status|status_ru }}</span>
+
+                      <a class="cab-badge"
+                         href="/client/requests/{{ r.id }}?back=active"
+                         style="text-decoration:none;">
+                        Открыть
+                      </a>
+                    </div>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <div class="cab-empty">Активных перевозок пока нет</div>
+              {% endif %}
+            </div>
+          </div>
+
+        {% elif tab == "archive" %}
+          <div class="cab-card">
+            <div class="cab-card-title">Архив</div>
+            <p class="cab-text">Раздел в разработке</p>
+            <div class="cab-empty">Пока пусто</div>
+          </div>
+
+        {% elif tab == "plan" %}
+          <!-- ================= PLAN ================= -->
+          <div class="cab-card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+              <div>
+                <div class="cab-card-title">План отгрузок</div>
+                <p class="cab-text">Теперь планы хранятся отдельно от заявок: у каждого плана есть график, окно подачи и список конкретных дат.</p>
+              </div>
+
+              <a class="btn-outline"
+                 href="/client/cabinet?tab=plan_create"
+                 style="width:auto;padding:10px 14px;border-radius:14px;text-decoration:none;">
+                + Создать план
+              </a>
+            </div>
+
+            <div class="cab-list">
+              {% if plans and plans|length > 0 %}
+                {% for p in plans %}
+                  <div class="cab-row plan-card-row" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+                    <div class="cab-row-left" style="flex:1;min-width:0;">
+                      <div class="cab-row-title">План #{{ p.id }}</div>
+                      <div class="cab-row-sub">
+                        {{ p.origin or "—" }} → {{ p.destination or "—" }}
+                        {% if p.period_start and p.period_end %}
+                          • {{ p.period_start.strftime('%d.%m.%Y') }} — {{ p.period_end.strftime('%d.%m.%Y') }}
+                        {% endif %}
+                      </div>
+
+                      <div class="plan-card-meta">
+                        <span class="cab-badge">{{ 'Активен' if p.status == 'active' else 'Пауза' }}</span>
+                        <span class="cab-badge">{{ p.schedule_summary }}</span>
+                        <span class="cab-badge">{{ p.trucks_per_occurrence }} маш.</span>
+                        <span class="cab-badge">{{ p.time_window }}</span>
+                        <span class="cab-badge">
+                          {% if p.lead_days == 1 %}
+                            1 день
+                          {% elif p.lead_days in [2, 3, 4] %}
+                            {{ p.lead_days }} дня
+                          {% else %}
+                            {{ p.lead_days }} дней
+                          {% endif %}
+                        </span>
+                      </div>
+
+                      <div class="cab-row-sub" style="margin-top:8px;">
+                        {% if p.next_occurrence_display %}
+                          Ближайшая дата: {{ p.next_occurrence_display }}
+                        {% else %}
+                          Даты пока не рассчитаны
+                        {% endif %}
+                        • Всего дат: {{ p.occurrence_count }}
+                        {% if p.cargo %} • {{ p.cargo }}{% endif %}
+                      </div>
+                    </div>
+
+                    <div class="cab-row-right" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center;">
+                      <a class="cab-badge"
+                         href="/client/plans/{{ p.id }}"
+                         style="text-decoration:none;">
+                        Открыть
+                      </a>
+                    </div>
+                  </div>
+                {% endfor %}
+              {% elif plan_requests and plan_requests|length > 0 %}
+                {% for r in plan_requests %}
+                  <div class="cab-row" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                    <div class="cab-row-left" style="flex:1;min-width:0;">
+                      <div class="cab-row-title">Старый план #{{ r.id }}</div>
+                      <div class="cab-row-sub">
+                        {{ r.origin_label or r.origin or "—" }} → {{ r.destination_label or r.destination or "—" }}
+                        {% if r.plan_date_from_display and r.plan_date_to_display %}
+                          • {{ r.plan_date_from_display }} — {{ r.plan_date_to_display }}
+                        {% elif r.plan_date_from_display %}
+                          • {{ r.plan_date_from_display }}
+                        {% elif r.load_date %}
+                          • {{ r.load_date }}
+                        {% endif %}
+                      </div>
+                    </div>
+                    <div class="cab-row-right" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center;">
+                      <a class="cab-badge" href="/client/requests/{{ r.id }}?back=plan" style="text-decoration:none;">Открыть</a>
+                    </div>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <div class="cab-empty">Планов отгрузок пока нет</div>
+              {% endif %}
+            </div>
+          </div>
+
+        {% elif tab == "docs" %}
+          <div class="cab-card">
+            <div class="cab-card-title">Документы</div>
+            <p class="cab-text">Раздел в разработке (будет список документов по всем заявкам)</p>
+            <div class="cab-empty">Пока пусто</div>
+          </div>
+
+        {% elif tab == "company" %}
+          {% set u = (client_user if client_user is defined else None) %}
+
+          <div class="cab-card">
+            <div class="cab-card-title">Компания</div>
+            <p class="cab-text">Данные компании и привязка Telegram.</p>
+
+            <div class="cab-card" style="margin-top:14px;background:#ffffff80;">
+              <div class="cab-card-title" style="font-size:16px;">Telegram</div>
+              <p class="cab-text">Привяжи Telegram, чтобы получать уведомления по заявкам и документам.</p>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4" style="margin-top:10px;">
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Статус</div>
+                  <div style="font-weight:700;">
+                    {% if u and u.tg_id and (u.tg_id | int) > 0 %}
+                      <span style="color:#16a34a;">✅ Telegram привязан</span>
+                    {% else %}
+                      <span style="color:#64748b;">Не привязан</span>
+                    {% endif %}
+                  </div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Telegram ID</div>
+                  <div style="font-weight:700;">
+                    {% if u and u.tg_id and (u.tg_id | int) > 0 %}{{ u.tg_id }}{% else %}—{% endif %}
+                  </div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Название компании</div>
+                  <div style="font-weight:700;">
+                    {% if u and u.company_name %}{{ u.company_name }}{% else %}—{% endif %}
+                  </div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Форма бизнеса</div>
+                  <div style="font-weight:700;">
+                    {% if u and u.business_form %}{{ u.business_form }}{% else %}—{% endif %}
+                  </div>
+                </div>
+              </div>
+
+              {% if (not u or not u.tg_id or (u.tg_id | int) <= 0) and client_tg_link %}
+                <div style="margin-top:14px;">
+                  <a href="/client/telegram-bind"
+                     target="_blank"
+                     style="
+                       display:inline-flex;
+                       align-items:center;
+                       gap:10px;
+                       background:#229ED9;
+                       color:#fff;
+                       text-decoration:none;
+                       padding:12px 18px;
+                       border-radius:14px;
+                       font-weight:700;
+                       box-shadow:0 8px 22px rgba(34,158,217,.22);
+                     ">
+                    <span style="font-size:18px;">✈️</span>
+                    <span>Привязать Telegram</span>
+                  </a>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+
+        {% else %}
+          <div class="cab-card">
+            <div class="cab-card-title">Раздел в разработке</div>
+          </div>
+        {% endif %}
+
+      </main>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_macros.html" import step_dots %}
+{% block title %}{{ t("register_telegram.page_title") }}{% endblock %}
+{% block content %}
+{{ step_dots(4) }}
+<h1>{{ t("register_telegram.title") }}</h1>
+<p class="muted">{{ t("register_telegram.intro") }}</p>
+<div style="border:1px solid var(--border-soft); border-radius:16px; background:var(--input-bg); padding:18px; text-align:center; margin:16px 0;">
+  <span class="num" style="font-size:1.6rem; font-weight:700; letter-spacing:2px;">{{ code }}</span>
+</div>
+<p class="muted">{{ t("register_telegram.sandbox_note") }}</p>
+<a class="btn-link" href="/dashboard">{{ t("register_telegram.finish") }}</a>
+{% endblock %}

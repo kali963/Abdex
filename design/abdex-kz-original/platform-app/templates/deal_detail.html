@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% from "_macros.html" import select_field, route_line_from_points %}
+{% block title %}{{ t("deal.detail_page_title", number=order.order_number if order else "") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% set has_map_data = map_data.checkpoints or map_data.track or map_data.route_points %}
+{% block head_extra %}
+{% if has_map_data %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+{% endif %}
+{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>
+    {{ order.order_number if order else "" }}
+    <span class="badge badge-{{ deal.status.value }}">{{ t("deal.status_" + deal.status.value) }}</span>
+    {% if deal.flagged_for_antifraud %}<span class="badge badge-high">{{ t("deal.antifraud_flag") }}</span>{% endif %}
+    {% if deal.risk_review_required %}<span class="badge badge-high">{{ t("deal.risk_review_pending") }}</span>{% endif %}
+  </h1>
+  <a href="/deals">{{ t("deal.back_to_list") }}</a>
+</div>
+
+<section>
+  <h2>{{ t("deal.section_terms") }}</h2>
+  <p>{{ snapshot.get("cargo_name", "") }} — {{ snapshot.get("cargo_weight_kg", "") }} {{ t("orders.unit_kg") }}</p>
+  <p>{{ t("deal.terms_price") }}: {{ snapshot.get("price_minor")|money(snapshot.get("currency_code", "KZT")) }}</p>
+  {% if points %}{{ route_line_from_points(points) }}{% endif %}
+</section>
+
+<section>
+  <h2>{{ t("deal.section_parties") }}</h2>
+  <table>
+    <tbody>
+      <tr><td>{{ t("deal.party_client") }}</td><td>{{ client_company.name if client_company else "—" }}</td></tr>
+      <tr><td>{{ t("deal.party_carrier") }}</td><td>{{ carrier_company.name if carrier_company else "—" }}</td></tr>
+      {% if driver_name %}<tr><td>{{ t("deal.party_driver") }}</td><td>{{ driver_name }}</td></tr>{% endif %}
+      {% if vehicle_plate %}<tr><td>{{ t("deal.party_vehicle") }}</td><td>{{ vehicle_plate }}</td></tr>{% endif %}
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>{{ t("deal.section_documents") }}</h2>
+  {% if documents %}
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t("deal.doc_col_type") }}</th>
+        <th>{{ t("deal.doc_col_number") }}</th>
+        <th>{{ t("deal.doc_col_status") }}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in documents %}
+      <tr>
+        <td>{{ t("deal.document_type_" + row.document.document_type.value) }}</td>
+        <td>{{ row.document.document_number }}</td>
+        <td><span class="badge badge-{{ row.document.status.value }}">{{ t("deal.document_status_" + row.document.status.value) }}</span></td>
+        <td>{% if row.download_url %}<a href="{{ row.download_url }}">{{ t("deal.doc_download") }}</a>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("deal.documents_empty") }}</p>
+  {% endif %}
+
+  {% if available_document_types %}
+  <form method="post" action="/deals/{{ deal.id }}/documents/generate" class="filters">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {{ select_field("document_type", t("deal.doc_generate_label"), available_document_types, required=True) }}
+    <button type="submit">{{ t("deal.doc_generate_submit") }}</button>
+  </form>
+  {% endif %}
+</section>
+
+<section>
+  <h2>{{ t("deal.section_finance") }}</h2>
+  {% if accruals %}
+  <table>
+    <thead><tr><th>{{ t("deal.finance_col_type") }}</th><th>{{ t("deal.finance_col_amount") }}</th><th>{{ t("orders.col_created") }}</th></tr></thead>
+    <tbody>
+    {% for accrual in accruals %}
+      <tr>
+        <td>{{ t("deal.income_type_" + accrual.income_type.value) }}{% if accrual.reverses_accrual_id %} ({{ t("deal.finance_reversal") }}){% endif %}</td>
+        <td>{{ accrual.amount_minor|money(accrual.currency_code) }}</td>
+        <td>{{ accrual.created_at|localtime }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("deal.finance_empty") }}</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>{{ t("deal.section_tracking") }}</h2>
+  {% if has_map_data %}
+  <div id="trip-map" style="height:360px; border-radius:16px; margin-bottom:16px; border:1px solid var(--border-soft);"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script>
+    (function () {
+      var data = {{ map_data|tojson }};
+      var map = L.map("trip-map");
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 18
+      }).addTo(map);
+
+      var bounds = [];
+      data.checkpoints.forEach(function (cp) {
+        L.marker([cp.lat, cp.lng]).addTo(map).bindPopup(cp.label + "<br>" + cp.time);
+        bounds.push([cp.lat, cp.lng]);
+      });
+      data.route_points.forEach(function (rp) {
+        L.circleMarker([rp.lat, rp.lng], { radius: 7, color: "#44695f" }).addTo(map).bindPopup(rp.label);
+        bounds.push([rp.lat, rp.lng]);
+      });
+      if (data.track.length > 1) {
+        var latlngs = data.track.map(function (p) { return [p.lat, p.lng]; });
+        L.polyline(latlngs, { color: "#44695f" }).addTo(map);
+        bounds = bounds.concat(latlngs);
+      }
+      if (bounds.length > 0) {
+        map.fitBounds(bounds, { padding: [24, 24] });
+      } else {
+        map.setView([48.0196, 66.9237], 4);
+      }
+    })();
+  </script>
+  {% endif %}
+  {% if checkpoints %}
+  <table>
+    <tbody>
+    {% for checkpoint in checkpoints %}
+      <tr>
+        <td>{{ t("deal.checkpoint_" + checkpoint.checkpoint_type.value) }}</td>
+        <td>{{ checkpoint.occurred_at|localtime }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("deal.tracking_empty") }}</p>
+  {% endif %}
+  {% if incidents %}
+  <table>
+    <thead><tr><th>{{ t("deal.incident_col_type") }}</th><th>{{ t("deal.incident_col_description") }}</th><th>{{ t("orders.col_created") }}</th></tr></thead>
+    <tbody>
+    {% for incident in incidents %}
+      <tr>
+        <td>{{ t("deal.incident_" + incident.incident_type.value) }}</td>
+        <td>{{ incident.description }}</td>
+        <td>{{ incident.occurred_at|localtime }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<section>
+  <h2>{{ t("deal.section_disputes") }}</h2>
+  {% if open_dispute %}
+  <p>{{ t("deal.dispute_open_notice") }} <a href="/disputes/{{ open_dispute.id }}">{{ t("deal.dispute_open_link") }}</a></p>
+  {% else %}
+  <form method="post" action="/deals/{{ deal.id }}/disputes">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="field">
+      <label for="subject">{{ t("deal.dispute_field_subject") }}</label>
+      <input type="text" id="subject" name="subject" required>
+    </div>
+    <div class="field">
+      <label for="description">{{ t("deal.dispute_field_description") }}</label>
+      <textarea id="description" name="description" rows="3" required></textarea>
+    </div>
+    <button type="submit" class="btn-secondary">{{ t("deal.dispute_open_submit") }}</button>
+  </form>
+  {% endif %}
+</section>
+
+<section>
+  <h2>{{ t("deal.section_history") }}</h2>
+  {% if events %}
+  <table>
+    <tbody>
+    {% for row in events %}
+      <tr>
+        <td>{{ t(row.label_key) }}</td>
+        <td>{{ row.event.created_at|localtime }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("deal.history_empty") }}</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>{{ t("deal.section_chat") }}</h2>
+  <div class="chat-log">
+  {% for row in messages %}
+    {% if row.message.message_type.value == "system" %}
+    <div class="chat-message system">{{ row.message.body }}</div>
+    {% else %}
+    <div class="chat-message">
+      <div class="meta">{{ row.sender_name or t("deal.chat_unknown_sender") }} — {{ row.message.created_at|localtime }}</div>
+      <div>{{ row.message.body }}</div>
+    </div>
+    {% endif %}
+  {% else %}
+    <p class="muted">{{ t("deal.chat_empty") }}</p>
+  {% endfor %}
+  </div>
+  <form method="post" action="/deals/{{ deal.id }}/chat/send">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="field">
+      <textarea name="body" rows="3" placeholder="{{ t('deal.chat_placeholder') }}" required></textarea>
+    </div>
+    <button type="submit">{{ t("deal.chat_send") }}</button>
+  </form>
+</section>
+{% endblock %}

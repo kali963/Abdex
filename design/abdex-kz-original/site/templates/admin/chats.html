@@ -1,0 +1,153 @@
+{% extends "admin/base.html" %}
+{% block title %}Чаты | Админ{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+  <h1 class="text-2xl font-semibold mb-6">Чаты</h1>
+
+  <div class="mb-8">
+    <h2 class="text-xl font-semibold mb-3">Техподдержка</h2>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50">
+          <tr>
+            <th class="p-3 text-left">Чат</th>
+            <th class="p-3 text-left">Пользователь</th>
+            <th class="p-3 text-left">Последнее сообщение</th>
+            <th class="p-3 text-right">Открыть</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for t in support_threads %}
+            {% set c = client_map.get(t.client_id) %}
+            {% set d = drv_map.get(t.driver_id) %}
+
+            <tr class="border-t">
+              <td class="p-3">
+                #{{ t.id }}
+              </td>
+
+              <td class="p-3">
+                {% if c %}
+                  Клиент: {{ c.company_name or c.name or ("ID " ~ c.id) }}
+                {% elif d %}
+                  Водитель: {{ d.name or ("ID " ~ d.id) }}
+                {% elif t.client_id %}
+                  Клиент ID {{ t.client_id }}
+                {% elif t.driver_id %}
+                  Водитель ID {{ t.driver_id }}
+                {% else %}
+                  Пользователь
+                {% endif %}
+              </td>
+
+              <td class="p-3">
+                {% if t.messages and t.messages|length > 0 %}
+                  {% set last = t.messages[-1] %}
+                  {% if last.text %}
+                    {{ last.text }}
+                  {% elif last.attachment_name %}
+                    📎 {{ last.attachment_name }}
+                  {% else %}
+                    —
+                  {% endif %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <td class="p-3 text-right">
+                <a class="text-blue-600 hover:underline" href="/admin/chats/{{ t.id }}">Открыть →</a>
+              </td>
+            </tr>
+          {% else %}
+            <tr class="border-t">
+              <td class="p-3 text-slate-500" colspan="4">Пока нет чатов техподдержки.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div>
+    <h2 class="text-xl font-semibold mb-3">Чаты заявок</h2>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50">
+          <tr>
+            <th class="p-3 text-left">Заявка</th>
+            <th class="p-3 text-left">Клиент</th>
+            <th class="p-3 text-left">Водитель</th>
+            <th class="p-3 text-left">Последнее сообщение</th>
+            <th class="p-3 text-right">Открыть</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for t in request_threads %}
+            {% set r = req_map.get(t.request_id) %}
+            {% set c = client_map.get(t.client_id) %}
+            {% set d = drv_map.get(t.driver_id) %}
+
+            <tr class="border-t">
+              <td class="p-3">
+                #{{ t.request_id }}
+                {% if r %}
+                  — {{ r.origin or "—" }} → {{ r.destination or "—" }}
+                {% endif %}
+              </td>
+
+              <td class="p-3">
+                {% if c %}
+                  {{ c.company_name or c.name or ("ID " ~ c.id) }}
+                {% elif t.client_id %}
+                  ID {{ t.client_id }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <td class="p-3">
+                {% if d %}
+                  {{ d.name or ("ID " ~ d.id) }}
+                {% elif t.driver_id %}
+                  ID {{ t.driver_id }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <td class="p-3">
+                {% if t.messages and t.messages|length > 0 %}
+                  {% set last = t.messages[-1] %}
+                  {% if last.text %}
+                    {{ last.text }}
+                  {% elif last.attachment_name %}
+                    📎 {{ last.attachment_name }}
+                  {% else %}
+                    —
+                  {% endif %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <td class="p-3 text-right">
+                <a class="text-blue-600 hover:underline" href="/admin/chats/{{ t.id }}">Открыть →</a>
+              </td>
+            </tr>
+          {% else %}
+            <tr class="border-t">
+              <td class="p-3 text-slate-500" colspan="5">Пока нет чатов заявок.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

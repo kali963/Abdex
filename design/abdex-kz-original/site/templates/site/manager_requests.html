@@ -1,0 +1,274 @@
+{% extends "site/base.html" %}
+{% block title %}Заявки менеджера | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-semibold">Заявки</h1>
+    <a href="/manager/cabinet" class="px-4 py-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200">Назад</a>
+  </div>
+
+  {% if request.query_params.get('error') %}
+    <div class="mb-4 p-3 rounded bg-red-50 text-red-700 border border-red-200">
+      {{ request.query_params.get('error') }}
+    </div>
+  {% endif %}
+
+  <div class="bg-white rounded-xl shadow p-5 mb-6">
+    <div class="text-lg font-semibold mb-3">Создать заявку</div>
+
+    <form class="req-form" action="/manager/requests/create" method="post" enctype="multipart/form-data">
+      <div class="req-grid">
+
+        <div class="req-field">
+          <label>Клиент</label>
+          <select name="client_id" required>
+            <option value="" disabled selected>Выбери клиента</option>
+            {% for c in clients %}
+              <option value="{{ c.id }}">{{ c.name or c.email }} (ID {{ c.id }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="req-field">
+          <label>Откуда</label>
+          <input type="text" name="origin" class="js-city-suggest" placeholder="Город/регион" required>
+        </div>
+
+        <div class="req-field">
+          <label>Куда</label>
+          <input type="text" name="destination" class="js-city-suggest" placeholder="Город/регион" required>
+        </div>
+
+        <div class="req-field">
+          <label>Дата загрузки</label>
+
+          <div class="abd-cal js-abd-cal" data-mode="single">
+            <input type="hidden" name="load_date" class="js-abd-cal-value" value="">
+
+            <button type="button" class="abd-cal-trigger js-abd-cal-trigger">
+              <span class="js-abd-cal-label">Выберите дату</span>
+              <span class="abd-cal-trigger-icon">📅</span>
+            </button>
+
+            <div class="abd-cal-popup js-abd-cal-popup" hidden>
+              <div class="abd-cal-toolbar">
+                <div class="abd-cal-month js-abd-cal-month"></div>
+
+                <div class="abd-cal-navs">
+                  <button type="button" class="abd-cal-nav js-abd-cal-prev">‹</button>
+                  <button type="button" class="abd-cal-nav js-abd-cal-next">›</button>
+                </div>
+              </div>
+
+              <div class="abd-cal-weekdays">
+                <span>Пн</span>
+                <span>Вт</span>
+                <span>Ср</span>
+                <span>Чт</span>
+                <span>Пт</span>
+                <span>Сб</span>
+                <span>Вс</span>
+              </div>
+
+              <div class="abd-cal-grid js-abd-cal-grid"></div>
+
+              <div class="abd-cal-actions">
+                <button type="button" class="btn-outline js-abd-cal-clear" style="width:auto;padding:8px 12px;border-radius:12px;text-decoration:none;">
+                  Очистить
+                </button>
+                <button type="button" class="btn-main js-abd-cal-apply" style="width:auto;padding:8px 12px;border-radius:12px;">
+                  Готово
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="req-field">
+          <label>Тип авто</label>
+          <select name="truck_type">
+            <option value="" selected>Любая</option>
+            <option value="Крытая">Крытая</option>
+            <option value="Открытая">Открытая</option>
+
+            <option value="Тент">Тент</option>
+            <option value="Платформа">Платформа</option>
+            <option value="Рефрижератор">Рефрижератор</option>
+            <option value="Изотерм">Изотерм</option>
+            <option value="Бортовой">Бортовой</option>
+
+            <option value="Автобус">Автобус</option>
+            <option value="Автовоз">Автовоз</option>
+            <option value="Автовышка">Автовышка</option>
+            <option value="Автотранспортер">Автотранспортер</option>
+            <option value="Балковоз">Балковоз</option>
+            <option value="Бензовоз">Бензовоз</option>
+            <option value="Бетоновоз">Бетоновоз</option>
+            <option value="Битумовоз">Битумовоз</option>
+            <option value="Газовоз">Газовоз</option>
+            <option value="Зерновоз">Зерновоз</option>
+            <option value="Конт.площадка">Конт.площадка</option>
+            <option value="Кормовоз">Кормовоз</option>
+            <option value="Кран">Кран</option>
+            <option value="Лесовоз">Лесовоз</option>
+            <option value="Манипулятор">Манипулятор</option>
+            <option value="Микроавтобус">Микроавтобус</option>
+            <option value="Муковоз">Муковоз</option>
+            <option value="Открытый Конт.">Открытый Конт.</option>
+            <option value="Панелевоз">Панелевоз</option>
+            <option value="Погрузчик">Погрузчик</option>
+            <option value="Самосвал">Самосвал</option>
+            <option value="Седельный Тягач">Седельный Тягач</option>
+            <option value="Скотовоз">Скотовоз</option>
+            <option value="Трал">Трал</option>
+            <option value="Трубовоз">Трубовоз</option>
+            <option value="Цельнометалл.">Цельнометалл.</option>
+            <option value="Цементовоз">Цементовоз</option>
+            <option value="Цистерна">Цистерна</option>
+            <option value="Шаланда">Шаланда</option>
+            <option value="Щеповоз">Щеповоз</option>
+            <option value="Эвакуатор">Эвакуатор</option>
+            <option value="Экскаватор">Экскаватор</option>
+          </select>
+        </div>
+
+        <div class="req-field">
+          <label>Груз</label>
+          <input type="text" name="cargo" placeholder="Напр. оборудование" required>
+        </div>
+
+        <div class="req-field">
+          <label>Грузоотправитель *</label>
+          <input type="text" name="shipper" required placeholder="Фирма или ФИО">
+        </div>
+
+        <div class="req-field">
+          <label>Грузополучатель *</label>
+          <input type="text" name="consignee" required placeholder="Фирма или ФИО">
+        </div>
+
+        <div class="req-field">
+          <label>Температурный режим</label>
+          <input type="text" name="temperature" placeholder="Напр. +5…+10 (если нужно)">
+        </div>
+
+        <div class="req-field">
+          <label>Стоимость груза</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="text" name="cargo_value" inputmode="numeric" placeholder="Напр.: 24000000" style="flex:1;">
+            <select name="cargo_value_currency" style="max-width:120px;">
+              <option value="KZT" selected>₸ KZT</option>
+              <option value="RUB">₽ RUB</option>
+              <option value="USD">$ USD</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="req-field">
+          <label>Контакт на погрузке *</label>
+          <input type="text" name="load_contact" required placeholder="Имя, телефон">
+        </div>
+
+        <div class="req-field">
+          <label>Контакт на выгрузке *</label>
+          <input type="text" name="unload_contact" required placeholder="Имя, телефон">
+        </div>
+
+        <div class="req-field">
+          <label>Тип оплаты</label>
+          <select name="payment">
+            <option value="" selected>Выбери тип оплаты</option>
+            <option value="Наличный расчет">Наличный расчет</option>
+            <option value="Безналичный расчет">Безналичный расчет</option>
+          </select>
+        </div>
+
+        <div class="req-field">
+          <label>Вес (кг)</label>
+          <input type="number" step="0.1" name="weight_kg" placeholder="12000">
+        </div>
+
+        <div class="req-field">
+          <label>Объём (м³)</label>
+          <input type="number" step="0.1" name="volume_m3" placeholder="42.5">
+        </div>
+
+        <div class="req-field">
+          <label>Габариты</label>
+          <input type="text" name="dims" placeholder="Д×Ш×В">
+        </div>
+
+        <div class="req-field">
+          <label>Мест</label>
+          <input type="number" step="1" name="places" placeholder="10">
+        </div>
+
+        <div class="req-field">
+          <label>Адрес погрузки (опц.)</label>
+          <input type="text" name="from_address" placeholder="точный адрес">
+        </div>
+
+        <div class="req-field">
+          <label>Адрес выгрузки (опц.)</label>
+          <input type="text" name="to_address" placeholder="точный адрес">
+        </div>
+
+        <div class="req-field">
+          <label>Бюджет (₸)</label>
+          <input type="number" step="1" name="budget" placeholder="500000">
+        </div>
+
+        <div class="req-field">
+          <label>Документы (если есть)</label>
+          <input type="file" name="documents" multiple>
+        </div>
+
+        <div class="req-field req-wide">
+          <label>Комментарий</label>
+          <textarea name="comment" placeholder="Детали по грузу, условия"></textarea>
+        </div>
+
+      </div>
+
+      <div class="mt-4">
+        <button class="px-5 py-2.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900">
+          Создать заявку
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50">
+        <tr>
+          <th class="text-left p-3">ID</th>
+          <th class="text-left p-3">Клиент</th>
+          <th class="text-left p-3">Маршрут</th>
+          <th class="text-left p-3">Статус</th>
+          <th class="text-left p-3">Создано</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in requests %}
+          <tr class="border-t">
+            <td class="p-3">{{ r.id }}</td>
+            <td class="p-3">
+              {% set c = clients_map.get(r.client_id) %}
+              {{ (c.name if c and c.name else (c.email if c else '—')) }}
+            </td>
+            <td class="p-3">{{ r.origin or "—" }} → {{ r.destination or "—" }}</td>
+            <td class="p-3">{{ r.status or "—" }}</td>
+            <td class="p-3">{{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else "—" }}</td>
+          </tr>
+        {% else %}
+          <tr class="border-t">
+            <td colspan="5" class="p-6 text-center text-slate-500">Пока нет заявок</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

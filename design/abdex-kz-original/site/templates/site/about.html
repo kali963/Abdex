@@ -1,0 +1,139 @@
+{% extends "site/base.html" %}
+{% block title %}О нас | AbdEX{% endblock %}
+
+{% block content %}
+<section class="about-wrap">
+
+  {# ===== ROLE HINT (не ломает старый контент) ===== #}
+  {% if request.url.path.startswith('/client') %}
+    <div class="about-badges" style="margin-bottom:14px;">
+      <span class="about-badge">Режим: Клиент</span>
+      <span class="about-badge">Создавайте заявки</span>
+      <span class="about-badge">Планируйте отгрузки</span>
+    </div>
+  {% elif request.url.path.startswith('/driver') %}
+    <div class="about-badges" style="margin-bottom:14px;">
+      <span class="about-badge">Режим: Перевозчик</span>
+      <span class="about-badge">Получайте заявки</span>
+      <span class="about-badge">Отправляйте ставки</span>
+    </div>
+  {% elif request.url.path.startswith('/admin') %}
+    <div class="about-badges" style="margin-bottom:14px;">
+      <span class="about-badge">Режим: Админ</span>
+      <span class="about-badge">Контроль заявок</span>
+      <span class="about-badge">Пользователи и сделки</span>
+    </div>
+  {% endif %}
+
+  <!-- HERO (архивный контент) -->
+  <div class="about-hero">
+    <div>
+      <h1 class="about-title">
+        Платформа, которая позволяет работать надёжно в Казахстане и СНГ
+      </h1>
+      <p class="about-lead">
+        Клиент создаёт заявку на платформе AbdEX.
+        AbdEX помогает выбрать лучшее предложение и сопровождает сделку.
+      </p>
+
+      <div class="about-badges">
+        <span class="about-badge">Без лишней бюрократии</span>
+        <span class="about-badge">Прозрачные условия</span>
+        <span class="about-badge">Удобно в Telegram</span>
+      </div>
+    </div>
+
+    <div class="about-card">
+      <div class="about-card-title">Как работает AbdEX</div>
+      <ol class="about-steps">
+        <li>Клиент отправляет заявку через сайт или Telegram-бота.</li>
+        <li>Платформа рассылает запрос проверенным перевозчикам. </li>
+        <li></li>Подбирает подходящий вариант и предоставляет дальнейшие сопровождение сделки.</li>
+      </ol>
+
+      {# CTA: для публичных страниц — регистрация, для кабинетов — на главную кабинета #}
+      {% if request.url.path.startswith('/client') %}
+        <a class="btn-outline about-cta" href="/client/cabinet">На главную кабинета</a>
+      {% elif request.url.path.startswith('/driver') %}
+        <a class="btn-outline about-cta" href="/driver/cabinet">На главную кабинета</a>
+      {% elif request.url.path.startswith('/admin') %}
+        <a class="btn-outline about-cta" href="/admin">В админку</a>
+      {% else %}
+        <a href="/"
+          class="inline-flex items-center gap-2 mt-4 px-6 py-3 rounded-xl
+                  bg-[#44695F] text-white font-medium
+                  shadow-md shadow-[#44695F]/30
+                  hover:bg-[#3b5f56] hover:shadow-lg
+                  active:scale-[0.98]
+                  transition-all duration-200">
+          Перейти к регистрации
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none"
+                viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 5l7 7-7 7" />
+          </svg>
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- FEATURES (архивный контент) -->
+  <div class="about-grid">
+    <div class="about-mini">
+      <div class="about-mini-title">Для клиентов</div>
+      <div class="about-mini-list">
+        <div class="about-mini-item">
+          <div class="about-mini-head">Быстрый поиск транспорта</div>
+          <div class="about-mini-text">Одна заявка — сразу несколько предложений от водителей.</div>
+        </div>
+        <div class="about-mini-item">
+          <div class="about-mini-head">Прозрачные сделки</div>
+          <div class="about-mini-text">Вы видите цену, сроки и условия по каждому перевозчику.</div>
+        </div>
+        <div class="about-mini-item">
+          <div class="about-mini-head">Документооборот</div>
+          <div class="about-mini-text">Счета, акты и закрывающие документы — в одном месте.</div>
+        </div>
+        <div class="about-mini-item">
+          <div class="about-mini-head">Фиксированная комиссия</div>
+          <div class="about-mini-text">Международные перевозки - 200$. По РК - 100$.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="about-mini">
+      <div class="about-mini-title">Для перевозчиков</div>
+      <div class="about-mini-list">
+        <div class="about-mini-item">
+          <div class="about-mini-head">Доступ к заявкам</div>
+          <div class="about-mini-text">Реальные грузы без посредников, от клиентов, готовых работать.</div>
+        </div>
+        <div class="about-mini-item">
+          <div class="about-mini-head">Удобно в Telegram</div>
+          <div class="about-mini-text">Все уведомления и общение — через бота.</div>
+        </div>
+        <div class="about-mini-item">
+          <div class="about-mini-head">Честная комиссия</div>
+          <div class="about-mini-text">Отсутсвие комиссии для перевозчиков.</div>
+        </div>
+        <div class="about-mini-item">
+          <div class="about-mini-head">Гарантия выплат</div>
+          <div class="about-mini-text">Гарантия оплаты труда, простоев и суточных</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOW IT WORKS (архивный контент) -->
+  <div class="about-bottom">
+    <div class="about-bottom-title">Как это работает</div>
+    <ol class="about-steps about-steps-wide">
+      <li>Вы заходите в Telegram-бот AbdEX.</li>
+      <li>Заполняете короткую форму по грузу и маршруту.</li>
+      <li>Выбираете лучшее предложение.</li>
+      <li>AbdEX помогает довести сделку до конца.</li>
+    </ol>
+  </div>
+
+</section>
+{% endblock %}

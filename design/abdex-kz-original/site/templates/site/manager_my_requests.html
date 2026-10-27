@@ -1,0 +1,91 @@
+{% extends "site/base.html" %}
+{% block title %}Мои заявки | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-semibold">Мои заявки</h1>
+
+    <div class="flex gap-2">
+      <a href="/manager/cabinet" class="btn btn-ghost btn-sm">
+        Кабинет
+      </a>
+      <a href="/manager/requests" class="btn btn-primary btn-sm">
+        Все заявки
+      </a>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50">
+        <tr>
+          <th class="p-3 text-left">ID</th>
+          <th class="p-3 text-left">Клиент</th>
+          <th class="p-3 text-left">Маршрут</th>
+          <th class="p-3 text-left">Статус</th>
+        </tr>
+      </thead>
+
+      <tbody>
+
+        {% set status_ru = {
+          "processing": "В обработке",
+          "published": "Опубликована",
+          "active": "В работе",
+          "done": "Завершена",
+          "cancelled": "Отменена"
+        } %}
+
+        {% for r in requests %}
+        <tr
+          class="border-t hover:bg-slate-50 transition cursor-pointer"
+          data-href="/manager/requests/{{ r.id }}"
+          title="Открыть заявку #{{ r.id }}"
+        >
+          <td class="p-3 font-semibold">
+            <a href="/manager/requests/{{ r.id }}"
+               class="text-slate-900 hover:underline">
+              {{ r.id }}
+            </a>
+          </td>
+
+          <td class="p-3">
+            {% set c = clients_map.get(r.client_id) %}
+            {{ c.name if c and c.name else (c.email if c else "—") }}
+          </td>
+
+          <td class="p-3">
+            {{ r.origin or "—" }} → {{ r.destination or "—" }}
+          </td>
+
+          <td class="p-3">
+            <span class="cab-badge">
+              {{ status_ru.get(r.status, r.status) }}
+            </span>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="p-8 text-center text-slate-500">
+            Ты ещё не создавала заявки
+          </td>
+        </tr>
+        {% endfor %}
+
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+  document.querySelectorAll("tr[data-href]").forEach(tr => {
+    tr.addEventListener("click", (e) => {
+      if (e.target.closest("a, button, input, select, textarea")) return;
+      window.location.href = tr.dataset.href;
+    });
+  });
+</script>
+{% endblock %}

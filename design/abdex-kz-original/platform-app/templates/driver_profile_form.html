@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}{{ t("driver.profile_page_title") }}{% endblock %}
+{% block content %}
+<h1>{{ t("driver.profile_title") }}</h1>
+<form method="post" action="/driver/profile">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {{ field("iin", t("driver.field_iin"), value=form.iin if form.iin is defined else (profile.iin if profile else ""), error=errors.iin) }}
+  {{ field("id_document_number", t("driver.field_id_document_number"), required=False, value=form.id_document_number if form.id_document_number is defined else (profile.id_document_number if profile else ""), error=errors.id_document_number) }}
+  {{ field("id_document_expires_at", t("driver.field_id_document_expires_at"), type="date", required=False, value=form.id_document_expires_at if form.id_document_expires_at is defined else "", error=errors.id_document_expires_at) }}
+  {{ field("license_number", t("driver.field_license_number"), required=False, value=form.license_number if form.license_number is defined else (profile.license_number if profile else ""), error=errors.license_number) }}
+  {{ field("license_categories", t("driver.field_license_categories"), required=False, value=form.license_categories if form.license_categories is defined else (profile.license_categories if profile else ""), error=errors.license_categories) }}
+  {{ field("license_expires_at", t("driver.field_license_expires_at"), type="date", required=False, value=form.license_expires_at if form.license_expires_at is defined else "", error=errors.license_expires_at) }}
+  {{ field("adr_permit_expires_at", t("driver.field_adr_permit_expires_at"), type="date", required=False, value=form.adr_permit_expires_at if form.adr_permit_expires_at is defined else "", error=errors.adr_permit_expires_at) }}
+  {{ field("medical_certificate_expires_at", t("driver.field_medical_certificate_expires_at"), type="date", required=False, value=form.medical_certificate_expires_at if form.medical_certificate_expires_at is defined else "", error=errors.medical_certificate_expires_at) }}
+  <button type="submit">{{ t("driver.submit") }}</button>
+</form>
+{% if profile %}
+<p><a href="/trips">{{ t("nav.trips") }}</a></p>
+{% endif %}
+{% endblock %}

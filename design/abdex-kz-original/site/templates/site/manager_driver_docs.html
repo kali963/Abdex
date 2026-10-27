@@ -1,0 +1,46 @@
+{% extends "site/base.html" %}
+{% block title %}Документы водителя #{{ driver_id }} | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-8">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-semibold">Документы водителя #{{ driver_id }}</h1>
+    <a class="cab-badge" style="text-decoration:none;" href="/manager/drivers">← К водителям</a>
+  </div>
+
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50">
+        <tr>
+          <th class="p-3 text-left">Тип</th>
+          <th class="p-3 text-left">Файл</th>
+          <th class="p-3 text-left">Дата</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if docs %}
+          {% for d in docs %}
+          <tr class="border-t">
+            <td class="p-3">{{ d.doc_type }}</td>
+            <td class="p-3">
+              {% if d.filename %}
+                <a class="cab-badge" style="text-decoration:none;"
+                   href="/uploads/{{ d.storage_key or d.filename }}">Открыть</a>
+                <span class="text-slate-500">{{ d.filename }}</span>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td class="p-3">
+              {% if d.created_at %}{{ d.created_at }}{% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr class="border-t"><td class="p-3" colspan="3">Документов нет</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

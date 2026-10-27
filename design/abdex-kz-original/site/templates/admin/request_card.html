@@ -1,0 +1,1159 @@
+{% extends "admin/base.html" %}
+{% block title %}Заявка #{{ r.id }}{% endblock %}
+
+{% block content %}
+
+<a href="/admin" class="text-indigo-600 hover:underline mb-4 inline-block">← Назад</a>
+
+{% set send_btn_style = "background:#06b23a;color:#fff;border:1px solid #059a32;" %}
+{% set send_btn_hover_style = "background:#059a32;" %}
+
+<!-- Карточка заявки -->
+<div class="bg-white rounded-xl shadow p-6 mb-8">
+
+  <!-- Заголовок -->
+  <div class="flex flex-col gap-1 mb-4">
+    <h2 class="text-2xl font-semibold">
+      Заявка #{{ r.id }}{% if r.plan_id %} (План отгрузок){% endif %}
+      {% if created_manager %}
+        <span class="text-slate-500 text-base font-medium"> • Менеджер: {{ created_manager }}</span>
+      {% endif %}
+    </h2>
+
+    <div class="text-sm text-slate-600">
+      {{ r.origin or "—" }} → {{ r.destination or "—" }}
+      {% if r.distance_km is not none %} • {{ '%.1f'|format(r.distance_km) }} км{% endif %}
+    </div>
+  </div>
+
+  {% if r.client %}
+    <div class="mb-4 p-4 bg-slate-50 rounded-lg">
+      <div class="text-sm text-slate-500 mb-2">Клиент</div>
+
+      <div class="grid md:grid-cols-2 gap-3 text-sm">
+
+        <div>
+          <div class="text-slate-500">Имя</div>
+          <div class="font-semibold">{{ r.client.name or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500">Контакт</div>
+          <div class="font-semibold">
+            {% if r.client.email %}
+              {{ r.client.email }}
+            {% elif r.client.phone %}
+              {{ r.client.phone }}
+            {% else %}
+              —
+            {% endif %}
+          </div>
+        </div>
+
+        {% if r.client.tg_id %}
+          <div>
+            <div class="text-slate-500">Telegram ID</div>
+            <div class="font-semibold">{{ r.client.tg_id }}</div>
+          </div>
+        {% endif %}
+
+        <div>
+          <div class="text-slate-500">Форма бизнеса</div>
+          <div class="font-semibold">{{ r.client.business_form or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500">Название фирмы</div>
+          <div class="font-semibold">{{ r.client.company_name or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500">Должность</div>
+          <div class="font-semibold">{{ r.client.position or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500">БИН / ИНН</div>
+          <div class="font-semibold">
+            {% if r.client.tax_id_type and r.client.tax_id_number %}
+              {{ r.client.tax_id_type }}: {{ r.client.tax_id_number }}
+            {% else %}
+              —
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Статус + ручная установка -->
+  <div class="flex items-center gap-3 mb-4">
+    <span class="text-sm text-slate-600">Статус:</span>
+    <span class="px-2 py-0.5 rounded text-xs {{ STATUS_BADGES.get(r.status, 'bg-slate-200') }}">
+      {{ r.status|status_ru }}
+    </span>
+
+    <form action="/admin/requests/{{ r.id }}/set-status" method="post" class="flex items-center gap-2">
+      <select name="status" class="border rounded p-1 text-sm">
+        {% for val, title in status_options %}
+          <option value="{{ val }}" {% if r.status == val %}selected{% endif %}>{{ title }}</option>
+        {% endfor %}
+      </select>
+      <button class="px-3 py-1 bg-slate-800 text-white rounded text-sm">Обновить</button>
+    </form>
+  </div>
+
+  <!-- ДАННЫЕ ЗАЯВКИ -->
+  <div class="mt-2">
+    <div class="text-lg font-semibold mb-3">Данные заявки</div>
+
+    <div class="grid md:grid-cols-3 gap-3">
+
+      <div class="p-4 rounded-xl border bg-slate-50">
+        <div class="text-xs text-slate-500 mb-1">Дата погрузки</div>
+        <div class="font-semibold">
+          {{ r.load_date or (extra_raw.get('load_date') if extra_raw else None) or (extra_raw.get('date') if extra_raw else None) or "—" }}
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl border bg-slate-50">
+        <div class="text-xs text-slate-500 mb-1">Тип транспорта</div>
+        <div class="font-semibold">
+          {{ r.truck_type or (extra_raw.get('truck_type') if extra_raw else None) or "—" }}
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl border bg-slate-50">
+        <div class="text-xs text-slate-500 mb-1">Тип груза</div>
+        <div class="font-semibold">
+          {{ r.cargo_type or (extra_raw.get('cargo') if extra_raw else None) or "—" }}
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl border bg-slate-50">
+        <div class="text-xs text-slate-500 mb-1">Вес</div>
+        <div class="font-semibold">
+          {% if r.weight_kg %}
+            {{ (r.weight_kg / 1000) | round(2) }} т
+          {% elif extra_raw and extra_raw.get('weight_kg') is not none %}
+            {{ ((extra_raw.get('weight_kg') | float) / 1000) | round(2) }} т
+          {% else %}
+            —
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl border bg-slate-50">
+        <div class="text-xs text-slate-500 mb-1">Объём</div>
+        <div class="font-semibold">
+          {% if r.volume_m3 is not none %}
+            {{ r.volume_m3 | round(2) }} м³
+          {% elif extra_raw and extra_raw.get('volume_m3') is not none %}
+            {{ (extra_raw.get('volume_m3') | float) | round(2) }} м³
+          {% else %}
+            —
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl border bg-slate-50">
+        <div class="text-xs text-slate-500 mb-1">Габариты</div>
+        <div class="font-semibold">
+          {{ r.dims or (extra_raw.get('dims') if extra_raw else None) or (extra_raw.get('dimensions') if extra_raw else None) or "—" }}
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl border bg-slate-50">
+        <div class="text-xs text-slate-500 mb-1">Мест</div>
+        <div class="font-semibold">
+          {% if r.places is not none %}
+            {{ r.places }}
+          {% elif extra_raw and extra_raw.get('places') is not none %}
+            {{ (extra_raw.get('places') | float) | int }}
+          {% else %}
+            —
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl border bg-slate-50">
+        <div class="text-xs text-slate-500 mb-1">Адрес погрузки</div>
+        <div class="font-semibold">
+          {{ r.from_address or (extra_raw.get('from_address') if extra_raw else None) or "—" }}
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl border bg-slate-50">
+        <div class="text-xs text-slate-500 mb-1">Адрес выгрузки</div>
+        <div class="font-semibold">
+          {{ r.to_address or (extra_raw.get('to_address') if extra_raw else None) or "—" }}
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl border bg-slate-50">
+        <div class="text-xs text-slate-500 mb-1">Бюджет</div>
+        <div class="font-semibold">
+          {% if r.budget_kzt is not none %}
+            {{ (r.budget_kzt or 0) | int }} ₸
+          {% elif extra_raw and extra_raw.get('budget_kzt') is not none %}
+            {{ (extra_raw.get('budget_kzt') | float) | int }} ₸
+          {% elif extra_raw and extra_raw.get('budget') is not none %}
+            {{ (extra_raw.get('budget') | float) | int }} ₸
+          {% else %}
+            —
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl border bg-slate-50">
+        <div class="text-xs text-slate-500 mb-1">Оплата</div>
+        <div class="font-semibold">
+          {{
+            r.payment_type
+            or (extra_raw.get('payment_type') if extra_raw else None)
+            or (extra_raw.get('pay_type') if extra_raw else None)
+            or (extra_raw.get('payment') if extra_raw else None)
+            or "—"
+          }}
+        </div>
+      </div>
+
+      <div class="md:col-span-3 p-4 rounded-xl border bg-slate-50">
+        <div class="text-xs text-slate-500 mb-1">Комментарий</div>
+        <div class="font-semibold whitespace-pre-wrap">
+          {{
+            r.client_comment
+            or (extra_raw.get('client_comment') if extra_raw else None)
+            or (extra_raw.get('comment') if extra_raw else None)
+            or "—"
+          }}
+        </div>
+      </div>
+
+    </div>
+
+    {% if extra and request.query_params.get("debug") == "1" %}
+      {% if extra %}
+        <div class="mt-4">
+          <div class="text-sm font-semibold mb-2">Доп. параметры</div>
+          <div class="overflow-hidden rounded-xl border bg-white">
+            <div class="divide-y">
+              {% for k, v in extra.items() %}
+                {% if v is not none and v != "" %}
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-2 p-3">
+                    <div class="text-slate-500 text-sm break-words">{{ k }}</div>
+                    <div class="md:col-span-2 font-medium break-words">{{ v }}</div>
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% endif %}
+    {% endif %}
+
+    {% if r.selfcost_total_kzt or r.driver_approved_kzt or r.client_quote_kzt or r.client_quote_without_vat %}
+      <div class="mt-4">
+        <div class="text-sm font-semibold mb-2">Расчёты</div>
+
+        <div class="grid md:grid-cols-3 gap-3">
+
+          {% if r.selfcost_total_kzt %}
+            <div class="p-4 rounded-xl border bg-slate-50">
+              <div class="text-xs text-slate-500 mb-1">Себестоимость (итого)</div>
+              <div class="font-semibold">{{ (r.selfcost_total_kzt or 0) | int }} ₸</div>
+              <div class="text-xs text-slate-500 mt-1">
+                топливо: {{ (r.fuel_cost_kzt or 0) | int }} ₸ • суточные: {{ (r.depreciation_kzt or 0) | int }} ₸ • платные: {{ (r.tolls_kzt or 0) | int }} ₸
+              </div>
+            </div>
+          {% endif %}
+
+          {% if r.driver_approved_kzt %}
+            <div class="p-4 rounded-xl border bg-slate-50">
+              <div class="text-xs text-slate-500 mb-1">Цена от водителя (нетто)</div>
+              <div class="font-semibold">{{ (r.driver_approved_kzt or 0) | int }} ₸</div>
+            </div>
+          {% endif %}
+
+          {% if r.client_quote_kzt or r.client_quote_without_vat %}
+            {% set sale_vat = (extra_raw.get('sale_client_vat') if extra_raw else None) %}
+            {% set sale_pay = (extra_raw.get('sale_driver_pay_type') if extra_raw else None) %}
+            {% set vat_label = "без НДС" if sale_vat == "without_vat" else "с НДС" %}
+            {% set pay_label = "водитель нал (+15%)" if sale_pay == "cash" else "водитель безнал" %}
+            {% set total_client = (r.client_quote_kzt or r.client_quote_without_vat) %}
+
+            <div class="p-4 rounded-xl border bg-slate-50">
+              <div class="text-xs text-slate-500 mb-1">Итог клиенту</div>
+              <div class="font-semibold">{{ (total_client or 0) | int }} ₸</div>
+
+              <div class="text-xs text-slate-500 mt-1">
+                {{ vat_label }} • {{ pay_label }}
+
+                {% if extra_raw %}
+                  {% set m = extra_raw.get('sale_margin_kzt') %}
+                  {% set a15 = extra_raw.get('sale_add_driver_cash_kzt') %}
+                  {% if a15 is none %}
+                    {% set a15 = extra_raw.get('sale_add_driver_cashless_kzt') %}
+                  {% endif %}
+                  {% set a31 = extra_raw.get('sale_add_client_vat_kzt') %}
+
+                  {% if m or a15 or a31 %}
+                    • +15%: {{ (a15 or 0) | int }} ₸ • +31%: {{ (a31 or 0) | int }} ₸ • маржа: {{ (m or 0) | int }} ₸
+                  {% endif %}
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
+
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Калькулятор себестоимости -->
+<div class="bg-white rounded-xl shadow p-6 mb-8">
+  <h3 class="text-xl font-semibold mb-3">🧮 Калькулятор себестоимости</h3>
+
+  <form method="post" action="/admin/requests/{{ r.id }}/calc/selfcost" class="grid md:grid-cols-3 gap-4">
+    <div class="md:col-span-2">
+      <div class="text-sm text-slate-600 mb-1">Данные из заявки</div>
+      <div class="text-sm text-slate-800">
+        Пробег: <span class="font-semibold">{% if r.distance_km is not none %}{{ '%.1f'|format(r.distance_km) }} км{% else %}—{% endif %}</span>
+        • Вес: <span class="font-semibold">{% if r.weight_kg is not none %}{{ (r.weight_kg or 0)|int }} кг{% else %}—{% endif %}</span>
+      </div>
+      <div class="text-xs text-slate-500 mt-1">
+        Формула: расход (л/100) = 25 + 0.75×(вес/1000); литры = (км/100)×расход; суточные = (км&gt;1000 ? (2+(км-1000)/800) : 2)×12500; платные = км×55.
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm text-slate-600 mb-1">Цена дизеля, ₸/л</label>
+      <input name="fuel_price_kzt" type="number" step="0.01" class="border p-2 rounded w-full"
+             value="{{ (extra_raw.get('fuel_price_kzt') if extra_raw else None) or 337 }}" required>
+    </div>
+
+    <div class="md:col-span-3">
+      <button class="px-4 py-2 bg-slate-800 text-white rounded hover:bg-slate-900">
+        Рассчитать себестоимость
+      </button>
+    </div>
+  </form>
+
+  {% if r.selfcost_total_kzt %}
+    {% set km = (r.distance_km or 0) %}
+    {% set wt = ((r.weight_kg or 0) / 1000) %}
+    {% set l_per100_fallback = 25 + (0.75 * wt) %}
+    {% set l_per100 = ((extra_raw.get('selfcost_l_per100') if extra_raw else None) or l_per100_fallback) %}
+    {% set liters = ((extra_raw.get('selfcost_liters') if extra_raw else None) or ((km/100) * l_per100)) %}
+    {% if km > 1000 %}
+      {% set days_fallback = 2 + ((km - 1000) / 800) %}
+    {% else %}
+      {% set days_fallback = 2 %}
+    {% endif %}
+    {% set days = ((extra_raw.get('selfcost_days') if extra_raw else None) or days_fallback) %}
+
+    <div class="mt-6 p-4 border rounded bg-slate-50">
+      <div class="grid md:grid-cols-4 gap-3">
+        <div>
+          <div class="text-sm text-slate-500">Расход, л/100</div>
+          <div class="text-lg font-semibold">{{ l_per100 }}</div>
+        </div>
+        <div>
+          <div class="text-sm text-slate-500">Топливо (л)</div>
+          <div class="text-lg font-semibold">{{ liters }}</div>
+        </div>
+        <div>
+          <div class="text-sm text-slate-500">Топливо</div>
+          <div class="text-lg font-semibold">{{ (r.fuel_cost_kzt or 0) | int }} ₸</div>
+        </div>
+        <div>
+          <div class="text-sm text-slate-500">Суточные (дней)</div>
+          <div class="text-lg font-semibold">{{ days }}</div>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-4 gap-3 mt-4">
+        <div>
+          <div class="text-sm text-slate-500">Суточные</div>
+          <div class="text-lg font-semibold">{{ (r.depreciation_kzt or 0) | int }} ₸</div>
+        </div>
+        <div>
+          <div class="text-sm text-slate-500">Платные дороги</div>
+          <div class="text-lg font-semibold">{{ (r.tolls_kzt or 0) | int }} ₸</div>
+        </div>
+        <div class="md:col-span-2">
+          <div class="text-sm text-slate-500">Итого себестоимость</div>
+          <div class="text-xl font-bold">{{ (r.selfcost_total_kzt or 0) | int }} ₸</div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Калькулятор продажи -->
+<div class="bg-white rounded-xl shadow p-6 mb-8">
+  <h3 class="text-xl font-semibold mb-3">💼 Калькулятор продажи</h3>
+
+  {% if request.query_params.get("notify") == "ok" %}
+    <div class="mb-4 p-3 rounded border border-green-200 bg-green-50 text-green-900">
+      ✅ Отправлено клиенту в Telegram.
+    </div>
+  {% elif request.query_params.get("notify") == "no_price" %}
+    <div class="mb-4 p-3 rounded border border-amber-200 bg-amber-50 text-amber-900">
+      ⚠️ Сначала нажми «Посчитать и сохранить» в калькуляторе продажи — потом можно отправлять клиенту.
+    </div>
+  {% elif request.query_params.get("notify") == "no_tg" %}
+    <div class="mb-4 p-3 rounded border border-amber-200 bg-amber-50 text-amber-900">
+      <div class="font-semibold">⚠️ У клиента не привязан Telegram (tg_id пустой)</div>
+      <div class="text-sm mt-1">
+        Клиент всё равно увидит цену в личном кабинете на сайте, но уведомление в Telegram не уйдёт.
+      </div>
+
+      {% if request.query_params.get("tg_link") %}
+        <div class="mt-3 text-sm">
+          <div class="font-medium mb-1">Ссылка для привязки Telegram:</div>
+          <div class="flex flex-col md:flex-row md:items-center gap-2">
+            <a href="{{ request.query_params.get('tg_link') }}"
+               target="_blank"
+               class="underline break-all text-slate-900">
+              {{ request.query_params.get('tg_link') }}
+            </a>
+            <button type="button"
+                    class="px-3 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-sm"
+                    data-copy-text="{{ request.query_params.get('tg_link')|e }}"
+                    data-copy-label="Копировать ссылку">
+              Копировать ссылку
+            </button>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if request.query_params.get("tg_token") %}
+        <div class="mt-2 text-sm">
+          <span class="font-medium">Токен:</span>
+          <code class="px-2 py-1 rounded bg-white border border-slate-200">{{ request.query_params.get('tg_token') }}</code>
+        </div>
+      {% endif %}
+
+      <div class="text-sm mt-3">
+        После привязки Telegram — нажми «✅ Отправить клиенту» ещё раз.
+      </div>
+    </div>
+  {% endif %}
+
+  {% set sale_pay = (extra_raw.get('sale_driver_pay_type') if extra_raw else None) %}
+  {% set sale_vat = (extra_raw.get('sale_client_vat') if extra_raw else None) %}
+
+  <form method="post" action="/admin/requests/{{ r.id }}/calc/sale" class="grid md:grid-cols-3 gap-4">
+
+    <div>
+      <label class="block text-sm text-slate-600 mb-1">Цена от водителя (нетто), ₸</label>
+      <input name="driver_price_kzt" type="number" step="1" class="border p-2 rounded w-full"
+             value="{{ r.driver_approved_kzt or '' }}" required>
+    </div>
+
+    <div>
+      <label class="block text-sm text-slate-600 mb-1">Маржа, ₸</label>
+      <input name="margin_kzt" type="number" step="1" class="border p-2 rounded w-full"
+             value="{{ (extra_raw.get('sale_margin_kzt') if extra_raw else None) or 0 }}">
+    </div>
+
+    <div class="md:col-span-3">
+      <div class="text-sm text-slate-600 mb-1">Оплата водителю</div>
+      <div class="flex flex-wrap gap-2">
+
+        <input id="sale_driver_cashless"
+               class="peer/sale_driver_cashless sr-only"
+               type="radio" name="driver_pay_type" value="cashless"
+               {% if sale_pay != "cash" %}checked{% endif %}>
+        <label for="sale_driver_cashless"
+               class="px-3 py-2 rounded-lg border text-sm font-semibold cursor-pointer select-none bg-white hover:bg-slate-50
+                      peer-checked/sale_driver_cashless:bg-indigo-600
+                      peer-checked/sale_driver_cashless:text-white
+                      peer-checked/sale_driver_cashless:border-indigo-600">
+          Водитель за БезНал
+        </label>
+
+        <input id="sale_driver_cash"
+               class="peer/sale_driver_cash sr-only"
+               type="radio" name="driver_pay_type" value="cash"
+               {% if sale_pay == "cash" %}checked{% endif %}>
+        <label for="sale_driver_cash"
+               class="px-3 py-2 rounded-lg border text-sm font-semibold cursor-pointer select-none bg-white hover:bg-slate-50
+                      peer-checked/sale_driver_cash:bg-indigo-600
+                      peer-checked/sale_driver_cash:text-white
+                      peer-checked/sale_driver_cash:border-indigo-600">
+          Водитель за Нал (+15%)
+        </label>
+
+      </div>
+    </div>
+
+    <div class="md:col-span-3">
+      <div class="text-sm text-slate-600 mb-1">НДС для клиента</div>
+      <div class="flex flex-wrap gap-2">
+
+        <input id="sale_client_with_vat"
+               class="peer/sale_client_with_vat sr-only"
+               type="radio" name="client_vat" value="with_vat"
+               {% if sale_vat != "without_vat" %}checked{% endif %}>
+        <label for="sale_client_with_vat"
+               class="px-3 py-2 rounded-lg border text-sm font-semibold cursor-pointer select-none bg-white hover:bg-slate-50
+                      peer-checked/sale_client_with_vat:bg-indigo-600
+                      peer-checked/sale_client_with_vat:text-white
+                      peer-checked/sale_client_with_vat:border-indigo-600">
+          Включаем НДС с клиентом (+31%)
+        </label>
+
+        <input id="sale_client_without_vat"
+               class="peer/sale_client_without_vat sr-only"
+               type="radio" name="client_vat" value="without_vat"
+               {% if sale_vat == "without_vat" %}checked{% endif %}>
+        <label for="sale_client_without_vat"
+               class="px-3 py-2 rounded-lg border text-sm font-semibold cursor-pointer select-none bg-white hover:bg-slate-50
+                      peer-checked/sale_client_without_vat:bg-indigo-600
+                      peer-checked/sale_client_without_vat:text-white
+                      peer-checked/sale_client_without_vat:border-indigo-600">
+          Без НДС с клиентом
+        </label>
+
+      </div>
+    </div>
+
+    <div class="md:col-span-3">
+      <button class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+        Посчитать и сохранить
+      </button>
+    </div>
+
+  </form>
+
+  {% if r.client_quote_kzt or r.client_quote_without_vat %}
+    {% set vat_label = "без НДС" if sale_vat == "without_vat" else "с НДС" %}
+    {% set pay_label = "водитель нал (+15%)" if sale_pay == "cash" else "водитель безнал" %}
+    {% set total_client = (r.client_quote_kzt or r.client_quote_without_vat) %}
+
+    <div class="mt-6 p-4 border rounded bg-slate-50">
+      <div class="grid md:grid-cols-3 gap-3 items-end">
+        <div class="md:col-span-2">
+          <div class="text-sm text-slate-500">Итог клиенту</div>
+          <div class="text-2xl font-bold">{{ (total_client or 0) | int }} ₸</div>
+          <div class="text-xs text-slate-500 mt-1">
+            {{ vat_label }} • {{ pay_label }}
+            {% if extra_raw %}
+              {% set m = extra_raw.get('sale_margin_kzt') %}
+              {% set a15 = extra_raw.get('sale_add_driver_cash_kzt') %}
+              {% if a15 is none %}
+                {% set a15 = extra_raw.get('sale_add_driver_cashless_kzt') %}
+              {% endif %}
+              {% set a31 = extra_raw.get('sale_add_client_vat_kzt') %}
+              {% if m or a15 or a31 %}
+                • +15%: {{ (a15 or 0) | int }} ₸ • +31%: {{ (a31 or 0) | int }} ₸ • маржа: {{ (m or 0) | int }} ₸
+              {% endif %}
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="flex md:justify-end">
+          <form action="/admin/requests/{{ r.id }}/notify-client" method="post">
+            <button class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              ✅ Отправить клиенту
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Рассылка водителям -->
+<div class="bg-white rounded-xl shadow p-6 mb-8">
+  <h3 class="text-xl font-semibold mb-3">🚚 Разослать водителям</h3>
+
+  <form action="/admin/requests/{{ r.id }}/broadcast" method="post" class="grid md:grid-cols-3 gap-4 mb-4">
+    <div class="md:col-span-2">
+      <label class="block text-sm text-slate-600 mb-1">Цена для водителя (нетто), ₸</label>
+      <input id="driver_price_kzt"
+             name="driver_price_kzt"
+             type="number"
+             step="1"
+             required
+             class="border p-2 rounded w-full"
+             value="{{ (r.driver_approved_kzt or 0) | int }}">
+      <p class="text-xs text-slate-500 mt-1">
+        В бот отправится одна ставка (та, что ты укажешь здесь). Себестоимость остаётся в блоке «Расчёты» для ориентира.
+      </p>
+    </div>
+
+    <div class="flex items-end">
+      <button class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 w-full">
+        Разослать всем водителям
+      </button>
+    </div>
+  </form>
+
+  <form action="/admin/requests/{{ r.id }}/send" method="post" class="grid md:grid-cols-3 gap-4">
+    <input type="hidden" name="driver_price_kzt" id="driver_price_kzt_hidden" value="{{ (r.driver_approved_kzt or 0) | int }}">
+
+    <div class="md:col-span-2">
+      <label class="block text-sm text-slate-600 mb-1">Выбери водителей (до 5)</label>
+
+      <select id="driver_select" class="border p-2 rounded w-full">
+        <option value="" selected disabled>Выбери водителя…</option>
+        {% for d in drivers %}
+          <option value="{{ d.id }}">#{{ d.id }} — {{ d.name }}</option>
+        {% endfor %}
+      </select>
+
+      <div id="selected_drivers" class="mt-2 flex flex-wrap gap-2"></div>
+
+      <input type="hidden" name="driver_ids" id="driver_ids" value="">
+      <p class="text-xs text-slate-500 mt-2">
+        Можно выбрать максимум 5 водителей.
+      </p>
+    </div>
+
+    <div class="flex items-end">
+      <button type="submit" class="px-4 py-2 bg-slate-800 text-white rounded hover:bg-slate-900 w-full">
+        Отправить выбранным
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+  (function () {
+    const priceInput = document.getElementById("driver_price_kzt");
+    const priceHidden = document.getElementById("driver_price_kzt_hidden");
+
+    const syncPrice = () => {
+      priceHidden.value = priceInput.value || "";
+    };
+
+    priceInput.addEventListener("input", syncPrice);
+    syncPrice();
+
+    const select = document.getElementById("driver_select");
+    const chipsWrap = document.getElementById("selected_drivers");
+    const hiddenIds = document.getElementById("driver_ids");
+
+    let selected = [];
+
+    function render() {
+      chipsWrap.innerHTML = "";
+
+      selected.forEach((id) => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-sm";
+        chip.textContent = "ID " + id + " ✕";
+        chip.onclick = () => {
+          selected = selected.filter(x => x !== id);
+          hiddenIds.value = selected.join(",");
+          render();
+        };
+        chipsWrap.appendChild(chip);
+      });
+
+      hiddenIds.value = selected.join(",");
+    }
+
+    select.addEventListener("change", () => {
+      const id = parseInt(select.value, 10);
+      if (!id) return;
+
+      if (selected.includes(id)) {
+        select.value = "";
+        return;
+      }
+
+      if (selected.length >= 5) {
+        alert("Можно выбрать максимум 5 водителей.");
+        select.value = "";
+        return;
+      }
+
+      selected.push(id);
+      select.value = "";
+      render();
+    });
+
+    render();
+  })();
+</script>
+
+<script>
+  (function () {
+    function copyText(text) {
+      if (!text) return Promise.reject();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+      }
+      return new Promise((resolve, reject) => {
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          const ok = document.execCommand("copy");
+          document.body.removeChild(ta);
+          ok ? resolve() : reject();
+        } catch (e) {
+          reject(e);
+        }
+      });
+    }
+
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-copy-text]");
+      if (!btn) return;
+
+      const text = btn.getAttribute("data-copy-text") || "";
+      const label = btn.getAttribute("data-copy-label") || btn.textContent || "Копировать";
+
+      copyText(text)
+        .then(() => {
+          btn.textContent = "Скопировано";
+          setTimeout(() => {
+            btn.textContent = label;
+          }, 1200);
+        })
+        .catch(() => {
+          alert("Не удалось скопировать ссылку");
+        });
+    });
+  })();
+</script>
+
+<!-- Офферы -->
+<div class="bg-white rounded-xl shadow p-6 mb-8">
+  <h3 class="text-xl font-semibold mb-4">📨 Офферы водителей</h3>
+
+  {% if offers %}
+    <table class="w-full text-left border-collapse">
+      <tr class="border-b">
+        <th class="p-2">ID</th>
+        <th class="p-2">Водитель</th>
+        <th class="p-2">Телефон</th>
+        <th class="p-2">Авто</th>
+        <th class="p-2">Ставка</th>
+        <th class="p-2">Комментарий</th>
+        <th class="p-2">Статус</th>
+        <th class="p-2">Чат</th>
+        <th class="p-2">Определение</th>
+      </tr>
+
+      {% for o in offers %}
+        <tr class="border-b align-top">
+          <td class="p-2">
+            <span class="inline-flex items-center justify-center min-w-[52px] px-2 py-1 rounded-full text-xs font-extrabold border
+              {% if o.visible_on_site %}bg-emerald-100 text-emerald-800 border-emerald-200{% else %}bg-rose-100 text-rose-800 border-rose-200{% endif %}">
+              {{ o.id }}
+            </span>
+          </td>
+
+          <td class="p-2">
+            <a href="/admin/drivers/{{ o.driver_id }}" class="text-indigo-600 hover:underline">
+              {{ o.driver_name }}
+            </a>
+          </td>
+
+          <td class="p-2">{{ o.phone or "—" }}</td>
+
+          <td class="p-2">
+            {% if o.car_number %}{{ o.car_number }}{% else %}—{% endif %}
+            {% if o.capacity_kg %}<span class="text-slate-500 text-xs"> • {{ o.capacity_kg }} кг</span>{% endif %}
+            {% if o.volume_m3 %}<span class="text-slate-500 text-xs"> • {{ o.volume_m3 }} м³</span>{% endif %}
+          </td>
+
+          <td class="p-2">
+            {% if o.price_kzt is not none and (o.price_kzt | float) == (o.price_kzt | float) %}
+              {{ (o.price_kzt | float) | int }} ₸
+            {% else %}
+              —
+            {% endif %}
+          </td>
+
+          <td class="p-2">{{ o.comment or "—" }}</td>
+          <td class="p-2">{{ OFFER_STATUS_LABELS.get(o.status, o.status) }}</td>
+
+          <td class="p-2">
+            <a href="/admin/requests/{{ r.id }}/drivers/{{ o.driver_id }}/chat"
+               class="px-3 py-1 border rounded hover:bg-slate-50 inline-block">
+              Чат
+            </a>
+          </td>
+
+          <td class="p-2">
+            {% if r.status == "in_transit" and o.status == "accepted" %}
+              <button type="button" disabled
+                      class="px-3 py-1 border rounded bg-slate-100 text-sm cursor-default inline-flex items-center gap-1">
+                ✅ Принят
+              </button>
+            {% else %}
+              <form action="/admin/requests/{{ r.id }}/accept" method="post" class="inline-block">
+                <input type="hidden" name="driver_id" value="{{ o.driver_id }}">
+                <button class="px-3 py-1 border rounded hover:bg-slate-50">
+                  Принять
+                </button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p class="text-slate-500">Пока нет офферов</p>
+  {% endif %}
+</div>
+
+<!-- Документы заявки -->
+<div class="bg-white rounded-xl shadow p-6 mb-8">
+  <h3 class="text-xl font-semibold mb-4">📄 Документы заявки</h3>
+
+  <div class="flex flex-wrap gap-2 mb-4">
+    <form action="/admin/requests/{{ r.id }}/docs/generate" method="post">
+      <input type="hidden" name="doc_kind" value="client">
+      <button class="px-3 py-2 border rounded hover:bg-slate-50">
+        Сформировать (клиент)
+      </button>
+    </form>
+
+    <form action="/admin/requests/{{ r.id }}/docs/generate" method="post">
+      <input type="hidden" name="doc_kind" value="driver">
+      <button class="px-3 py-2 border rounded hover:bg-slate-50">
+        Сформировать (водитель)
+      </button>
+    </form>
+
+    <span class="text-slate-500 text-sm self-center">
+      Если данных нет — будет “НЕТ ДАННЫХ”.
+    </span>
+  </div>
+
+  {% if docs and docs|length > 0 %}
+    <div class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));">
+      {% for d in docs %}
+        {% set is_img = (d.content_type and d.content_type.startswith("image/")) %}
+        <div class="border rounded-lg p-3">
+          <div class="text-sm font-semibold break-words">{{ d.original_name }}</div>
+          <div class="text-xs text-slate-500 mt-1">#{{ d.id }} • {{ d.created_at }}</div>
+
+          {% if is_img %}
+            <a href="/admin/requests/{{ r.id }}/docs/{{ d.id }}?inline=1" target="_blank">
+              <img src="/admin/requests/{{ r.id }}/docs/{{ d.id }}?inline=1" class="mt-2 rounded-lg max-h-48 object-cover w-full"/>
+            </a>
+          {% endif %}
+
+          <div class="mt-3 flex gap-2">
+            <a class="px-3 py-1 border rounded hover:bg-slate-50"
+               href="/admin/requests/{{ r.id }}/docs/{{ d.id }}">Скачать</a>
+
+            <form action="/admin/requests/{{ r.id }}/docs/{{ d.id }}/delete"
+                  method="post"
+                  onsubmit="return confirm('Удалить документ?');">
+              <button class="px-3 py-1 border rounded hover:bg-slate-50">Удалить</button>
+            </form>
+          </div>
+
+          {% if d.audience_role == "client" or d.audience_role == "driver" %}
+            <form action="/admin/requests/{{ r.id }}/docs/{{ d.id }}/send"
+                  method="post"
+                  class="mt-2">
+              <button class="w-full px-3 py-1 border rounded hover:bg-slate-50">
+                {% if d.audience_role == "client" %}
+                  Отправить (клиенту)
+                {% else %}
+                  Отправить (водителю)
+                {% endif %}
+              </button>
+            </form>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-slate-500">Пока документов нет</p>
+  {% endif %}
+</div>
+
+<!-- Загруженные документы Клиента -->
+<form action="/admin/requests/{{ r.id }}/docs/bulk-send" method="post" class="bg-white rounded-xl shadow p-6 mb-4">
+  <h3 class="text-xl font-semibold mb-4">📎 Загруженные документы Клиента</h3>
+
+  {% if client_uploaded_docs and client_uploaded_docs|length > 0 %}
+    <div class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));">
+      {% for d in client_uploaded_docs %}
+        {% set is_img = (d.content_type and d.content_type.startswith("image/")) %}
+        <div class="border rounded-lg p-3">
+          <label class="flex items-center gap-2 mb-2 text-sm">
+            <input type="checkbox" name="selected_doc_ids" value="{{ d.id }}">
+            <span>Выбрать</span>
+          </label>
+
+          <div class="text-sm font-semibold break-words">{{ d.original_name }}</div>
+          <div class="text-xs text-slate-500 mt-1">#{{ d.id }} • {{ d.created_at }}</div>
+
+          {% if is_img %}
+            <a href="/admin/requests/{{ r.id }}/docs/{{ d.id }}?inline=1" target="_blank">
+              <img src="/admin/requests/{{ r.id }}/docs/{{ d.id }}?inline=1"
+                   class="mt-2 rounded-lg max-h-48 object-cover w-full"/>
+            </a>
+          {% endif %}
+
+          <div class="mt-2 text-xs text-slate-500">
+            {% if d.size_bytes %}{{ (d.size_bytes / 1024) | round(1) }} КБ{% else %}—{% endif %}
+          </div>
+
+          <div class="mt-3 flex gap-2 flex-wrap">
+            <a class="px-3 py-1 border rounded hover:bg-slate-50"
+               href="/admin/requests/{{ r.id }}/docs/{{ d.id }}">
+              Скачать
+            </a>
+
+            <button type="submit"
+                    formaction="/admin/requests/{{ r.id }}/docs/{{ d.id }}/delete"
+                    formmethod="post"
+                    onclick="return confirm('Удалить документ клиента?');"
+                    class="px-3 py-1 border rounded hover:bg-slate-50">
+              Удалить
+            </button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="mt-4 flex gap-3 flex-wrap">
+      <button type="submit"
+              name="target_role"
+              value="client"
+              class="px-4 py-2 rounded-lg text-white border"
+              style="background:#10b981;border-color:#10b981;">
+        Отправить клиенту
+      </button>
+
+      <button type="submit"
+              name="target_role"
+              value="driver"
+              class="px-4 py-2 rounded-lg text-white border"
+              style="background:#10b981;border-color:#10b981;">
+        Отправить водителю
+      </button>
+    </div>
+  {% else %}
+    <p class="text-slate-500">Клиент пока ничего не загружал</p>
+  {% endif %}
+</form>
+
+<!-- Загруженные документы Водителя -->
+<form action="/admin/requests/{{ r.id }}/docs/bulk-send" method="post" class="bg-white rounded-xl shadow p-6 mb-4">
+  <h3 class="text-xl font-semibold mb-4">📎 Загруженные документы Водителя</h3>
+
+  {% if driver_uploaded_docs and driver_uploaded_docs|length > 0 %}
+    <div class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));">
+      {% for d in driver_uploaded_docs %}
+        {% if d.kind == "request_doc" %}
+          {% set is_img = (d.content_type and d.content_type.startswith("image/")) %}
+          <div class="border rounded-lg p-3">
+            <label class="flex items-center gap-2 mb-2 text-sm">
+              <input type="checkbox" name="selected_doc_ids" value="{{ d.id }}">
+              <span>Выбрать</span>
+            </label>
+
+            <div class="text-sm font-semibold break-words">{{ d.original_name }}</div>
+            <div class="text-xs text-slate-500 mt-1">
+              #{{ d.id }} • {{ d.created_at }}
+            </div>
+
+            {% if is_img %}
+              <a href="/admin/requests/{{ r.id }}/docs/{{ d.id }}?inline=1" target="_blank">
+                <img src="/admin/requests/{{ r.id }}/docs/{{ d.id }}?inline=1"
+                     class="mt-2 rounded-lg max-h-48 object-cover w-full"/>
+              </a>
+            {% endif %}
+
+            <div class="mt-2 text-xs text-slate-500">
+              {% if d.size_bytes %}{{ (d.size_bytes / 1024) | round(1) }} КБ{% else %}—{% endif %}
+            </div>
+
+            <div class="mt-3 flex gap-2 flex-wrap">
+              <a class="px-3 py-1 border rounded hover:bg-slate-50"
+                 href="/admin/requests/{{ r.id }}/docs/{{ d.id }}">
+                Скачать
+              </a>
+
+              <button type="submit"
+                      formaction="/admin/requests/{{ r.id }}/docs/{{ d.id }}/delete"
+                      formmethod="post"
+                      onclick="return confirm('Удалить документ водителя?');"
+                      class="px-3 py-1 border rounded hover:bg-slate-50">
+                Удалить
+              </button>
+            </div>
+          </div>
+        {% else %}
+          {% set is_img = (d.attachment_mime and d.attachment_mime.startswith("image/")) %}
+          <div class="border rounded-lg p-3">
+            <label class="flex items-center gap-2 mb-2 text-sm opacity-50">
+              <input type="checkbox" disabled>
+              <span>Выбрать</span>
+            </label>
+
+            <div class="text-sm font-semibold break-words">{{ d.attachment_name }}</div>
+            <div class="text-xs text-slate-500 mt-1">
+              #{{ d.id }} • {{ d.created_at }}{% if d.sender_name %} • {{ d.sender_name }}{% endif %}
+            </div>
+
+            {% if is_img %}
+              <a href="/uploads/chat/{{ d.attachment_path }}" target="_blank">
+                <img src="/uploads/chat/{{ d.attachment_path }}"
+                     class="mt-2 rounded-lg max-h-48 object-cover w-full"/>
+              </a>
+            {% endif %}
+
+            <div class="mt-2 text-xs text-slate-500">
+              {% if d.attachment_size %}{{ (d.attachment_size / 1024) | round(1) }} КБ{% else %}—{% endif %}
+            </div>
+
+            <div class="mt-3 flex gap-2 flex-wrap">
+              <a class="px-3 py-1 border rounded hover:bg-slate-50"
+                 href="/uploads/chat/{{ d.attachment_path }}"
+                 target="_blank">
+                Скачать
+              </a>
+
+              <button type="submit"
+                      formaction="/admin/requests/{{ r.id }}/chat-attachments/{{ d.id }}/delete"
+                      formmethod="post"
+                      onclick="return confirm('Удалить вложение из чата?');"
+                      class="px-3 py-1 border rounded hover:bg-slate-50">
+                Удалить
+              </button>
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="mt-4 flex gap-3 flex-wrap">
+      <button type="submit"
+              name="target_role"
+              value="client"
+              class="px-4 py-2 rounded-lg text-white border"
+              style="background:#10b981;border-color:#10b981;">
+        Отправить клиенту
+      </button>
+
+      <button type="submit"
+              name="target_role"
+              value="driver"
+              class="px-4 py-2 rounded-lg text-white border"
+              style="background:#10b981;border-color:#10b981;">
+        Отправить водителю
+      </button>
+    </div>
+  {% else %}
+    <p class="text-slate-500">Водитель пока ничего не загружал</p>
+  {% endif %}
+</form>
+
+<!-- Загрузка документов Админом -->
+<div class="bg-white rounded-xl shadow p-6 mb-4">
+  <h3 class="text-xl font-semibold mb-4">📎 Загрузка документов Админом</h3>
+
+  <form action="/admin/requests/{{ r.id }}/docs/upload"
+        method="post"
+        enctype="multipart/form-data"
+        class="flex flex-wrap items-center gap-3">
+    <input type="file" name="documents" multiple class="border rounded px-3 py-2">
+    <button class="px-4 py-2 border rounded hover:bg-slate-50">
+      + Прикрепить документы
+    </button>
+  </form>
+</div>
+
+<!-- Загруженные документы Админа -->
+<form action="/admin/requests/{{ r.id }}/docs/bulk-send" method="post" class="bg-white rounded-xl shadow p-6 mb-8">
+  <h3 class="text-xl font-semibold mb-4">📎 Загруженные документы Админа</h3>
+
+  {% if admin_uploaded_docs and admin_uploaded_docs|length > 0 %}
+    <div class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));">
+      {% for d in admin_uploaded_docs %}
+        {% set is_img = (d.content_type and d.content_type.startswith("image/")) %}
+        <div class="border rounded-lg p-3">
+          <label class="flex items-center gap-2 mb-2 text-sm">
+            <input type="checkbox" name="selected_doc_ids" value="{{ d.id }}">
+            <span>Выбрать</span>
+          </label>
+
+          <div class="text-sm font-semibold break-words">{{ d.original_name }}</div>
+          <div class="text-xs text-slate-500 mt-1">#{{ d.id }} • {{ d.created_at }}</div>
+
+          {% if is_img %}
+            <a href="/admin/requests/{{ r.id }}/docs/{{ d.id }}?inline=1" target="_blank">
+              <img src="/admin/requests/{{ r.id }}/docs/{{ d.id }}?inline=1"
+                   class="mt-2 rounded-lg max-h-48 object-cover w-full"/>
+            </a>
+          {% endif %}
+
+          <div class="mt-2 text-xs text-slate-500">
+            {% if d.size_bytes %}{{ (d.size_bytes / 1024) | round(1) }} КБ{% else %}—{% endif %}
+          </div>
+
+          <div class="mt-3 flex gap-2 flex-wrap">
+            <a class="px-3 py-1 border rounded hover:bg-slate-50"
+               href="/admin/requests/{{ r.id }}/docs/{{ d.id }}">
+              Скачать
+            </a>
+
+            <button type="submit"
+                    formaction="/admin/requests/{{ r.id }}/docs/{{ d.id }}/delete"
+                    formmethod="post"
+                    onclick="return confirm('Удалить документ админа?');"
+                    class="px-3 py-1 border rounded hover:bg-slate-50">
+              Удалить
+            </button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="mt-4 flex gap-3 flex-wrap">
+      <button type="submit"
+              name="target_role"
+              value="client"
+              class="px-4 py-2 rounded-lg text-white border"
+              style="background:#10b981;border-color:#10b981;">
+        Отправить клиенту
+      </button>
+
+      <button type="submit"
+              name="target_role"
+              value="driver"
+              class="px-4 py-2 rounded-lg text-white border"
+              style="background:#10b981;border-color:#10b981;">
+        Отправить водителю
+      </button>
+    </div>
+  {% else %}
+    <p class="text-slate-500">Админ пока ничего не загружал</p>
+  {% endif %}
+</form>
+
+<!-- Удалить заявку -->
+<div class="bg-white rounded-xl shadow p-6">
+  <form action="/admin/requests/{{ r.id }}/delete" method="post"
+        onsubmit="return confirm('Точно удалить заявку #{{ r.id }}? Это действие необратимо.');">
+    <button class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+      🗑 Удалить заявку
+    </button>
+  </form>
+</div>
+
+{% endblock %}

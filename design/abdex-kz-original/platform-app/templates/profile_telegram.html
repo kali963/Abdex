@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ t("profile.telegram_page_title") }}{% endblock %}
+{% block content %}
+<h1>{{ t("profile.telegram_page_title") }}</h1>
+<p class="muted">{{ t("register_telegram.intro") }}</p>
+<div style="border:1px solid var(--border-soft); border-radius:16px; background:var(--input-bg); padding:18px; text-align:center; margin:16px 0;">
+  <span class="num" style="font-size:1.6rem; font-weight:700; letter-spacing:2px;">{{ code }}</span>
+</div>
+<p class="muted">{{ t("register_telegram.sandbox_note") }}</p>
+<a class="btn-link" href="/profile">{{ t("profile.telegram_back") }}</a>
+{% endblock %}

@@ -1,0 +1,286 @@
+{% extends "site/base.html" %}
+{% block title %}Заявка #{{ v.id }} | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+
+  {% set status_ru = {
+    "processing": "В обработке",
+    "published": "Опубликована",
+    "active": "В работе",
+    "done": "Завершена",
+    "cancelled": "Отменена",
+    "sent_to_drivers": "Разослана водителям",
+    "negotiation": "Переговоры",
+    "in_transit": "В пути",
+    "declined": "Отклонена"
+  } %}
+
+  {% set OFFER_STATUS_LABELS = {
+    "sent": "отправлено",
+    "accepted": "принят",
+    "declined": "отклонён"
+  } %}
+
+  {# flash из query params (если ты редиректом добавляешь ?ok=... или ?error=...) #}
+  {% set ok_msg = request.query_params.get("ok") %}
+  {% set err_msg = request.query_params.get("error") %}
+  {% if ok_msg %}
+    <div class="mb-4 p-3 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-sm">
+      {{ ok_msg }}
+    </div>
+  {% endif %}
+  {% if err_msg %}
+    <div class="mb-4 p-3 rounded-lg bg-rose-50 text-rose-800 border border-rose-200 text-sm">
+      {{ err_msg }}
+    </div>
+  {% endif %}
+
+  <!-- HEADER -->
+  <div class="flex items-start justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-semibold">Заявка #{{ v.id }}</h1>
+      <div class="text-slate-600 mt-1">
+        {{ v.origin or "—" }} → {{ v.destination or "—" }}
+      </div>
+      <div class="mt-2">
+        <span class="cab-badge">{{ status_ru.get(v.status, v.status) }}</span>
+      </div>
+    </div>
+
+    <div class="flex gap-2 flex-wrap justify-end">
+      <a href="/manager/my-requests" class="btn btn-ghost btn-sm">← Назад</a>
+      <a href="/manager/requests" class="btn btn-primary btn-sm">Все заявки</a>
+    </div>
+  </div>
+
+  <!-- CLIENT -->
+  {% if client %}
+  <div class="bg-white rounded-xl shadow p-4 mb-4">
+    <div class="font-semibold mb-2">Клиент</div>
+    <div class="text-sm text-slate-700">
+      <div><b>Имя:</b> {{ client.name or "—" }}</div>
+      <div><b>Email:</b> {{ client.email or "—" }}</div>
+      <div><b>Телефон:</b> {{ client.phone or "—" }}</div>
+      <div><b>Форма бизнеса:</b> {{ client.business_form or "—" }}</div>
+      <div><b>Компания:</b> {{ client.company_name or "—" }}</div>
+      <div><b>Должность:</b> {{ client.position or "—" }}</div>
+      <div><b>ИИН/БИН:</b>
+        {% if client.tax_id_type or client.tax_id_number %}
+          {{ (client.tax_id_type or "") ~ " " ~ (client.tax_id_number or "") }}
+        {% else %}
+          —
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- REQUEST DETAILS -->
+  <div class="bg-white rounded-xl shadow p-4 mb-6">
+    <div class="font-semibold mb-2">Данные заявки</div>
+
+    <div class="text-sm text-slate-800 space-y-2">
+      <div><b>Направление:</b> {{ v.origin or "—" }} → {{ v.destination or "—" }}</div>
+
+      {% if extra and extra|length %}
+      <div class="mt-3 border rounded-lg overflow-hidden">
+        <table class="min-w-full text-sm">
+          <tbody>
+            {% for k, val in extra.items() %}
+            <tr class="border-t">
+              <td class="p-2 bg-slate-50 w-1/3">{{ k }}</td>
+              <td class="p-2">
+                {% if val is boolean %}
+                  {{ "Да" if val else "Нет" }}
+                {% else %}
+                  {{ val }}
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- SEND TO DRIVERS -->
+  <div class="bg-white rounded-xl shadow p-4 mb-6">
+    <div class="font-semibold mb-3">📣 Разослать водителям</div>
+
+    <form id="sendForm" method="post" action="/manager/requests/{{ v.id }}/send" class="space-y-3">
+      <div class="text-xs text-slate-500">Выбери до 5 водителей:</div>
+
+      <select id="driverSelect" class="select select-bordered w-full">
+        <option value="">Выбери водителя…</option>
+        {% for d in drivers %}
+          <option value="{{ d.id }}">{{ d.name or ("driver#" ~ d.id) }}</option>
+        {% endfor %}
+      </select>
+
+      <div id="selectedDrivers" class="flex flex-wrap gap-2"></div>
+
+      {# ✅ ВАЖНО: один hidden input со списком "1,2,3" — так как бек ждёт строку #}
+      <input type="hidden" name="driver_ids" id="driverIdsCsv" value="">
+
+      <div>
+        <label class="text-xs text-slate-500">Цена для водителя (нетто), ₸</label>
+        <input
+          name="driver_price_kzt"
+          type="number"
+          step="0.01"
+          required
+          class="input input-bordered w-full"
+          value="{{ v.driver_approved_kzt if v.driver_approved_kzt is not none else 0 }}"
+        >
+      </div>
+
+      <div class="flex gap-2 flex-wrap">
+        <button class="btn btn-primary" type="submit" data-action="send">
+          Отправить выбранным
+        </button>
+
+        <button class="btn btn-ghost" type="submit" data-action="broadcast">
+          Разослать всем активным
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- CALC SALE -->
+  <div class="bg-white rounded-xl shadow p-4 mb-6">
+    <div class="font-semibold mb-3">💰 Калькулятор продажи</div>
+
+    <form method="post" action="/manager/requests/{{ v.id }}/calc/sale" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div>
+        <label class="text-xs text-slate-500">Цена от водителя (нетто), ₸</label>
+        <input name="driver_price_kzt" type="number" step="0.01" class="input input-bordered w-full"
+               value="{{ v.driver_approved_kzt if v.driver_approved_kzt is not none else 0 }}">
+      </div>
+
+      <div>
+        <label class="text-xs text-slate-500">Маржа, ₸</label>
+        <input name="margin_kzt" type="number" step="0.01" class="input input-bordered w-full" value="0">
+      </div>
+
+      <div class="md:col-span-2 flex items-center gap-3">
+        <button class="btn btn-primary" type="submit">Посчитать и сохранить</button>
+        <div class="text-sm text-slate-600">
+          {% if v.client_quote_kzt %}
+            Клиент (с НДС): <b>{{ "%.0f"|format(v.client_quote_kzt) }} ₸</b>,
+            без НДС: <b>{{ "%.0f"|format(v.client_quote_without_vat or 0) }} ₸</b>
+          {% else %}
+            —
+          {% endif %}
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- OFFERS -->
+  <div class="bg-white rounded-xl shadow p-4">
+    <div class="font-semibold mb-3">📨 Офферы водителей</div>
+
+    {% if offers and offers|length %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50">
+            <tr>
+              <th class="p-2 text-left">Водитель</th>
+              <th class="p-2 text-left">Телефон</th>
+              <th class="p-2 text-left">Авто</th>
+              <th class="p-2 text-left">Цена, ₸</th>
+              <th class="p-2 text-left">Статус</th>
+              <th class="p-2 text-left">Чат</th>
+              <th class="p-2 text-left">Комментарий</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for o in offers %}
+            <tr class="border-t">
+              <td class="p-2">{{ o.driver_name }}</td>
+              <td class="p-2">{{ o.phone or "—" }}</td>
+              <td class="p-2">{{ o.car_number or "—" }}</td>
+              <td class="p-2">{{ o.price_kzt if o.price_kzt is not none else "—" }}</td>
+              <td class="p-2">{{ OFFER_STATUS_LABELS.get(o.status, o.status) }}</td>
+              <td class="p-2">
+                {# ✅ роут у тебя string driver_id_raw — сюда можно спокойно подставлять число #}
+                <a class="btn btn-ghost btn-xs" href="/manager/requests/{{ v.id }}/chat/{{ o.driver_id }}">Чат</a>
+              </td>
+              <td class="p-2">{{ o.comment or "—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="text-slate-500 text-sm">Пока нет офферов</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+  const selected = new Map();
+  const select = document.getElementById("driverSelect");
+  const selectedBox = document.getElementById("selectedDrivers");
+  const idsCsv = document.getElementById("driverIdsCsv");
+  const form = document.getElementById("sendForm");
+
+  function updateCsv() {
+    idsCsv.value = Array.from(selected.keys()).join(",");
+  }
+
+  function renderSelected() {
+    selectedBox.innerHTML = "";
+
+    selected.forEach((name, id) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-sm";
+      chip.textContent = name + " ✕";
+      chip.onclick = () => {
+        selected.delete(id);
+        renderSelected();
+      };
+      selectedBox.appendChild(chip);
+    });
+
+    updateCsv();
+  }
+
+  select.addEventListener("change", () => {
+    const id = select.value;
+    const name = select.options[select.selectedIndex]?.text || "";
+    if (!id) return;
+
+    if (selected.size >= 5) {
+      select.value = "";
+      return;
+    }
+
+    selected.set(String(id), name);
+    select.value = "";
+    renderSelected();
+  });
+
+  // ✅ правильный endpoint для broadcast
+  form.addEventListener("submit", (e) => {
+    const submitter = e.submitter;
+    const action = submitter?.dataset?.action || "send";
+
+    if (action === "broadcast") {
+      form.action = "/manager/requests/{{ v.id }}/broadcast";
+      // driver_ids не нужен для broadcast (можно оставить пустым)
+      idsCsv.value = "";
+    } else {
+      form.action = "/manager/requests/{{ v.id }}/send";
+      updateCsv();
+    }
+  });
+
+  renderSelected();
+</script>
+{% endblock %}

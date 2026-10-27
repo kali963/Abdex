@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field, step_dots %}
+{% block title %}{{ t("register_company.page_title") }}{% endblock %}
+{% block content %}
+{{ step_dots(3) }}
+<h1>{{ t("register_company.title") }}</h1>
+<p class="muted">{{ t("register_company.role_notice", role=(t("register_role.option_carrier") if role == "carrier" else t("register_role.option_client"))) }}</p>
+<form method="post" action="/register/company">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="role" value="{{ role }}">
+  {{ field("name", t("company_new.field_name"), value=form.name, error=errors.name) }}
+  {{ field("bin_iin", t("company_new.field_bin_iin"), value=form.bin_iin, error=errors.bin_iin) }}
+  <button type="submit">{{ t("register_company.submit") }}</button>
+</form>
+{% endblock %}

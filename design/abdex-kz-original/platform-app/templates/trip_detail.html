@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% from "_macros.html" import select_field, route_line_from_points %}
+{% block title %}{{ t("trip.detail_page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>{{ order.order_number if order else "—" }} <span class="badge badge-{{ deal.status.value }}">{{ t("deal.status_" + deal.status.value) }}</span></h1>
+  <a href="/trips">{{ t("trips.back_to_list") }}</a>
+</div>
+
+<section>
+  <h2>{{ t("trip.section_info") }}</h2>
+  <p>{{ t("deal.party_client") }}: {{ client_company.name if client_company else "—" }}</p>
+  <p>{{ t("deal.party_carrier") }}: {{ carrier_company.name if carrier_company else "—" }}</p>
+  {% if order %}<p>{{ order.cargo_name }}</p>{% endif %}
+  {{ route_line_from_points(points) }}
+</section>
+
+<section>
+  <h2>{{ t("trip.section_checkpoints") }}</h2>
+  {% if checkpoints %}
+  <table>
+    <tbody>
+    {% for row in checkpoints %}
+      <tr>
+        <td>{{ t("deal.checkpoint_" + row.checkpoint.checkpoint_type.value) }}</td>
+        <td>{{ row.checkpoint.occurred_at|localtime }}</td>
+        <td>
+          {% if row.photos %}{{ row.photos|length }} {{ t("trip.photos_count_suffix") }}{% endif %}
+          <form method="post" action="/trips/{{ deal.id }}/checkpoints/{{ row.checkpoint.id }}/photos" enctype="multipart/form-data" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="file" name="file" accept="image/*" required>
+            <button type="submit" class="btn-inline">{{ t("trip.photo_upload") }}</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("deal.tracking_empty") }}</p>
+  {% endif %}
+
+  {% if next_checkpoint_type %}
+  <form method="post" action="/trips/{{ deal.id }}/checkpoints">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="checkpoint_type" value="{{ next_checkpoint_type }}">
+    <p>{{ t("trip.next_checkpoint_label") }}: <strong>{{ t("deal.checkpoint_" + next_checkpoint_type) }}</strong></p>
+    <div class="field">
+      <label for="occurred_at">{{ t("trip.field_occurred_at") }}</label>
+      <input type="datetime-local" id="occurred_at" name="occurred_at" required>
+    </div>
+    <div class="field">
+      <label for="latitude">{{ t("trip.field_latitude") }}</label>
+      <input type="number" step="any" id="latitude" name="latitude" required>
+    </div>
+    <div class="field">
+      <label for="longitude">{{ t("trip.field_longitude") }}</label>
+      <input type="number" step="any" id="longitude" name="longitude" required>
+    </div>
+    <div class="field">
+      <label for="notes">{{ t("trip.field_notes") }}</label>
+      <input type="text" id="notes" name="notes">
+    </div>
+    <button type="submit">{{ t("trip.submit_checkpoint") }}</button>
+  </form>
+  <script>
+    (function () {
+      if (!navigator.geolocation) return;
+      var lat = document.getElementById("latitude");
+      var lon = document.getElementById("longitude");
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        lat.value = pos.coords.latitude;
+        lon.value = pos.coords.longitude;
+      });
+    })();
+  </script>
+  {% else %}
+  <p class="notice">{{ t("trip.all_checkpoints_done") }}</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>{{ t("trip.section_consent") }}</h2>
+  <p>
+    {% if consent_active %}{{ t("trip.consent_status_granted") }}
+    {% elif consent %}{{ t("trip.consent_status_revoked") }}
+    {% else %}{{ t("trip.consent_status_none") }}{% endif %}
+  </p>
+  {% if consent_active %}
+  <form method="post" action="/trips/{{ deal.id }}/location-consent/revoke" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn-secondary">{{ t("trip.revoke_consent") }}</button>
+  </form>
+  {% else %}
+  <form method="post" action="/trips/{{ deal.id }}/location-consent/grant" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit">{{ t("trip.grant_consent") }}</button>
+  </form>
+  {% endif %}
+</section>
+
+<section>
+  <h2>{{ t("deal.section_tracking") }} — {{ t("trip.section_incidents") }}</h2>
+  {% if incidents %}
+  <table>
+    <thead><tr><th>{{ t("deal.incident_col_type") }}</th><th>{{ t("deal.incident_col_description") }}</th><th>{{ t("orders.col_created") }}</th></tr></thead>
+    <tbody>
+    {% for incident in incidents %}
+      <tr>
+        <td>{{ t("deal.incident_" + incident.incident_type.value) }}</td>
+        <td>{{ incident.description }}</td>
+        <td>{{ incident.occurred_at|localtime }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("trip.incidents_empty") }}</p>
+  {% endif %}
+
+  <form method="post" action="/trips/{{ deal.id }}/incidents">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {{ select_field("incident_type", t("trip.field_incident_type"), incident_types) }}
+    <div class="field">
+      <label for="description">{{ t("trip.field_description") }}</label>
+      <textarea id="description" name="description" required></textarea>
+    </div>
+    <div class="field">
+      <label for="incident_occurred_at">{{ t("trip.field_incident_occurred_at") }}</label>
+      <input type="datetime-local" id="incident_occurred_at" name="occurred_at">
+    </div>
+    <div class="field">
+      <label><input type="checkbox" name="open_dispute"> {{ t("trip.field_open_dispute") }}</label>
+    </div>
+    <button type="submit">{{ t("trip.submit_incident") }}</button>
+  </form>
+</section>
+{% endblock %}

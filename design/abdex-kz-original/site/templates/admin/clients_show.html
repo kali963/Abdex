@@ -1,0 +1,101 @@
+{% extends "admin/base.html" %}
+{% block title %}Клиент #{{ u.id }}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-6">
+
+  <div class="bg-white rounded-xl shadow p-4">
+    <h2 class="text-xl font-semibold mb-3">Клиент #{{ u.id }}</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+      <div><span class="font-semibold">Имя:</span> {{ u.name or "—" }}</div>
+      <div><span class="font-semibold">Telegram ID:</span> {{ u.tg_id }}</div>
+
+      <div><span class="font-semibold">Форма:</span> {{ u.business_form or "—" }}</div>
+      <div><span class="font-semibold">Компания:</span> {{ u.company_name or "—" }}</div>
+
+      <div><span class="font-semibold">Должность:</span> {{ u.position or "—" }}</div>
+      <div>
+        <span class="font-semibold">БИН/ИНН:</span>
+        {% if u.tax_id_type and u.tax_id_number %}
+          {{ u.tax_id_type }} {{ u.tax_id_number }}
+        {% else %}
+          —
+        {% endif %}
+      </div>
+
+      <div><span class="font-semibold">Создан:</span> {{ u.created_at }}</div>
+      <div><span class="font-semibold">Номер договора:</span> {{ u.contract_number or "—" }}</div>
+    </div>
+
+    <div class="mt-4 pt-4 border-t">
+      <h3 class="text-sm font-semibold mb-2">Редактирование номера договора</h3>
+
+      <form method="post" action="/admin/clients/{{ u.id }}/contract-number" class="flex gap-2 items-center flex-wrap">
+        <input
+          type="text"
+          name="contract_number"
+          value="{{ u.contract_number or '' }}"
+          placeholder="Например: ГТЕ/ABD-2026-015"
+          class="border rounded p-2 w-80"
+        >
+        <button type="submit" class="btn btn-primary btn-sm">Сохранить</button>
+      </form>
+
+      <div class="text-xs text-slate-500 mt-2">
+        Это поле может менять только админ. Оно автоматически подставляется в клиентский DOCX.
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-4">
+    <h3 class="text-lg font-semibold mb-3">Заявки клиента</h3>
+
+    {% if requests %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead class="bg-slate-50">
+            <tr class="border-b">
+              <th class="p-2">ID</th>
+              <th class="p-2">Маршрут</th>
+              <th class="p-2">Статус</th>
+              <th class="p-2">Цена с НДС</th>
+              <th class="p-2">Цена без НДС</th>
+              <th class="p-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for r in requests %}
+            <tr class="border-b hover:bg-slate-50">
+              <td class="p-2">{{ r.id }}</td>
+              <td class="p-2">{{ r.origin }} → {{ r.destination }}</td>
+              <td class="p-2">
+                {% set badge = STATUS_BADGES.get(r.status, "bg-slate-100 text-slate-700") %}
+                {% set label = STATUS_LABELS.get(r.status, r.status) %}
+                <span class="px-2 py-1 rounded text-xs {{ badge }}">{{ label }}</span>
+              </td>
+              <td class="p-2">
+                {% if r.client_quote_kzt is not none %}
+                  {{ "{:,.0f}".format(r.client_quote_kzt).replace(",", " ") }} ₸
+                {% else %}—{% endif %}
+              </td>
+              <td class="p-2">
+                {% if r.client_quote_without_vat is not none %}
+                  {{ "{:,.0f}".format(r.client_quote_without_vat).replace(",", " ") }} ₸
+                {% else %}—{% endif %}
+              </td>
+              <td class="p-2">
+                <a class="text-indigo-600 hover:underline" href="/admin/requests/{{ r.id }}">Открыть</a>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="text-slate-500 text-sm">У клиента пока нет заявок.</div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

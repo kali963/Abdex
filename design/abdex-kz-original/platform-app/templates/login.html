@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}{{ t("login.page_title") }}{% endblock %}
+{% block content %}
+<h1>{{ t("login.title") }}</h1>
+<p class="muted">{{ t("login.subtitle") }}</p>
+<form method="post" action="/login">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {{ field("identifier", t("login.field_identifier"), value=form.identifier, error=errors.identifier) }}
+  <div class="field">
+    <label for="password">{{ t("login.field_password") }}</label>
+    <div class="pass-wrap">
+      <input type="password" id="password" name="password" required>
+      <button type="button" class="pass-eye" id="togglePassword" aria-label="{{ t('login.show_password') }}">👁</button>
+    </div>
+    {% if errors.password %}<p class="error">{{ errors.password }}</p>{% endif %}
+  </div>
+  {{ field("totp_code", t("login.field_totp"), required=False, error=errors.totp_code) }}
+  <button type="submit">{{ t("login.submit") }}</button>
+</form>
+<p class="muted">{{ t("login.no_account") }} <a href="/register">{{ t("login.register_link") }}</a></p>
+<script>
+  (function () {
+    var btn = document.getElementById("togglePassword");
+    var input = document.getElementById("password");
+    if (!btn || !input) return;
+    btn.addEventListener("click", function () {
+      var isHidden = input.type === "password";
+      input.type = isHidden ? "text" : "password";
+      btn.textContent = isHidden ? "🙈" : "👁";
+      input.focus();
+    });
+  })();
+</script>
+{% endblock %}

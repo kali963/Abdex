@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ t("trips.list_page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<h1>{{ t("trips.list_title") }}</h1>
+{% if rows %}
+<table>
+  <thead>
+    <tr>
+      <th>{{ t("orders.col_number") }}</th>
+      <th>{{ t("trips.col_status") }}</th>
+      <th>{{ t("orders.col_created") }}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ row.order.order_number if row.order else "—" }}</td>
+      <td><span class="badge badge-{{ row.deal.status.value }}">{{ t("deal.status_" + row.deal.status.value) }}</span></td>
+      <td>{{ row.deal.created_at|localtime }}</td>
+      <td><a href="/trips/{{ row.deal.id }}">{{ t("trips.detail_link") }}</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">{{ t("trips.empty") }}</p>
+{% endif %}
+{% endblock %}

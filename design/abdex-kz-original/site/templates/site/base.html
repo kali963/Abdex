@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  {% set path = request.url.path %}
+  {% set session_role = request.session.get("role") %}
+
+  {% set in_cabinet = (
+    path.startswith('/cabinet') or
+    path.startswith('/client') or
+    path.startswith('/driver') or
+    path.startswith('/manager') or
+    path.startswith('/admin') or
+    path.startswith('/notifications')
+  ) %}
+
+  {% if in_cabinet %}
+    {% if path.startswith('/client') or session_role == 'client' %}
+      {% set home_link = '/client/cabinet' %}
+      {% set about_link = '/client/about' %}
+    {% elif path.startswith('/driver') or session_role == 'driver' %}
+      {% set home_link = '/driver/cabinet' %}
+      {% set about_link = '/driver/about' %}
+    {% elif path.startswith('/manager') or session_role == 'manager' %}
+      {% set home_link = '/manager/cabinet' %}
+      {% set about_link = '/about' %}
+    {% elif path.startswith('/admin') or session_role == 'admin' %}
+      {% set home_link = '/admin' %}
+      {% set about_link = '/admin/about' %}
+    {% else %}
+      {% set home_link = '/' %}
+      {% set about_link = '/about' %}
+    {% endif %}
+  {% else %}
+    {% set home_link = '/' %}
+    {% set about_link = '/about' %}
+  {% endif %}
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="google-site-verification" content="9nPiPtVvJ8BCF7wdg7UO5WzP8viK3pESwT89zxfP4Aw" />
+  <title>{% block title %}AbdEX{% endblock %}</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/site.css?v=12" />
+  <script src="/static/site.js" defer></script>
+</head>
+
+<body class="min-h-[100dvh] flex flex-col {% if in_cabinet %}is-cabinet{% endif %}">
+
+  <!-- HEADER -->
+  <header class="border-b header-bg">
+    <div class="layout-container py-4 grid grid-cols-3 items-center">
+
+      <!-- LOGO -->
+      <a href="{{ home_link }}" class="flex items-center gap-3 justify-self-start">
+        <img src="/static/abdex-logo.png" alt="AbdEX" class="h-7 w-auto" />
+        <div class="leading-tight">
+          <div class="text-lg font-bold text-primary">AbdEX</div>
+          <div class="text-[11px] text-secondary">
+            Торгово-экспедиторская платформа
+          </div>
+        </div>
+      </a>
+
+      <!-- CENTER -->
+      <div class="justify-self-center">
+      </div>
+
+      <!-- RIGHT NAV -->
+      <nav class="justify-self-end flex items-center gap-4">
+        <a href="{{ about_link }}" class="text-sm font-medium nav-link">О нас</a>
+
+        {% if in_cabinet and session_role in ["admin", "manager", "client", "driver"] %}
+          <a href="/notifications" class="text-sm font-medium nav-link relative">
+            🔔
+            <span id="notifBadge"
+                  class="hidden absolute -top-2 -right-2 text-[10px] px-2 py-[2px] rounded-full bg-red-600 text-white">
+              0
+            </span>
+          </a>
+        {% endif %}
+
+        {% if in_cabinet %}
+          <a href="/logout" class="btn-outline">Выход</a>
+        {% else %}
+          <a href="/login" class="btn-outline">Войти</a>
+        {% endif %}
+      </nav>
+
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <main class="flex-grow">
+    <div class="layout-container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="py-4 text-center text-xs text-secondary border-t">
+    © AbdEX, 2025. Платформа для грузоперевозок.
+  </footer>
+
+</body>
+</html>

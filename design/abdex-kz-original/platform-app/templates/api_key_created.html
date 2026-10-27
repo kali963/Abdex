@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ t("integrations.key_created_title") }}{% endblock %}
+{% block content %}
+<h1>{{ t("integrations.key_created_title") }}</h1>
+<p class="muted">{{ t("integrations.key_created_warning") }}</p>
+<div style="border:1px solid var(--border-soft); border-radius:16px; background:var(--input-bg); padding:18px; margin:16px 0; word-break:break-all; font-family:monospace; font-size:.95rem;">
+  {{ key }}
+</div>
+<a class="btn-link" href="/settings/integrations">{{ t("integrations.key_created_continue") }}</a>
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends "site/base.html" %}
+
+{% block title %}Техподдержка | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-8">
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h1 class="text-2xl font-semibold">Техподдержка</h1>
+      <div class="text-slate-500 text-sm">
+        Чат с админом/менеджером. По заявкам с водителем пишите в отдельном чате заявки.
+      </div>
+    </div>
+
+    <a class="text-blue-600 hover:underline" href="/client/cabinet">← Назад в кабинет</a>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-4">
+    <div id="chatScroll" class="flex flex-col gap-3 max-h-[60vh] overflow-auto p-2">
+      {% for m in messages %}
+        {% set is_client = m.sender_role == "client" %}
+        {% set is_office = m.sender_role in ["admin", "manager", "office"] %}
+
+        <div class="flex {% if is_client %}justify-end{% else %}justify-start{% endif %}">
+          <div class="max-w-[70%] rounded-2xl border px-4 py-3 {% if is_client %}bg-blue-50{% else %}bg-slate-50{% endif %}">
+            <div class="text-xs text-slate-500 mb-1">
+              {% if is_client %}
+                Вы
+              {% elif is_office %}
+                Техподдержка
+              {% else %}
+                {{ m.sender_role }}
+              {% endif %}
+              • {{ (m.created_at|string)[:16].replace("T"," ") }}
+            </div>
+
+            {% if m.text %}
+              <div class="whitespace-pre-wrap break-words">{{ m.text }}</div>
+            {% endif %}
+
+            {% if m.attachment_path %}
+              {% set fname = m.attachment_name or m.attachment_filename or "file" %}
+              {% set mime = m.attachment_mime or "" %}
+
+              <div class="mt-2 pt-2 border-t border-dashed">
+                {% if mime.startswith("image/") %}
+                  <a class="text-blue-600 underline" href="/uploads/chat/{{ m.attachment_path }}" target="_blank">📎 {{ fname }}</a>
+                  <img class="mt-2 max-w-[240px] rounded-xl border" src="/uploads/chat/{{ m.attachment_path }}" alt="{{ fname }}">
+                {% else %}
+                  <a class="text-blue-600 underline" href="/uploads/chat/{{ m.attachment_path }}" target="_blank">📎 {{ fname }}</a>
+                {% endif %}
+              </div>
+            {% elif m.attachment_name or m.attachment_filename %}
+              <div class="mt-2 pt-2 border-t border-dashed">
+                📎 {{ m.attachment_name or m.attachment_filename }}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <form class="mt-4 flex gap-2 items-center"
+          method="post"
+          enctype="multipart/form-data"
+          action="/client/support/{{ thread.id }}/send">
+      <input class="w-full border rounded-lg px-3 py-2"
+             name="text"
+             placeholder="Сообщение в техподдержку..." />
+
+      <input class="border rounded-lg px-3 py-2"
+             type="file"
+             name="file" />
+
+      <button class="border rounded-lg px-4 py-2 bg-blue-600 text-white">
+        Отправить
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+  const sc = document.getElementById("chatScroll");
+  if (sc) sc.scrollTop = sc.scrollHeight;
+</script>
+{% endblock %}

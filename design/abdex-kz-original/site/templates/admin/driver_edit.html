@@ -1,0 +1,100 @@
+{% extends "admin/base.html" %}
+{% block title %}Редактирование водителя{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <a href="/admin/drivers/{{ profile.id }}" class="text-indigo-600 hover:underline">← Назад к карточке</a>
+</div>
+
+<div class="bg-white rounded-xl shadow p-6">
+  <h2 class="text-2xl font-semibold mb-4">Редактирование водителя</h2>
+
+  {% if errors and errors|length %}
+    <div class="mb-4 p-3 rounded bg-rose-50 text-rose-800 border border-rose-200">
+      <div class="font-semibold mb-1">Проверь поля:</div>
+      <ul class="list-disc ml-5">
+        {% for e in errors %}
+          <li>{{ e }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <form method="post" action="/admin/drivers/{{ profile.id }}/edit" class="grid md:grid-cols-2 gap-4">
+    <div class="md:col-span-2">
+      <div class="text-slate-500 text-sm mb-1">Отображаемое имя (User.name)</div>
+      <input name="user_name" value="{{ user.name or '' }}" class="w-full border rounded p-2" placeholder="Например: Иван" />
+    </div>
+
+    <div>
+      <div class="text-slate-500 text-sm mb-1">Форма бизнеса</div>
+      <input name="business_form" value="{{ profile.business_form }}" class="w-full border rounded p-2" required />
+    </div>
+
+    <div>
+      <div class="text-slate-500 text-sm mb-1">Название / Компания</div>
+      <input name="entity_name" value="{{ profile.entity_name }}" class="w-full border rounded p-2" required />
+    </div>
+
+    <div>
+      <div class="text-slate-500 text-sm mb-1">ФИО</div>
+      <input name="full_name" value="{{ profile.full_name or '' }}" class="w-full border rounded p-2" />
+    </div>
+
+    <div>
+      <div class="text-slate-500 text-sm mb-1">Телефон</div>
+      <input name="phone" value="{{ profile.phone or '' }}" class="w-full border rounded p-2" required />
+    </div>
+
+    <div>
+      <div class="text-slate-500 text-sm mb-1">ИИН</div>
+      <input name="iin" value="{{ profile.iin or '' }}" class="w-full border rounded p-2" />
+    </div>
+
+    <div>
+      <div class="text-slate-500 text-sm mb-1">№ удостоверения</div>
+      <input name="id_number" value="{{ profile.id_number or '' }}" class="w-full border rounded p-2" />
+    </div>
+
+    <div>
+      <div class="text-slate-500 text-sm mb-1">№ паспорта</div>
+      <input name="passport_number" value="{{ profile.passport_number or '' }}" class="w-full border rounded p-2" />
+    </div>
+
+    <div>
+      <div class="text-slate-500 text-sm mb-1">№ техпаспорта</div>
+      <input name="tech_passport_number" value="{{ profile.tech_passport_number or '' }}" class="w-full border rounded p-2" />
+    </div>
+
+    <div>
+      <div class="text-slate-500 text-sm mb-1">Авто</div>
+      <input name="car" value="{{ profile.car }}" class="w-full border rounded p-2" required />
+    </div>
+
+    <div>
+      <div class="text-slate-500 text-sm mb-1">Прицеп</div>
+      <input name="trailer" value="{{ profile.trailer or '' }}" class="w-full border rounded p-2" />
+    </div>
+
+    <div>
+      <div class="text-slate-500 text-sm mb-1">Грузоподъёмность (кг)</div>
+      <input type="number" name="capacity_kg" value="{{ profile.capacity_kg }}" class="w-full border rounded p-2" required />
+    </div>
+
+    <div>
+      <div class="text-slate-500 text-sm mb-1">Объём (м³)</div>
+      <input type="number" step="0.01" name="volume_m3" value="{{ profile.volume_m3 }}" class="w-full border rounded p-2" required />
+    </div>
+
+    <div class="md:col-span-2 flex items-center gap-2">
+      <input id="active" type="checkbox" name="active" {% if profile.active %}checked{% endif %} class="h-4 w-4" />
+      <label for="active" class="text-slate-700">Активен</label>
+    </div>
+
+    <div class="md:col-span-2 flex gap-2 mt-2">
+      <button type="submit" class="px-4 py-2 bg-slate-800 text-white rounded hover:bg-slate-900">Сохранить</button>
+      <a href="/admin/drivers/{{ profile.id }}" class="px-4 py-2 border rounded hover:bg-slate-50">Отмена</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

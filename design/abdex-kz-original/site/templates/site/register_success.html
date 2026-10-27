@@ -1,0 +1,82 @@
+{% extends "site/base.html" %}
+{% block title %}Готово — AbdEX{% endblock %}
+
+{% block content %}
+<section class="py-12">
+  <div class="max-w-2xl mx-auto px-4">
+
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h1 class="text-3xl sm:text-4xl font-semibold text-[#1F3253]">
+        Спасибо, {{ name or "друг" }}!
+      </h1>
+      <p class="mt-3 text-base text-slate-600">
+        Регистрация завершена ✅ Теперь привяжи Telegram, чтобы получать уведомления (о заявках, офферах, статусах).
+      </p>
+    </div>
+
+    <!-- Card -->
+    <div class="rounded-2xl border border-slate-200 bg-white/60 shadow-sm p-6 sm:p-7">
+
+      <div class="flex items-start gap-3">
+        <div class="shrink-0 w-10 h-10 rounded-xl bg-[#d2f7b7] flex items-center justify-center">
+          <span class="text-[#1F3253] font-bold">TG</span>
+        </div>
+
+        <div class="flex-1">
+          <h2 class="text-lg font-semibold text-[#1F3253]">Привязка Telegram</h2>
+          <ol class="mt-2 space-y-1 text-sm text-slate-700 list-decimal list-inside">
+            <li>Открой бота по кнопке ниже</li>
+            <li>Нажми <b>Start</b> — бот привяжет аккаунт автоматически</li>
+          </ol>
+
+          <div class="mt-5 flex flex-col sm:flex-row gap-3">
+            <a href="{{ tg_link }}"
+               class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl
+                      bg-[#44695F] text-white font-semibold
+                      shadow-md shadow-[#44695F]/25 hover:opacity-95 active:scale-[0.99] transition">
+              Открыть Telegram-бота
+              <span>→</span>
+            </a>
+
+            <a href="/"
+               class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl
+                      border border-[#1F3253]/20 text-[#1F3253] font-semibold
+                      bg-white/40 hover:bg-white/70 active:scale-[0.99] transition">
+              На главную
+            </a>
+          </div>
+
+          <!-- Token -->
+          <div class="mt-5 rounded-xl bg-[#F5F2EB] border border-slate-200 p-4">
+            <p class="text-sm text-slate-700">
+              Если бот попросит токен — вот он:
+            </p>
+            <div class="mt-2 flex items-center gap-2">
+              <code class="flex-1 text-sm px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-800 break-all">
+                {{ tg_token }}
+              </code>
+
+              <button type="button"
+                      class="px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-sm font-medium text-slate-800"
+                      onclick="navigator.clipboard.writeText('{{ tg_token }}')">
+                Копировать
+              </button>
+            </div>
+            <p class="mt-2 text-xs text-slate-500">
+              Если ссылка не открывается — зайди в бота вручную и нажми Start.
+            </p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer note -->
+    <p class="text-center mt-6 text-sm text-slate-500">
+      Можно закрыть эту страницу после привязки Telegram.
+    </p>
+
+  </div>
+</section>
+{% endblock %}

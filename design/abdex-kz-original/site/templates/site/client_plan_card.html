@@ -1,0 +1,111 @@
+{% extends "site/base.html" %}
+{% block title %}План #{{ v.id }} | AbdEX{% endblock %}
+
+{% block content %}
+<div class="cab-container">
+  <div class="cab-head" style="align-items:flex-start;gap:12px;flex-wrap:wrap;">
+    <div>
+      <h1 class="cab-title">План #{{ v.id }}</h1>
+      <div class="cab-sub">
+        {{ v.origin or "—" }} → {{ v.destination or "—" }}
+        {% if v.distance_km is not none %} • {{ '%.1f'|format(v.distance_km) }} км{% endif %}
+      </div>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+        <span class="cab-badge">{{ 'Активен' if v.status == 'active' else 'Пауза' }}</span>
+        <span class="cab-badge">{{ v.schedule_summary }}</span>
+        <span class="cab-badge">{{ v.trucks_per_occurrence }} маш.</span>
+        <span class="cab-badge">{{ v.time_window }}</span>
+      </div>
+    </div>
+
+    <div style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+      <a class="btn-outline" href="/client/cabinet?tab=plan"
+         style="width:auto;padding:10px 14px;border-radius:14px;text-decoration:none;">
+        ← Назад
+      </a>
+    </div>
+  </div>
+
+  <div class="cab-card">
+    <div class="cab-card-title">Параметры плана</div>
+    <div class="req-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));">
+      <div class="req-field">
+        <div class="req-label">Период действия</div>
+        <div class="req-val">
+          {{ v.period_start.strftime('%d.%m.%Y') if v.period_start else '—' }}
+          {% if v.period_end %} — {{ v.period_end.strftime('%d.%m.%Y') }}{% endif %}
+        </div>
+      </div>
+      <div class="req-field">
+        <div class="req-label">График</div>
+        <div class="req-val">{{ v.schedule_summary }}</div>
+      </div>
+      <div class="req-label">Получить документы до погрузки за</div>
+      <div class="req-val">
+        {% if v.lead_days == 1 %}
+          1 день
+        {% elif v.lead_days in [2, 3, 4] %}
+          {{ v.lead_days }} дня
+        {% else %}
+          {{ v.lead_days }} дней
+        {% endif %}
+      </div>
+      <div class="req-field">
+        <div class="req-label">Тип транспорта</div>
+        <div class="req-val">{{ v.truck_type or '—' }}</div>
+      </div>
+      <div class="req-field">
+        <div class="req-label">Тип груза</div>
+        <div class="req-val">{{ v.cargo or '—' }}</div>
+      </div>
+      <div class="req-field">
+        <div class="req-label">Окно подачи</div>
+        <div class="req-val">{{ v.time_window }}</div>
+      </div>
+      <div class="req-field">
+        <div class="req-label">Вес</div>
+        <div class="req-val">{% if v.weight_kg %}{{ (v.weight_kg / 1000) | round(2) }} т{% else %}—{% endif %}</div>
+      </div>
+      <div class="req-field">
+        <div class="req-label">Объём</div>
+        <div class="req-val">{% if v.volume_m3 %}{{ v.volume_m3 | round(2) }} м³{% else %}—{% endif %}</div>
+      </div>
+      <div class="req-field">
+        <div class="req-label">Бюджет</div>
+        <div class="req-val">{% if v.budget_kzt is not none %}{{ v.budget_kzt }} ₸{% else %}—{% endif %}</div>
+      </div>
+      <div class="req-field">
+        <div class="req-label">Адрес погрузки</div>
+        <div class="req-val">{{ v.from_address or '—' }}</div>
+      </div>
+      <div class="req-field">
+        <div class="req-label">Адрес выгрузки</div>
+        <div class="req-val">{{ v.to_address or '—' }}</div>
+      </div>
+      <div class="req-field">
+        <div class="req-label">Комментарий</div>
+        <div class="req-val">{{ v.comment or '—' }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cab-card" style="margin-top:14px;">
+    <div class="cab-card-title">Даты отгрузок</div>
+    {% if occurrences and occurrences|length > 0 %}
+      <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;">
+        {% for occ in occurrences %}
+          <div style="background:rgba(255,255,255,.24);border:1px solid var(--border-soft);border-radius:18px;padding:14px;">
+            <div style="font-weight:900;color:var(--text-main);">{{ occ.occurrence_date.strftime('%d.%m.%Y') }}</div>
+            <div style="margin-top:8px;font-size:14px;opacity:.8;">Статус: {{ occ.status }}</div>
+            <div style="margin-top:6px;font-size:14px;opacity:.8;">Машин: {{ occ.trucks_needed }}</div>
+            <div style="margin-top:6px;font-size:14px;opacity:.8;">Окно: {{ occ.time_from or '—' }}{% if occ.time_to %} — {{ occ.time_to }}{% endif %}</div>
+            <div style="margin-top:6px;font-size:14px;opacity:.8;">Генерация заявки: {{ occ.generate_on.strftime('%d.%m.%Y') }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="cab-empty" style="margin-top:12px;">Даты по этому плану пока не рассчитаны</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

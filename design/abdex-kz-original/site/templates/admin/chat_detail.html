@@ -1,0 +1,200 @@
+{% extends "admin/base.html" %}
+{% block title %}Чат | Админ{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-8">
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h1 class="text-2xl font-semibold">
+        {% if thread.chat_type == "support" %}
+          Чат техподдержки
+        {% else %}
+          Чат по заявке #{{ thread.request_id }}
+        {% endif %}
+      </h1>
+
+      <div class="text-slate-500 text-sm">
+        {% if req_obj %}
+          {{ req_obj.origin or "—" }} → {{ req_obj.destination or "—" }}
+        {% endif %}
+
+        {% if thread.chat_type == "request" %}
+          • Клиент:
+          {% if client %}
+            {{ client.company_name or client.name or ("ID " ~ client.id) }}
+          {% else %}
+            ID {{ thread.client_id }}
+          {% endif %}
+
+          • Водитель:
+          {% if driver %}
+            {{ driver.name or ("ID " ~ driver.id) }}
+          {% else %}
+            ID {{ thread.driver_id }}
+          {% endif %}
+        {% else %}
+          • Техподдержка
+        {% endif %}
+      </div>
+    </div>
+
+    <a class="text-blue-600 hover:underline" href="/admin/chats">← Назад</a>
+  </div>
+
+  <style>
+    .msg-list{
+      display:flex; flex-direction:column; gap:10px;
+      max-height:60vh; overflow:auto; padding:8px;
+    }
+    .msg-row{display:flex; margin-bottom:10px;}
+    .msg-row.left{justify-content:flex-start;}
+    .msg-row.right{justify-content:flex-end;}
+
+    .msg-bubble{
+      max-width:70%;
+      padding:12px 14px;
+      border-radius:16px;
+      border:1px solid rgba(0,0,0,.10);
+      background:#fff;
+      text-align:left;
+      box-shadow:0 1px 2px rgba(0,0,0,.04);
+    }
+
+    .msg-bubble.office{background:#E9F3FF;}
+    .msg-bubble.client{background:#F0FDF4;}
+    .msg-bubble.driver{background:#FFF7ED;}
+
+    .msg-meta{font-size:12px;opacity:.7;margin-bottom:6px;}
+    .msg-text{white-space:pre-wrap;word-wrap:break-word;}
+    .msg-attach{margin-top:8px; padding-top:8px; border-top:1px dashed rgba(0,0,0,.12);}
+    .msg-attach a{color:#2563eb; text-decoration:underline;}
+    .msg-img{
+      margin-top:8px;
+      max-width:240px; border-radius:12px;
+      border:1px solid rgba(0,0,0,.12);
+      display:block;
+    }
+
+    .send-row{display:flex; gap:10px; margin-top:10px; align-items:center;}
+    .attach-btn{
+      width:44px; height:44px;
+      border-radius:12px;
+      border:1px solid rgba(0,0,0,.12);
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer; user-select:none;
+      background:#fff;
+    }
+    .attach-btn:hover{background:#f8fafc;}
+    .file-pill{
+      font-size:12px; color:#334155;
+      padding:6px 10px; border-radius:999px;
+      background:#f1f5f9; border:1px solid rgba(0,0,0,.08);
+      max-width:260px;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      display:none;
+    }
+    .readonly-box{
+      margin-top:12px;
+      padding:12px 14px;
+      border-radius:12px;
+      background:#f8fafc;
+      color:#64748b;
+      border:1px solid rgba(0,0,0,.08);
+      font-size:14px;
+    }
+  </style>
+
+  <div class="bg-white rounded-xl shadow p-4">
+    <div class="msg-list" id="chatScroll">
+      {% for m in messages %}
+        {% set is_office = m.sender_role in ["admin", "manager", "office"] %}
+        {% set is_client = m.sender_role == "client" %}
+        {% set is_driver = m.sender_role == "driver" %}
+
+        <div class="msg-row {% if is_office %}right{% else %}left{% endif %}">
+          <div class="msg-bubble {% if is_office %}office{% elif is_client %}client{% elif is_driver %}driver{% endif %}">
+            <div class="msg-meta">
+              {% if is_office %}
+                Офис
+              {% elif is_client %}
+                Клиент
+              {% elif is_driver %}
+                Водитель
+              {% else %}
+                {{ m.sender_role }}
+              {% endif %}
+              • {{ (m.created_at|string)[:16].replace("T"," ") }}
+            </div>
+
+            {% if m.text %}
+              <div class="msg-text">{{ m.text }}</div>
+            {% endif %}
+
+            {% if m.attachment_path %}
+              {% set fname = m.attachment_name or m.attachment_filename or "file" %}
+              {% set mime = m.attachment_mime or "" %}
+              <div class="msg-attach">
+                {% if mime.startswith("image/") %}
+                  <a href="/uploads/chat/{{ m.attachment_path }}" target="_blank">📎 {{ fname }}</a>
+                  <img class="msg-img" src="/uploads/chat/{{ m.attachment_path }}" alt="{{ fname }}">
+                {% else %}
+                  <a href="/uploads/chat/{{ m.attachment_path }}" target="_blank">📎 {{ fname }}</a>
+                {% endif %}
+              </div>
+            {% elif m.attachment_name or m.attachment_filename %}
+              {% set fname = m.attachment_name or m.attachment_filename %}
+              <div class="msg-attach">
+                📎 {{ fname }}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if thread.chat_type == "support" %}
+      <form method="post"
+            action="/admin/chats/{{ thread.id }}/send"
+            enctype="multipart/form-data"
+            class="send-row">
+        <label class="attach-btn" title="Прикрепить файл">
+          📎
+          <input id="fileInput" type="file" name="file" style="display:none;">
+        </label>
+
+        <div id="filePill" class="file-pill"></div>
+
+        <input name="text" placeholder="Напишите сообщение..."
+               style="flex:1;padding:12px;border-radius:12px;border:1px solid rgba(0,0,0,.12);">
+        <button class="btn-main" type="submit" style="width:auto;">Отправить</button>
+      </form>
+    {% else %}
+      <div class="readonly-box">
+        Это чат клиента и водителя. Админ имеет доступ только к просмотру.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  (function () {
+    const sc = document.getElementById("chatScroll");
+    if (sc) sc.scrollTop = sc.scrollHeight;
+
+    const fi = document.getElementById("fileInput");
+    const pill = document.getElementById("filePill");
+    if (!fi || !pill) return;
+
+    fi.addEventListener("change", () => {
+      const f = fi.files && fi.files[0];
+      if (!f) {
+        pill.style.display = "none";
+        pill.textContent = "";
+        return;
+      }
+      pill.style.display = "inline-block";
+      pill.textContent = f.name;
+    });
+  })();
+</script>
+{% endblock %}

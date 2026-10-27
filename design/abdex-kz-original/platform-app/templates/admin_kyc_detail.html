@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% from "_macros.html" import admin_nav %}
+{% block title %}Админ — Заявка на верификацию — AbdEX{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+{{ admin_nav("kyc") }}
+<div class="toolbar">
+  <h1>{{ entity_label }} <span class="badge badge-{{ moderation.status.value }}">{{ moderation.status.value }}</span></h1>
+  <a href="/admin/kyc">← К очереди</a>
+</div>
+<table>
+  <tbody>
+    <tr><td>Тип объекта</td><td>{{ moderation.entity_type.value }}</td></tr>
+    <tr><td>Приоритет</td><td>{{ moderation.priority.value }}</td></tr>
+    <tr><td>Срок SLA</td><td>{{ moderation.sla_due_at|localtime }}</td></tr>
+  </tbody>
+</table>
+
+{% if moderation.status.value == "pending" %}
+<form method="post" action="/admin/kyc/requests/{{ moderation.id }}/assign" style="margin-top:14px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit" class="btn-inline">Взять в работу</button>
+</form>
+{% endif %}
+
+<h2 style="margin-top:22px;">Документы</h2>
+{% if documents %}
+<table>
+  <thead><tr><th>Тип</th><th>Файл</th><th>Статус</th><th></th></tr></thead>
+  <tbody>
+  {% for document in documents %}
+    <tr>
+      <td>{{ document.document_type.value }}</td>
+      <td>{{ document.original_filename }}</td>
+      <td>
+        <span class="badge badge-{{ document.status.value }}">{{ document.status.value }}</span>
+        {% if document.rejection_reason %} — {{ document.rejection_reason.value }}{% endif %}
+      </td>
+      <td>
+        {% if document.status.value == "pending" %}
+        <form method="post" action="/admin/kyc/documents/{{ document.id }}/review" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="decision" value="approved">
+          <button type="submit" class="btn-inline">Подтвердить</button>
+        </form>
+        <form method="post" action="/admin/kyc/documents/{{ document.id }}/review" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="decision" value="rejected">
+          <select name="rejection_reason" required>
+            {% for reason in rejection_reasons %}
+            <option value="{{ reason.value }}">{{ reason.value }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn-inline btn-secondary">Отклонить</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">Документов пока нет.</p>
+{% endif %}
+
+{% if moderation.status.value in ("pending", "in_review") %}
+<h2 style="margin-top:22px;">Решение по заявке</h2>
+<form method="post" action="/admin/kyc/requests/{{ moderation.id }}/decide" class="inline-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="approve" value="yes">
+  <button type="submit">Одобрить заявку</button>
+</form>
+<form method="post" action="/admin/kyc/requests/{{ moderation.id }}/decide" class="inline-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="approve" value="no">
+  <button type="submit" class="btn-secondary">Отклонить заявку</button>
+</form>
+{% endif %}
+{% endblock %}

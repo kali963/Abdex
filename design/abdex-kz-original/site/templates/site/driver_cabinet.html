@@ -1,0 +1,652 @@
+{% extends "site/base.html" %}
+{% block title %}Кабинет перевозчика | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+  <section class="cab-wrap driver-cabinet">
+
+    <!-- HEADER -->
+    <div class="cab-head">
+      <div>
+        <h1 class="cab-title">Кабинет перевозчика</h1>
+        <p class="cab-sub">Получайте заявки, отправляйте ставки, ведите историю.</p>
+      </div>
+      <div class="cab-actions"></div>
+    </div>
+
+    <div class="cab-layout">
+
+      <!-- LEFT NAV -->
+      <aside class="cab-nav">
+        <a class="cab-link {% if tab=='requests' %}active{% endif %}" href="/driver/cabinet?tab=requests">Заявки</a>
+        <a class="cab-link {% if tab=='active' %}active{% endif %}" href="/driver/cabinet?tab=active">Активные</a>
+        <a class="cab-link {% if tab=='history' %}active{% endif %}" href="/driver/cabinet?tab=history">История</a>
+        <a class="cab-link {% if tab=='chats' %}active{% endif %}" href="/driver/cabinet?tab=chats">Чаты</a>
+        <a class="cab-link" href="/driver/support">Техподдержка</a>
+        <a class="cab-link {% if tab=='docs' %}active{% endif %}" href="/driver/cabinet?tab=docs">Документы</a>
+        <a class="cab-link {% if tab=='company' %}active{% endif %}" href="/driver/cabinet?tab=company">Компания</a>
+      </aside>
+
+      <!-- MAIN -->
+      <main class="cab-main">
+
+        <!-- STATS -->
+        {% if tab in ["requests", "active", "history"] %}
+          <div class="cab-stats">
+            <div class="cab-stat">
+              <div class="cab-stat-label">Новых заявок</div>
+              <div class="cab-stat-val">{{ stats.new_requests | default(0) }}</div>
+            </div>
+
+            <div class="cab-stat">
+              <div class="cab-stat-label">Активных перевозок</div>
+              <div class="cab-stat-val">{{ stats.active_in_transit | default(0) }}</div>
+            </div>
+
+            <div class="cab-stat">
+              <div class="cab-stat-label">Заработано</div>
+              <div class="cab-stat-val">—</div>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if error %}
+          <div class="cab-empty"
+               style="background:#ffe9e9;border:1px solid #ffb3b3;color:#7a1a1a;margin-bottom:16px;">
+            {{ error }}
+          </div>
+        {% endif %}
+
+        {% if tab == "requests" %}
+          <div class="cab-card">
+            <div class="cab-card-title">Заявки</div>
+            <p class="cab-text">Актуальные заявки клиентов.</p>
+
+            <div class="cab-list">
+              {% if requests and requests|length > 0 %}
+                {% for r in requests %}
+                  <a href="/driver/requests/{{ r.id }}"
+                     class="cab-row"
+                     style="text-decoration:none;color:inherit;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+
+                    <div class="cab-row-left">
+
+                      <div class="cab-row-sub" style="font-weight:700;">
+                        {{ r.origin or "—" }} - {{ r.destination or "—" }}
+                        {% if r.distance_km %} • {{ r.distance_km|round(0) }} км{% endif %}
+                        {% if r.weight_kg %} • {{ (r.weight_kg / 1000) | round(1) }} т{% endif %}
+                        {% if r.volume_m3 %} • {{ r.volume_m3 | round(1) }} м³{% endif %}
+                      </div>
+
+                      <div class="cab-row-sub" style="opacity:.85;">
+                        {% set ld = (r.load_date_display or r.load_date) %}
+                        {% if ld %}
+                          {% set d = (ld|string)[:10] %}
+                          Дата загрузки: {{ d[8:10] }}.{{ d[5:7] }}.{{ d[0:4] }}
+                        {% else %}
+                          Дата загрузки: —
+                        {% endif %}
+                      </div>
+
+                      <div class="cab-row-sub" style="opacity:.85;">
+                        Груз: {{ r.cargo_type or "—" }}
+                      </div>
+
+                      <div class="cab-row-sub" style="opacity:.75;">
+                        Заявка #{{ r.id }}
+                      </div>
+                    </div>
+
+                    <div class="cab-row-right" style="display:flex;gap:8px;align-items:center;">
+                      <span class="cab-badge">Подробнее →</span>
+                    </div>
+
+                  </a>
+                {% endfor %}
+              {% else %}
+                <div class="cab-empty">Пока нет заявок</div>
+              {% endif %}
+            </div>
+          </div>
+
+        {% elif tab == "active" %}
+          <div class="cab-card">
+            <div class="cab-card-title">Активные</div>
+            <p class="cab-text">Перевозки в работе.</p>
+
+            <div class="cab-list">
+              {% if active_requests and active_requests|length > 0 %}
+                {% for r in active_requests %}
+                  <a href="/driver/requests/{{ r.id }}"
+                     class="cab-row"
+                     style="text-decoration:none;color:inherit;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+
+                    <div class="cab-row-left">
+
+                      <div class="cab-row-sub" style="font-weight:700;">
+                        {{ r.origin or "—" }} - {{ r.destination or "—" }}
+                        {% if r.distance_km %} • {{ r.distance_km|round(0) }} км{% endif %}
+                        {% if r.weight_kg %} • {{ (r.weight_kg / 1000) | round(1) }} т{% endif %}
+                        {% if r.volume_m3 %} • {{ r.volume_m3 | round(1) }} м³{% endif %}
+                      </div>
+
+                      <div class="cab-row-sub" style="opacity:.85;">
+                        {% set ld = (r.load_date_display or r.load_date) %}
+                        {% if ld %}
+                          {% set d = (ld|string)[:10] %}
+                          Дата загрузки: {{ d[8:10] }}.{{ d[5:7] }}.{{ d[0:4] }}
+                        {% else %}
+                          Дата загрузки: —
+                        {% endif %}
+                      </div>
+
+                      <div class="cab-row-sub" style="opacity:.85;">
+                        Груз: {{ r.cargo_type or "—" }}
+                      </div>
+
+                      <div class="cab-row-sub" style="opacity:.75;">
+                        Заявка #{{ r.id }}
+                      </div>
+                    </div>
+
+                    <div class="cab-row-right" style="display:flex;gap:8px;align-items:center;">
+                      <span class="cab-badge">В пути</span>
+                      <span class="cab-badge">Подробнее →</span>
+                    </div>
+
+                  </a>
+                {% endfor %}
+              {% else %}
+                <div class="cab-empty">Активных перевозок пока нет</div>
+              {% endif %}
+            </div>
+          </div>
+
+        {% elif tab == "history" %}
+          <div class="cab-card">
+            <div class="cab-card-title">История</div>
+            <p class="cab-text">Завершённые перевозки.</p>
+            <div class="cab-empty">История пуста</div>
+          </div>
+
+        {% elif tab == "chats" %}
+          <div class="cab-card">
+            <div class="cab-card-title">Чаты по заявкам</div>
+            <p class="cab-text">Ваши переписки с клиентами по заявкам. Офис видит эти чаты, но не пишет сюда.</p>
+
+            <div style="margin:12px 0 16px;">
+              <a class="cab-btn" href="/driver/support">Написать в техподдержку</a>
+            </div>
+
+            {% if threads and threads|length > 0 %}
+              <div class="space-y-3">
+                {% for it in threads %}
+                  <div class="cab-req">
+                    <div class="cab-req-main">
+                      <div class="cab-req-title">
+                        {% if it.req %}
+                          Чат по заявке #{{ it.req.id }}
+                        {% else %}
+                          Чат #{{ it.thread.id }}
+                        {% endif %}
+                      </div>
+
+                      <div class="cab-req-meta">
+                        {% if it.req %}
+                          {{ it.req.origin or "—" }} - {{ it.req.destination or "—" }}
+                          {% if it.req.distance_km %} • {{ it.req.distance_km|round(0) }} км{% endif %}
+                          {% if it.req.weight_kg %} • {{ (it.req.weight_kg / 1000) | round(1) }} т{% endif %}
+                          {% if it.req.volume_m3 %} • {{ it.req.volume_m3 | round(1) }} м³{% endif %}
+                        {% endif %}
+                      </div>
+
+                      {% if it.last %}
+                        <div class="cab-text" style="margin-top:6px;color:#3f4a4a;">
+                          <span style="opacity:.7;">Последнее:</span>
+                          {{ (it.last.text or "")[:160] }}
+                        </div>
+                      {% endif %}
+                    </div>
+
+                    <div class="cab-req-actions">
+                      <a class="cab-btn" href="/driver/chats/{{ it.thread.id }}">Открыть</a>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="cab-empty">Пока нет чатов</div>
+            {% endif %}
+          </div>
+
+        {% elif tab == "docs" %}
+          <div class="cab-card">
+            <div class="cab-card-title">Документы</div>
+            <p class="cab-text">Счета, акты, закрывающие.</p>
+            <div class="cab-empty">Документов пока нет</div>
+          </div>
+
+        {% elif tab == "company" %}
+          <div class="cab-card">
+            <div class="cab-card-title">Компания</div>
+            <p class="cab-text">Реквизиты и документы перевозчика.</p>
+
+            {# ===== контекст ===== #}
+            {% set u = (driver_user if driver_user is defined else None) %}
+            {% set p = (driver_profile if driver_profile is defined else None) %}
+
+            {# ✅ значения авто берём ИЗ РОУТЕРА, без парсинга в шаблоне #}
+            {% set car_type_val = (car_type_val if car_type_val is defined else "") %}
+            {% set car_make_val = (car_make_val if car_make_val is defined else "") %}
+            {% set car_num_val  = (car_num_val  if car_num_val  is defined else "") %}
+            {% set trailer_val  = (trailer_val  if trailer_val  is defined else "") %}
+
+            <!-- TELEGRAM -->
+            <div class="cab-card" style="margin-top:14px;background:#ffffff80;">
+              <div class="cab-card-title" style="font-size:16px;">Telegram</div>
+              <p class="cab-text">Привяжи Telegram, чтобы получать уведомления, документы и сообщения по заявкам.</p>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4" style="margin-top:10px;">
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Статус</div>
+                  <div style="font-weight:700;">
+                    {% if u and u.tg_id and (u.tg_id | int) > 0 %}
+                      <span style="color:#16a34a;">✅ Telegram привязан</span>
+                    {% else %}
+                      <span style="color:#64748b;">Не привязан</span>
+                    {% endif %}
+                  </div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Telegram ID</div>
+                  <div style="font-weight:700;">
+                    {% if u and u.tg_id and (u.tg_id | int) > 0 %}{{ u.tg_id }}{% else %}—{% endif %}
+                  </div>
+                </div>
+
+              </div>
+
+              {% if (not u or not u.tg_id or (u.tg_id | int) <= 0) and driver_tg_link %}
+                <div style="margin-top:14px;">
+                  <a href="/driver/telegram-bind"
+                     target="_blank"
+                     style="
+                       display:inline-flex;
+                       align-items:center;
+                       gap:10px;
+                       background:#229ED9;
+                       color:#fff;
+                       text-decoration:none;
+                       padding:12px 18px;
+                       border-radius:14px;
+                       font-weight:700;
+                       box-shadow:0 8px 22px rgba(34,158,217,.22);
+                     ">
+                    <span style="font-size:18px;">✈️</span>
+                    <span>Привязать Telegram</span>
+                  </a>
+                </div>
+              {% endif %}
+            </div>
+
+            <!-- МОИ ДОКУМЕНТЫ -->
+            <div class="cab-card" style="margin-top:14px;background:#ffffff80;">
+              <div class="cab-card-title" style="font-size:16px;">Мои документы</div>
+              <p class="cab-text">Реквизиты для оплаты (одним файлом).</p>
+
+              {% if company_docs and company_docs.payment_details %}
+                <div class="cab-req" style="margin-top:10px;">
+                  <div class="cab-req-main">
+                    <div class="cab-req-title">Реквизиты</div>
+                    <div class="cab-req-meta">
+                      {{ company_docs.payment_details.filename or "Файл" }}
+                    </div>
+                  </div>
+                  <div class="cab-req-actions">
+                    <a class="cab-btn" href="/driver/company/docs/{{ company_docs.payment_details.id }}">Скачать</a>
+                  </div>
+                </div>
+              {% else %}
+                <div class="cab-empty" style="margin-top:10px;">Реквизиты пока не загружены</div>
+              {% endif %}
+
+              <form method="post" action="/driver/company/my-docs" enctype="multipart/form-data" style="margin-top:12px;">
+                <div class="file-picker">
+                  <input id="payment_details_file" name="payment_details" type="file" class="file-input" data-filelabel="payment_details_name">
+                  <label for="payment_details_file" class="file-btn">Выбрать файл</label>
+                  <span id="payment_details_name" class="file-name">Файл не выбран</span>
+                </div>
+                <button class="cab-btn" style="margin-top:10px;" type="submit">Загрузить / обновить</button>
+              </form>
+            </div>
+
+            <!-- МОИ АВТО -->
+            <div class="cab-card" style="margin-top:14px;background:#ffffff80;">
+              <div class="cab-card-title" style="font-size:16px;">Мои авто</div>
+              <p class="cab-text">Документы на водителя и авто.</p>
+
+              <!-- Удостоверение / паспорт -->
+              <div style="margin-top:10px;">
+                <div class="cab-req-title" style="margin-bottom:6px;">Удостоверение / паспорт</div>
+
+                {% if company_docs and company_docs.id_card and company_docs.id_card|length > 0 %}
+                  <div class="mp-grid">
+                    {% for d in company_docs.id_card %}
+                      <div class="mp-card">
+                        <div class="mp-thumb">
+                          {% if d.content_type and d.content_type.startswith('image/') %}
+                            <img src="/driver/company/docs/{{ d.id }}?inline=1" alt="">
+                          {% else %}
+                            <div class="mp-icon">📄</div>
+                          {% endif %}
+                        </div>
+
+                        <div class="mp-body">
+                          <div class="mp-title">Документ водителя #{{ loop.index }}</div>
+                          <div class="mp-sub">{{ d.filename or d.doc_type }}</div>
+                          <div class="mp-actions">
+                            <a class="mp-btn" href="/driver/company/docs/{{ d.id }}">Скачать</a>
+                          </div>
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <div class="cab-empty">Не загружено</div>
+                {% endif %}
+              </div>
+
+              <!-- Техпаспорт -->
+              <div style="margin-top:12px;">
+                <div class="cab-req-title" style="margin-bottom:6px;">Техпаспорт</div>
+
+                {% if company_docs and company_docs.tech_passport and company_docs.tech_passport|length > 0 %}
+                  <div class="mp-grid">
+                    {% for d in company_docs.tech_passport %}
+                      <div class="mp-card">
+                        <div class="mp-thumb">
+                          {% if d.content_type and d.content_type.startswith('image/') %}
+                            <img src="/driver/company/docs/{{ d.id }}?inline=1" alt="">
+                          {% else %}
+                            <div class="mp-icon">📄</div>
+                          {% endif %}
+                        </div>
+
+                        <div class="mp-body">
+                          <div class="mp-title">Документ авто #{{ loop.index }}</div>
+                          <div class="mp-sub">{{ d.filename or d.doc_type }}</div>
+                          <div class="mp-actions">
+                            <a class="mp-btn" href="/driver/company/docs/{{ d.id }}">Скачать</a>
+                          </div>
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <div class="cab-empty">Не загружено</div>
+                {% endif %}
+              </div>
+
+              <!-- Upload form -->
+              <form method="post" action="/driver/company/my-auto" enctype="multipart/form-data" style="margin-top:12px;">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                  <div>
+                    <div class="cab-text" style="margin-bottom:6px;">Загрузить удостоверение/паспорт (до 2 файлов)</div>
+                    <div class="file-picker">
+                      <input id="id_card_files" name="id_card" type="file" multiple class="file-input" data-filelabel="id_card_name">
+                      <label for="id_card_files" class="file-btn">Выбрать файлы</label>
+                      <span id="id_card_name" class="file-name">Файл не выбран</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div class="cab-text" style="margin-bottom:6px;">Загрузить техпаспорт (до 2 файлов)</div>
+                    <div class="file-picker">
+                      <input id="tech_passport_files" name="tech_passport" type="file" multiple class="file-input" data-filelabel="tech_passport_name">
+                      <label for="tech_passport_files" class="file-btn">Выбрать файлы</label>
+                      <span id="tech_passport_name" class="file-name">Файл не выбран</span>
+                    </div>
+                  </div>
+
+                </div>
+
+                <button class="cab-btn" style="margin-top:10px;" type="submit">Загрузить / обновить</button>
+              </form>
+
+              <!-- ✅ РУЧНОЙ ВВОД ДАННЫХ -->
+              <hr style="margin:14px 0;opacity:.18;">
+
+              <div class="cab-card-title" style="font-size:16px;">Данные документов (вручную)</div>
+              <p class="cab-text" style="margin-bottom:10px;">
+                Если что-то не загружено файлом — можно указать тут. Эти данные потом пойдут в документы (в докген).
+              </p>
+
+              <form class="req-form" method="post" action="/driver/company/auto-data">
+                <div style="display:grid;gap:14px;">
+
+                  <!-- ДАННЫЕ ВОДИТЕЛЯ -->
+                  <div class="cab-card" style="margin:0;background:#ffffffb8;border:1px solid rgba(0,0,0,.06);">
+                    <div class="cab-card-title" style="font-size:15px;margin-bottom:6px;">Данные водителя</div>
+                    <p class="cab-text" style="margin-bottom:12px;opacity:.8;">
+                      Личные данные водителя для документов.
+                    </p>
+
+                    <div class="req-grid">
+                      <div class="req-field">
+                        <label>ФИО водителя</label>
+                        <input type="text" name="full_name" placeholder="Иванов Иван Иванович"
+                              value="{{ (p.full_name if p else '') }}">
+                      </div>
+
+                      <div class="req-field">
+                        <label>ИИН</label>
+                        <input type="text" name="iin" inputmode="numeric" placeholder="12 цифр"
+                              value="{{ (p.iin if p else '') }}">
+                      </div>
+
+                      <div class="req-field">
+                        <label>№ удостоверения</label>
+                        <input type="text" name="id_number" placeholder="Например: 123456789"
+                              value="{{ (p.id_number if p else '') }}">
+                      </div>
+
+                      <div class="req-field">
+                        <label>№ паспорта</label>
+                        <input type="text" name="passport_number" placeholder="Например: N12345678"
+                              value="{{ (p.passport_number if p else '') }}">
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- ДАННЫЕ АВТО -->
+                  <div class="cab-card" style="margin:0;background:#ffffffb8;border:1px solid rgba(0,0,0,.06);">
+                    <div class="cab-card-title" style="font-size:15px;margin-bottom:6px;">Данные авто</div>
+                    <p class="cab-text" style="margin-bottom:12px;opacity:.8;">
+                      Технические данные автомобиля и прицепа для документов.
+                    </p>
+
+                    <div class="req-grid">
+                      <div class="req-field">
+                        <label>№ техпаспорта</label>
+                        <input type="text" name="tech_passport_number" placeholder="Например: AB123456"
+                              value="{{ (p.tech_passport_number if p else '') }}">
+                      </div>
+
+                      <div class="req-field">
+                        <label>Тип авто</label>
+                        <input type="text" name="vehicle_type" placeholder="Тент / Реф / Борт / Самосвал…"
+                              value="{{ car_type_val }}">
+                      </div>
+
+                      <div class="req-field">
+                        <label>Марка и модель авто</label>
+                        <input type="text" name="car_make_model" placeholder="Например: Volvo FH"
+                              value="{{ car_make_val }}">
+                      </div>
+
+                      <div class="req-field">
+                        <label>Номер авто</label>
+                        <input type="text" name="car_number" placeholder="Например: 777ABC02"
+                              value="{{ car_num_val }}">
+                      </div>
+
+                      <div class="req-field">
+                        <label>Номер прицепа</label>
+                        <input type="text" name="trailer_number" placeholder="Например: 123AB02"
+                              value="{{ trailer_val }}">
+                      </div>
+
+                      <div class="req-field">
+                        <label>Грузоподъёмность (кг)</label>
+                        <input type="number" name="capacity_kg" inputmode="numeric" placeholder="Например: 20000"
+                              value="{% if p and p.capacity_kg %}{{ p.capacity_kg }}{% else %}{% endif %}">
+                      </div>
+
+                      <div class="req-field">
+                        <label>Объём авто (м³)</label>
+                        <input type="number" step="0.1" name="volume_m3" inputmode="decimal" placeholder="Например: 86.5"
+                              value="{% if p and p.volume_m3 %}{{ p.volume_m3 }}{% else %}{% endif %}">
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                <button class="cab-btn" style="margin-top:10px;" type="submit">Сохранить данные</button>
+              </form>
+              <!-- ✅ /РУЧНОЙ ВВОД -->
+
+            </div>
+
+            <!-- ✅ МОИ ДАННЫЕ (ниже "Мои авто") -->
+            <div class="cab-card" style="margin-top:14px;background:#ffffff80;">
+              <div class="cab-card-title" style="font-size:16px;">Мои данные</div>
+              <p class="cab-text">Все данные водителя, которые сейчас сохранены в базе.</p>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4" style="margin-top:10px;">
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">ID пользователя</div>
+                  <div style="font-weight:700;">{{ u.id if u else "—" }}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Telegram ID</div>
+                  <div style="font-weight:700;">{% if u and u.tg_id is defined and u.tg_id %}{{ u.tg_id }}{% else %}—{% endif %}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Имя (аккаунт)</div>
+                  <div style="font-weight:700;">{% if u and u.name is defined and u.name %}{{ u.name }}{% else %}—{% endif %}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Телефон</div>
+                  <div style="font-weight:700;">{% if u and u.phone is defined and u.phone %}{{ u.phone }}{% else %}—{% endif %}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Email</div>
+                  <div style="font-weight:700;">{% if u and u.email is defined and u.email %}{{ u.email }}{% else %}—{% endif %}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Роль</div>
+                  <div style="font-weight:700;">{% if u and u.role is defined and u.role %}{{ u.role }}{% else %}—{% endif %}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">ФИО (профиль)</div>
+                  <div style="font-weight:700;">{% if p and p.full_name %}{{ p.full_name }}{% else %}—{% endif %}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">ИИН</div>
+                  <div style="font-weight:700;">{% if p and p.iin %}{{ p.iin }}{% else %}—{% endif %}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">№ удостоверения</div>
+                  <div style="font-weight:700;">{% if p and p.id_number %}{{ p.id_number }}{% else %}—{% endif %}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">№ паспорта</div>
+                  <div style="font-weight:700;">{% if p and p.passport_number %}{{ p.passport_number }}{% else %}—{% endif %}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">№ техпаспорта</div>
+                  <div style="font-weight:700;">{% if p and p.tech_passport_number %}{{ p.tech_passport_number }}{% else %}—{% endif %}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Тип авто</div>
+                  <div style="font-weight:700;">{{ car_type_val if car_type_val else "—" }}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Марка и модель</div>
+                  <div style="font-weight:700;">{{ car_make_val if car_make_val else "—" }}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Номер авто</div>
+                  <div style="font-weight:700;">{{ car_num_val if car_num_val else "—" }}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Номер прицепа</div>
+                  <div style="font-weight:700;">{{ trailer_val if trailer_val else "—" }}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Грузоподъёмность (кг)</div>
+                  <div style="font-weight:700;">{% if p and p.capacity_kg is defined and p.capacity_kg %}{{ p.capacity_kg }}{% else %}—{% endif %}</div>
+                </div>
+
+                <div>
+                  <div class="cab-text" style="opacity:.7;margin-bottom:4px;">Объём (м³)</div>
+                  <div style="font-weight:700;">{% if p and p.volume_m3 is defined and p.volume_m3 %}{{ p.volume_m3 }}{% else %}—{% endif %}</div>
+                </div>
+
+              </div>
+            </div>
+            <!-- ✅ /МОИ ДАННЫЕ -->
+
+          </div>
+
+        {% else %}
+          <div class="cab-card">
+            <div class="cab-card-title">Раздел не найден</div>
+            <p class="cab-text">Выберите пункт меню слева.</p>
+          </div>
+        {% endif %}
+
+      </main>
+    </div>
+  </section>
+</div>
+
+<script>
+  (function () {
+    document.querySelectorAll('input[type="file"][data-filelabel]').forEach((inp) => {
+      const targetId = inp.getAttribute('data-filelabel');
+      const label = document.getElementById(targetId);
+
+      const update = () => {
+        if (!label) return;
+        const files = inp.files ? Array.from(inp.files) : [];
+        label.textContent = files.length ? files.map(f => f.name).join(', ') : 'Файл не выбран';
+      };
+
+      inp.addEventListener('change', update);
+      update();
+    });
+  })();
+</script>
+
+{% endblock %}

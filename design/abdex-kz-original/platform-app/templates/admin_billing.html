@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_macros.html" import admin_nav %}
+{% block title %}Админ — Биллинг — AbdEX{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+{{ admin_nav("billing") }}
+<h1>Тарифы</h1>
+{% if tariffs %}
+<table>
+  <thead>
+    <tr><th>Модель</th><th>Компания</th><th>Фикс./внутр.</th><th>Процент/межд.</th><th>Валюта</th><th>Активен</th></tr>
+  </thead>
+  <tbody>
+  {% for tariff in tariffs %}
+    <tr>
+      <td>{{ tariff.tariff_model.value }}</td>
+      <td>{{ tariff.company_id or "платформа (по умолчанию)" }}</td>
+      <td>{{ tariff.domestic_fee_minor if tariff.tariff_model.value == "route_flat_usd" else tariff.fixed_fee_minor }}</td>
+      <td>{{ tariff.international_fee_minor if tariff.tariff_model.value == "route_flat_usd" else tariff.percent }}</td>
+      <td>{{ tariff.currency_code }}</td>
+      <td>{{ "Да" if tariff.is_active else "Нет" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">Тарифы не настроены.</p>
+{% endif %}
+
+<h1 style="margin-top:28px;">Начисления ({{ rows|length }})</h1>
+{% if rows %}
+<table>
+  <thead>
+    <tr><th>Компания (плательщик)</th><th>Тип дохода</th><th>Сумма</th><th>Валюта</th><th>Создано</th></tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ row.company_name }}</td>
+      <td>{{ row.accrual.income_type.value }}</td>
+      <td>{{ row.accrual.amount_minor|money(row.accrual.currency_code) }}</td>
+      <td>{{ row.accrual.currency_code }}</td>
+      <td>{{ row.accrual.created_at|localtime }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">Начислений пока нет.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ t("support.detail_page_title", number=ticket.ticket_number) }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>{{ ticket.ticket_number }} <span class="badge badge-{{ ticket.status.value }}">{{ t("support.status_" + ticket.status.value) }}</span></h1>
+  <a href="/support">{{ t("support.back_to_list") }}</a>
+</div>
+<p>{{ ticket.subject }}</p>
+<p class="muted">{{ t("support.category_" + ticket.category.value) }}</p>
+
+<div class="chat-log">
+{% for row in messages %}
+  <div class="chat-message">
+    <div class="meta">{{ row.sender_name or t("deal.chat_unknown_sender") }} — {{ row.message.created_at|localtime }}</div>
+    <div>{{ row.message.body }}</div>
+  </div>
+{% else %}
+  <p class="muted">{{ t("support.messages_empty") }}</p>
+{% endfor %}
+</div>
+
+{% if ticket.status.value not in ("resolved", "closed") %}
+<form method="post" action="/support/{{ ticket.id }}/messages">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="field">
+    <textarea name="body" rows="3" placeholder="{{ t('support.field_reply') }}" required></textarea>
+  </div>
+  <button type="submit">{{ t("support.send_reply") }}</button>
+</form>
+{% endif %}
+{% endblock %}

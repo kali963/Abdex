@@ -281,13 +281,16 @@ def logout(request: Request, db: Session = Depends(get_db), me: Principal | None
 
 
 @router.get("/register")
-def register_form(request: Request, type: str = "client", db: Session = Depends(get_db),
+def register_form(request: Request, type: str = "", db: Session = Depends(get_db),
                   me: Principal | None = Depends(get_principal_optional)):
     from app.modules.analytics.product import track
 
-    track(db, "register_view", role=type if type in ("client", "carrier", "driver") else "")
+    role = type if type in ("client", "carrier", "driver") else ""
+    track(db, "register_view", role=role)
     db.commit()
-    return render(request, "public/register.html", {"form": {"account_type": type}})
+    if not role:  # first "who are you" (the role cards of the abdex.kz site), then the form for that role
+        return render(request, "public/register_role.html")
+    return render(request, "public/register.html", {"form": {"account_type": role}})
 
 
 @router.post("/register")

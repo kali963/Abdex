@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field, step_dots %}
+{% block title %}{{ t("register_confirm.page_title") }}{% endblock %}
+{% block content %}
+{{ step_dots(2) }}
+<h1>{{ t("register_confirm.title") }}</h1>
+<p class="muted">{{ t("register_confirm.sent_notice", target=target) }}</p>
+<form method="post" action="/register/confirm">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="channel" value="{{ channel }}">
+  <input type="hidden" name="target" value="{{ target }}">
+  <input type="hidden" name="role" value="{{ role }}">
+  {{ field("code", t("register_confirm.field_code"), error=errors.code) }}
+  <button type="submit">{{ t("register_confirm.submit") }}</button>
+</form>
+{% endblock %}

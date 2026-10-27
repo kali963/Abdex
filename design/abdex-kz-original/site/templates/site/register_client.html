@@ -1,0 +1,80 @@
+{% extends "site/base.html" %}
+{% block title %}Регистрация клиента — AbdEX{% endblock %}
+
+{% block content %}
+
+<section class="py-10 max-w-xl mx-auto">
+  <h1 class="text-2xl font-semibold mb-4 text-slate-900">Регистрация клиента</h1>
+  <p class="text-sm text-slate-400 mb-6">
+    Для регистрации введите корректные данные.
+  </p>
+
+{% if error %}<div class="mb-4 p-3 rounded-lg border border-red-400 text-red-200 text-sm">{{ error }}</div>{% endif %}
+
+  <form method="post" class="auth-form space-y-4">
+    <div>
+      <label class="block text-sm mb-1">Имя контактного лица *</label>
+      <input name="name" required value="{{ (form.name if form else '')|e }}" class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm">
+    </div>
+
+
+<div>
+  <label class="block text-sm mb-1">Телефон *</label>
+  <input name="phone" required placeholder="+7..." value="{{ (form.phone if form else '')|e }}" class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm">
+</div>
+
+<div>
+  <label class="block text-sm mb-1">Email (необязательно)</label>
+  <input name="email" type="email" value="{{ (form.email if form else '')|e }}" class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm">
+</div>
+
+<div>
+  <label class="block text-sm mb-1">Пароль *</label>
+  <input name="password" type="password" required minlength="6" class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm">
+  <p class="text-xs text-slate-500 mt-1">Минимум 6 символов</p>
+</div>
+
+<div>
+  <label class="block text-sm mb-1">Форма деятельности *</label>
+  <select name="business_form" required class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm">
+    <option value="">Выбрать</option>
+    <option value="ИП" {% if form and form.business_form=='ИП' %}selected{% endif %}>ИП</option>
+    <option value="ТОО" {% if form and form.business_form=='ТОО' %}selected{% endif %}>ТОО</option>
+  </select>
+</div>
+
+<div>
+  <label class="block text-sm mb-1">Компания</label>
+  <input name="company_name" placeholder="Название компании / ИП" class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm">
+</div>
+
+<div>
+  <label class="block text-sm mb-1">Должность</label>
+  <input name="position" placeholder="Логист / директор / собственник" class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm">
+</div>
+
+<div class="grid grid-cols-2 gap-3">
+  <div>
+    <label class="block text-sm mb-1">Тип налогового номера</label>
+    <select name="tax_id_type" class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm">
+      <option value="">Не указывать</option>
+      <option value="BIN">БИН</option>
+      <option value="INN">ИИН</option>
+    </select>
+  </div>
+  <div>
+    <label class="block text-sm mb-1">Номер БИН/ИИН</label>
+    <input name="tax_id_number" class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm">
+  </div>
+</div>
+
+<div style="margin-top: 24px;">
+  <button type="submit" class="btn-main">
+    Зарегистрироваться
+  </button>
+</div>
+
+
+  </form>
+</section>
+{% endblock %}

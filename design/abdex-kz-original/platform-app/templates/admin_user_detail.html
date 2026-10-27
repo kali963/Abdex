@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "_macros.html" import admin_nav %}
+{% block title %}Админ — {{ target.phone or target.email }} — AbdEX{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+{{ admin_nav("users") }}
+<div class="toolbar">
+  <h1>{{ target.full_name or target.phone or target.email }}</h1>
+  <a href="/admin/users">← К пользователям</a>
+</div>
+<table>
+  <tbody>
+    <tr><td>Телефон</td><td>{{ target.phone or "—" }}</td></tr>
+    <tr><td>Email</td><td>{{ target.email or "—" }}</td></tr>
+    <tr><td>Персонал платформы</td><td>{{ "Да" if target.is_platform_staff else "—" }}</td></tr>
+    <tr><td>2FA</td><td>{{ "Включена" if target.totp_enabled_at else "Выключена" }}</td></tr>
+    <tr><td>Статус</td><td>{{ "Активен" if target.is_active else "Заблокирован" }}</td></tr>
+  </tbody>
+</table>
+
+<h2 style="margin-top:22px;">Компании</h2>
+{% if memberships %}
+<table>
+  <tbody>
+  {% for m in memberships %}
+    <tr><td>{{ m.company.name }}</td><td>{{ m.role.value }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">Не состоит ни в одной компании.</p>
+{% endif %}
+
+<div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:22px;">
+  {% if target.is_active %}
+  <form method="post" action="/admin/users/{{ target.id }}/block">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="field">
+      <label for="reason_block">Причина блокировки</label>
+      <input type="text" id="reason_block" name="reason" required>
+    </div>
+    <button type="submit" class="btn-secondary">Заблокировать</button>
+  </form>
+  {% else %}
+  <form method="post" action="/admin/users/{{ target.id }}/unblock">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="field">
+      <label for="reason_unblock">Причина разблокировки</label>
+      <input type="text" id="reason_unblock" name="reason" required>
+    </div>
+    <button type="submit">Разблокировать</button>
+  </form>
+  {% endif %}
+
+  {% if target.totp_enabled_at %}
+  <form method="post" action="/admin/users/{{ target.id }}/reset-totp">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="field">
+      <label for="reason_totp">Причина сброса 2FA</label>
+      <input type="text" id="reason_totp" name="reason" required>
+    </div>
+    <button type="submit" class="btn-secondary">Сбросить 2FA</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,130 @@
+{% extends "admin/base.html" %}
+{% block title %}Заявки{% endblock %}
+
+{% block content %}
+<h2 class="text-2xl font-semibold mb-4">Все заявки</h2>
+
+<!-- Фильтр по статусу -->
+<form method="get" class="mb-6 flex items-center gap-3">
+  <label class="text-sm text-slate-600">Статус:</label>
+  <select name="status" class="border rounded p-2">
+    {% for val, title in status_options %}
+      <option value="{{ val }}" {% if current_status==val %}selected{% endif %}>{{ title }}</option>
+    {% endfor %}
+  </select>
+  <button class="px-3 py-2 bg-slate-800 text-white rounded hover:bg-slate-900">Фильтровать</button>
+  {% if current_status %}
+    <a href="/admin" class="text-slate-500 hover:text-slate-700 text-sm">Сбросить</a>
+  {% endif %}
+</form>
+
+<div class="grid gap-3">
+  {% for r in items %}
+  <div class="p-4 bg-white rounded-xl shadow hover:shadow-md transition">
+    <div class="flex items-start justify-between gap-4">
+      <!-- Левый блок: информация -->
+      <div class="min-w-0 flex-1">
+        <a href="/admin/requests/{{ r.id }}" class="block hover:underline">
+          <div class="font-semibold truncate">
+            #{{ r.id }} — {{ r.origin }} → {{ r.destination }}{% if r.plan_id %} (План отгрузок){% endif %}
+          </div>
+        </a>
+
+        <div class="mt-1 text-sm text-slate-600 flex items-center gap-2">
+          <span class="font-medium">Статус:</span>
+          <span class="px-2 py-0.5 rounded text-xs font-medium {{ STATUS_BADGES.get(r.status, 'bg-slate-200 text-slate-700') if STATUS_BADGES is defined else 'bg-slate-200 text-slate-700' }}">
+            {{ r.status|status_ru }}
+          </span>
+        </div>
+
+        <div class="mt-1 text-sm text-slate-600">
+          <span class="font-medium">Груз:</span> {{ r.cargo_type or "—" }}
+        </div>
+
+        <div class="text-sm text-slate-600">
+          <span class="font-medium">Кубатура:</span>
+          {{ r.volume_m3 if r.volume_m3 is not none else "—" }}{% if r.volume_m3 is not none %} м³{% endif %}
+          <span class="ml-3 font-medium">Вес:</span>
+          {{ r.weight_kg if r.weight_kg is not none else "—" }}{% if r.weight_kg is not none %} кг{% endif %}
+        </div>
+
+        <div class="text-sm text-slate-600 mt-1">
+          <span class="font-medium">Километраж:</span>
+          {% if r.distance_km is not none %}{{ '%.1f'|format(r.distance_km) }} км{% else %}—{% endif %}
+          <span class="ml-3 font-medium">Бюджет клиента:</span>
+          {% if r.budget_kzt is not none %}{{ (r.budget_kzt|string)|replace(',', ' ') }} ₸{% else %}—{% endif %}
+
+        </div>
+
+        {% if r.extra_params %}
+        <div class="mt-1 text-xs text-slate-500 whitespace-pre-wrap line-clamp-2">
+          <span class="font-medium">Доп. параметры:</span> {{ r.extra_params }}
+        </div>
+        {% endif %}
+
+        <!-- Итог по деньгам -->
+        {% set has_money = (r.selfcost_total_kzt or r.client_quote_kzt or r.driver_approved_kzt) %}
+        {% if has_money %}
+          {% set vat = 0.17 %}
+          {# Decimal -> float безопасно #}
+          {% set client_with_vat = (r.client_quote_kzt | float) if r.client_quote_kzt is not none else None %}
+          {% set client_without_vat = (client_with_vat * (1 - vat)) if client_with_vat is not none else None %}
+          {% set gross_with_vat = ((r.driver_approved_kzt | float) / (1 - vat)) if r.driver_approved_kzt is not none else None %}
+          {% set margin_val = (client_with_vat - gross_with_vat) if (client_with_vat is not none and gross_with_vat is not none) else None %}
+
+          <div class="mt-3 grid sm:grid-cols-4 gap-2">
+            <div class="px-3 py-2 rounded-lg bg-slate-50 border">
+              <div class="text-xs text-slate-500">Себестоимость</div>
+              <div class="font-semibold">{{ (r.selfcost_total_kzt | float) | int }} ₸</div>
+            </div>
+            <div class="px-3 py-2 rounded-lg bg-slate-50 border">
+              <div class="text-xs text-slate-500">Клиент (без НДС)</div>
+              <div class="font-semibold">
+                {% if client_without_vat is not none %}{{ client_without_vat | int }} ₸{% else %}—{% endif %}
+              </div>
+            </div>
+            <div class="px-3 py-2 rounded-lg bg-slate-50 border">
+              <div class="text-xs text-slate-500">Клиент (с НДС)</div>
+              <div class="font-semibold">
+                {% if client_with_vat is not none %}{{ client_with_vat | int }} ₸{% else %}—{% endif %}
+              </div>
+            </div>
+            <div class="px-3 py-2 rounded-lg bg-slate-50 border">
+              <div class="text-xs text-slate-500">Маржа</div>
+              <div class="font-semibold">
+                {% if margin_val is not none %}{{ margin_val | int }} ₸{% else %}—{% endif %}
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Правый блок: действия -->
+      <div class="flex items-center gap-2 shrink-0">
+        <form
+          action="/admin/requests/{{ r.id }}/delete"
+          method="post"
+          onsubmit="return confirm('Удалить заявку #{{ r.id }}? Это действие необратимо.');"
+        >
+          <button
+            class="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            title="Удалить заявку"
+            type="submit"
+          >🗑</button>
+        </form>
+
+        <a
+          href="/admin/requests/{{ r.id }}"
+          class="text-slate-400 text-2xl leading-none hover:text-slate-600"
+          title="Открыть"
+        >›</a>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="p-6 bg-white rounded-xl shadow text-center text-slate-500">
+      Заявок пока нет
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

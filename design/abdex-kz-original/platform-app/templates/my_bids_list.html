@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ t("bid.list_page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<h1>{{ t("bid.list_title", company=company.name) }}</h1>
+
+{% if bids %}
+<table>
+  <thead>
+    <tr>
+      <th>{{ t("orders.col_number") }}</th>
+      <th>{{ t("orders.col_rate") }}</th>
+      <th>{{ t("orders.bid_col_valid_until") }}</th>
+      <th>{{ t("orders.bid_col_status") }}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in bids %}
+    <tr>
+      <td>
+        {% if row.deal_id %}<a href="/deals/{{ row.deal_id }}">{{ row.order.order_number }}</a>
+        {% elif row.order %}{{ row.order.order_number }}
+        {% else %}—{% endif %}
+      </td>
+      <td>{{ row.bid.current_price_minor|money(row.bid.currency_code) }}</td>
+      <td>{{ row.bid.valid_until|localtime }}</td>
+      <td><span class="badge badge-{{ row.bid.status.value }}">{{ t("orders.bid_status_" + row.bid.status.value) }}</span></td>
+      <td>
+        <a href="/bids/{{ row.bid.id }}">{{ t("orders.bid_negotiate_link") }}</a>
+        {% if row.bid.status.value == "pending" %}
+        <form method="post" action="/bids/{{ row.bid.id }}/withdraw" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn-inline">{{ t("bid.withdraw_button") }}</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">{{ t("bid.empty_state") }}</p>
+{% endif %}
+{% endblock %}

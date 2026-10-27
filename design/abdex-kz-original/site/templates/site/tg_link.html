@@ -1,0 +1,25 @@
+{% extends "site/base.html" %}
+{% block content %}
+
+<div class="max-w-xl mx-auto mt-10 bg-white p-6 rounded-xl shadow">
+
+  <h2 class="text-xl font-semibold mb-4">Привязка Telegram</h2>
+
+  <p class="text-sm text-slate-600 mb-4">
+    Нажми кнопку ниже и открой Telegram:
+  </p>
+
+  <a href="{{ link }}"
+     target="_blank"
+     class="block text-center px-4 py-3 rounded-lg text-white mb-3"
+     style="background:#229ED9;">
+    Открыть Telegram
+  </a>
+
+  <p class="text-xs text-slate-500 break-all">
+    {{ link }}
+  </p>
+
+</div>
+
+{% endblock %}

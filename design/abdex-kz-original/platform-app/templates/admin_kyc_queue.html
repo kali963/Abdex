@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import admin_nav %}
+{% block title %}Админ — Модерация верификации — AbdEX{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+{{ admin_nav("kyc") }}
+<h1>Очередь модерации ({{ rows|length }})</h1>
+{% if rows %}
+<table>
+  <thead><tr><th>Объект</th><th>Тип</th><th>Приоритет</th><th>Статус</th><th>Срок SLA</th><th></th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ row.entity_label }}</td>
+      <td>{{ row.request.entity_type.value }}</td>
+      <td>{{ row.request.priority.value }}</td>
+      <td><span class="badge badge-{{ row.request.status.value }}">{{ row.request.status.value }}</span></td>
+      <td>{{ row.request.sla_due_at|localtime }}</td>
+      <td><a href="/admin/kyc/{{ row.request.id }}">Открыть</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">Очередь пуста.</p>
+{% endif %}
+{% endblock %}

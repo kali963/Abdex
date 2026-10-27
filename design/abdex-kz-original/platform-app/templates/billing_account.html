@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}{{ t("billing.page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>{{ t("billing.title") }}</h1>
+</div>
+
+{% if account.is_multi_currency %}
+<p class="notice">{{ t("billing.multi_currency_notice") }}</p>
+<table>
+  <thead>
+    <tr>
+      <th>{{ t("billing.col_currency") }}</th>
+      <th>{{ t("billing.stat_accrued") }}</th>
+      <th>{{ t("billing.stat_paid") }}</th>
+      <th>{{ t("billing.stat_debt") }}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for code in account.debt_by_currency.keys() %}
+    <tr>
+      <td>{{ code }}</td>
+      <td class="num">{{ account.accrued_by_currency.get(code, 0)|money(code) }}</td>
+      <td class="num">{{ account.paid_by_currency.get(code, 0)|money(code) }}</td>
+      <td class="num">{{ account.debt_by_currency[code]|money(code) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+{% set ccy = account.accruals[0].currency_code if account.accruals else (account.payments[0].currency_code if account.payments else "KZT") %}
+<div class="stat-grid">
+  <div class="stat-card"><div class="num">{{ account.accrued_total_minor|money(ccy) }}</div><div class="label">{{ t("billing.stat_accrued") }}</div></div>
+  <div class="stat-card"><div class="num">{{ account.paid_total_minor|money(ccy) }}</div><div class="label">{{ t("billing.stat_paid") }}</div></div>
+  <div class="stat-card"><div class="num">{{ account.debt_minor|money(ccy) }}</div><div class="label">{{ t("billing.stat_debt") }}</div></div>
+</div>
+{% endif %}
+
+<section>
+  <h2>{{ t("billing.section_accruals") }}</h2>
+  {% if account.accruals %}
+  <table>
+    <thead>
+      <tr><th>{{ t("billing.col_type") }}</th><th>{{ t("billing.col_amount") }}</th><th>{{ t("orders.col_created") }}</th></tr>
+    </thead>
+    <tbody>
+    {% for accrual in account.accruals %}
+      <tr>
+        <td>{{ t("deal.income_type_" + accrual.income_type.value) }}{% if accrual.reverses_accrual_id %} ({{ t("deal.finance_reversal") }}){% endif %}</td>
+        <td class="num">{{ accrual.amount_minor|money(accrual.currency_code) }}</td>
+        <td>{{ accrual.created_at|localtime }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("billing.accruals_empty") }}</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>{{ t("billing.section_payments") }}</h2>
+  {% if account.payments %}
+  <table>
+    <thead>
+      <tr><th>{{ t("billing.col_amount") }}</th><th>{{ t("billing.col_reference") }}</th><th>{{ t("billing.col_paid_at") }}</th></tr>
+    </thead>
+    <tbody>
+    {% for payment in account.payments %}
+      <tr>
+        <td class="num">{{ payment.amount_minor|money(payment.currency_code) }}</td>
+        <td>{{ payment.reference_text }}</td>
+        <td>{{ payment.paid_at|localtime }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("billing.payments_empty") }}</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>{{ t("billing.section_invoices") }}</h2>
+  {% if invoices %}
+  <table>
+    <thead>
+      <tr><th>{{ t("billing.col_invoice_number") }}</th><th>{{ t("billing.col_period") }}</th><th>{{ t("billing.col_amount") }}</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for invoice in invoices %}
+      <tr>
+        <td class="num">{{ invoice.invoice_number }}</td>
+        <td>{{ invoice.period_from }} — {{ invoice.period_to }}</td>
+        <td class="num">{{ invoice.total_amount_minor|money(invoice.currency_code) }}</td>
+        <td>{% if invoice.storage_key %}<a href="/billing/invoices/{{ invoice.id }}/download">{{ t("billing.download") }}</a>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("billing.invoices_empty") }}</p>
+  {% endif %}
+</section>
+{% endblock %}

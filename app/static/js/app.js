@@ -234,32 +234,103 @@
     });
   }
 
-  // ---- 3D tilt for panels (pointer devices only, respects reduced motion) ----------
-  var fine = window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-  var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (fine && !calm) {
-    document.querySelectorAll(".panel-3d, .stat").forEach(function (el) {
-      var raf = 0;
-      el.addEventListener("pointermove", function (e) {
-        var r = el.getBoundingClientRect();
-        var x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
-        cancelAnimationFrame(raf);
-        raf = requestAnimationFrame(function () {
-          var max = r.width > 520 ? 2.5 : 6;  // big panels tilt less
-          el.style.setProperty("--ry", ((x - 0.5) * max * 2).toFixed(2) + "deg");
-          el.style.setProperty("--rx", ((0.5 - y) * max * 2).toFixed(2) + "deg");
-          el.style.setProperty("--mx", (x * 100).toFixed(1) + "%");
-          el.style.setProperty("--my", (y * 100).toFixed(1) + "%");
-          el.classList.add("is-tilting");
-        });
-      });
-      el.addEventListener("pointerleave", function () {
-        cancelAnimationFrame(raf);
-        el.style.setProperty("--rx", "0deg"); el.style.setProperty("--ry", "0deg");
-        el.classList.remove("is-tilting");
-      });
-    });
+  // ---- form helpers of the abdex.kz site: phone mask, checks while typing, password eye, no double submit
+  //      (the server validates everything again; these only help the user see a mistake early)
+  var me = document.currentScript || document.querySelector('script[src*="/static/js/app.js"]');
+  var msg = function (k, d) { return (me && me.getAttribute("data-" + k)) || d; };
+  var digits = function (v) { return (v || "").replace(/\D/g, ""); };
+
+  function formatPhone(raw) {  // +7 (7XX) XXX-XX-XX
+    var d = digits(raw);
+    if (!d) return "";
+    if (d[0] === "8") d = "7" + d.slice(1);
+    if (d[0] !== "7") d = "7" + d;
+    d = d.slice(0, 11);
+    var out = "+7";
+    if (d.length > 1) out += " (" + d.slice(1, 4);
+    if (d.length >= 4) out += ")";
+    if (d.length > 4) out += " " + d.slice(4, 7);
+    if (d.length > 7) out += "-" + d.slice(7, 9);
+    if (d.length > 9) out += "-" + d.slice(9, 11);
+    return out;
   }
+
+  function binOk(v) {  // the official control digit of BIN / IIN
+    if (!/^\d{12}$/.test(v)) return false;
+    var n = v.split("").map(Number), w1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], w2 = [3, 4, 5, 6, 7, 8, 9, 10, 11, 1, 2];
+    var s = 0, i;
+    for (i = 0; i < 11; i++) s += n[i] * w1[i];
+    s %= 11;
+    if (s === 10) { s = 0; for (i = 0; i < 11; i++) s += n[i] * w2[i]; s %= 11; if (s === 10) return false; }
+    return s === n[11];
+  }
+
+  function problem(input) {
+    var v = (input.value || "").trim();
+    if (!v) return "";
+    if (input.type === "tel") return digits(v).length === 11 ? "" : msg("err-phone", "Phone: +7 and 10 digits");
+    if (input.type === "email") return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) ? "" : msg("err-email", "Check the e-mail");
+    if (input.name === "bin_iin" || input.hasAttribute("data-bin")) return binOk(v) ? "" : msg("err-bin", "Check the BIN / IIN");
+    return "";
+  }
+
+  function show(input, text) {
+    var field = input.closest(".field");
+    if (!field) return;
+    var node = field.querySelector(".err[data-live]");
+    if (!text) { if (node) node.remove(); if (!field.querySelector(".err:not([data-live])")) field.classList.remove("has-error"); return; }
+    if (!node) { node = document.createElement("span"); node.className = "err"; node.setAttribute("data-live", ""); field.appendChild(node); }
+    node.textContent = text;
+    field.classList.add("has-error");
+  }
+
+  document.querySelectorAll('input[type="tel"]').forEach(function (input) {
+    if (input.value) input.value = formatPhone(input.value);
+    input.addEventListener("input", function () {
+      var end = input.selectionStart === input.value.length;
+      input.value = formatPhone(input.value);
+      if (end) input.setSelectionRange(input.value.length, input.value.length);
+    });
+  });
+  document.querySelectorAll('input[type="tel"], input[type="email"], input[name="bin_iin"], input[data-bin]').forEach(function (input) {
+    if (input.name === "bin_iin") input.addEventListener("input", function () { input.value = digits(input.value).slice(0, 12); });
+    // a message appearing on blur would shift the form under the pointer (the next click lands elsewhere):
+    // messages appear on a submit attempt, then follow the field while it is being corrected
+    var live = function () { if (input.closest(".field") && input.closest(".field").querySelector(".err[data-live]")) show(input, problem(input)); };
+    input.addEventListener("blur", live);
+    input.addEventListener("input", function () { if (!problem(input)) show(input, ""); });
+  });
+
+  document.querySelectorAll('input[type="password"]').forEach(function (input) {
+    var wrap = document.createElement("span");
+    wrap.className = "pw-wrap";
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    var eye = document.createElement("button");
+    eye.type = "button"; eye.className = "pw-eye"; eye.textContent = "👁";
+    eye.setAttribute("aria-label", msg("show-password", "Show password"));
+    eye.addEventListener("click", function () {
+      var shown = input.type === "text";
+      input.type = shown ? "password" : "text";
+      eye.setAttribute("aria-label", msg(shown ? "show-password" : "hide-password", shown ? "Show password" : "Hide password"));
+      eye.setAttribute("aria-pressed", shown ? "false" : "true");
+    });
+    wrap.appendChild(eye);
+  });
+
+  // a second tap on a slow connection must not send the form twice (the server also refuses duplicates)
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (e.defaultPrevented || form.hasAttribute("data-no-guard")) return;  // AJAX forms (chat) handle themselves
+    var bad = null;
+    form.querySelectorAll('input[type="tel"], input[type="email"], input[name="bin_iin"], input[data-bin]').forEach(function (input) {
+      var p = problem(input); show(input, p); if (p && !bad) bad = input;
+    });
+    if (bad) { e.preventDefault(); bad.focus(); return; }
+    var buttons = form.querySelectorAll('button[type="submit"], button:not([type]), input[type="submit"]');
+    setTimeout(function () { buttons.forEach(function (b) { b.disabled = true; }); }, 0);  // after the value is sent
+    setTimeout(function () { buttons.forEach(function (b) { b.disabled = false; }); }, 8000);  // downloads stay on the page
+  });
 
   // ---- tables -> stacked cards on phones: copy column headers into data-label -------
   document.querySelectorAll(".table-wrap table").forEach(function (t) {

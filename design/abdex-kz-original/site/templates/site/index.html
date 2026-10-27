@@ -1,0 +1,27 @@
+{% extends "site/base.html" %}
+{% block title %}AbdEX — Регистрация{% endblock %}
+
+{% block content %}
+<section class="home-wrap">
+
+  <!-- Заголовок -->
+  <div class="home-hero">
+    <h1 class="home-title">Выберите, кто вы</h1>
+    <p class="home-subtitle">Дальше сможете привязать Телеграмм</p>
+  </div>
+
+  <!-- Кнопки -->
+  <div class="home-cards">
+    <a href="/register/driver" class="role-card role-card-xl">
+      <div class="text-3xl font-semibold">Я Перевозчик</div>
+      <div class="mt-3 text-base opacity-90">Получайте заявки и отправляйте ставки</div>
+    </a>
+
+    <a href="/register/client" class="role-card role-card-xl">
+      <div class="text-3xl font-semibold">Я Клиент</div>
+      <div class="mt-3 text-base opacity-90">Создавайте заявки и выбирайте перевозчика</div>
+    </a>
+  </div>
+
+</section>
+{% endblock %}

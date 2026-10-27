@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ t("impersonation.page_title") }}{% endblock %}
+{% block content %}
+<h1>{{ t("impersonation.stop_title") }}</h1>
+<p class="muted">{{ t("impersonation.stop_intro", target=(user.full_name or user.phone or user.email), staff=(user.impersonation_staff_name or "—")) }}</p>
+<form method="post" action="/impersonation/stop">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="session_id" value="{{ user.impersonation_session_id }}">
+  <div class="field">
+    <label for="reason">{{ t("impersonation.field_reason") }}</label>
+    <input type="text" id="reason" name="reason" required>
+  </div>
+  <button type="submit" class="btn-secondary">{{ t("impersonation.stop_submit") }}</button>
+</form>
+<a class="btn-link" href="/dashboard">{{ t("impersonation.keep_going") }}</a>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "_macros.html" import admin_nav %}
+{% block title %}Админ — Права доступа — AbdEX{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+{{ admin_nav("acl") }}
+<h1>Матрица прав по ролям (FR-ACL-06)</h1>
+<p class="muted">Каждая ячейка — реальная строка в БД, не код. Изменение применяется немедленно ко всем новым проверкам прав.</p>
+<table>
+  <thead>
+    <tr>
+      <th>Роль</th>
+      {% for permission in permissions %}
+      <th>{{ permission }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+  {% for role in roles %}
+    <tr>
+      <td>{{ role.value }}</td>
+      {% for permission in permissions %}
+      {% set granted = permission in matrix.get(role, []) %}
+      <td>
+        <form method="post" action="/admin/acl/toggle" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="role" value="{{ role.value }}">
+          <input type="hidden" name="permission" value="{{ permission }}">
+          <input type="hidden" name="granted" value="{{ 'revoke' if granted else 'grant' }}">
+          <button type="submit" class="btn-inline{{ ' btn-secondary' if not granted else '' }}">{{ "✓" if granted else "—" }}</button>
+        </form>
+      </td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

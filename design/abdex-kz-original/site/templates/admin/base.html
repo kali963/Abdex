@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <title>{% block title %}Админка{% endblock %}</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/admin.css" />
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body class="bg-slate-100 text-slate-800">
+    <div class="flex min-h-screen">
+
+        <!-- LEFT SIDEBAR -->
+        <aside class="w-64 bg-white shadow-md p-5">
+            <h1 class="text-xl font-bold mb-6">🚛 Freight Admin</h1>
+
+            <nav class="space-y-3">
+                <a href="/admin" class="block hover:text-indigo-600">📋 Заявки</a>
+                <a href="/admin/plans" class="block hover:text-indigo-600">🗓 План отгрузок</a>
+
+                <a href="/notifications" class="block hover:text-indigo-600 relative pr-8">
+                    🔔 Уведомления
+                    <span id="notifBadgeAdmin"
+                          class="hidden absolute top-0 right-0 text-[10px] px-2 py-[2px] rounded-full bg-red-600 text-white">
+                        0
+                    </span>
+                </a>
+
+                <a href="/admin/clients" class="block hover:text-indigo-600">👤 Клиенты</a>
+                <a href="/admin/drivers" class="block hover:text-indigo-600">🚚 Водители</a>
+                <a href="/admin/managers" class="block hover:text-indigo-600">🧑‍💼 Менеджеры</a>
+                <a href="/admin/chats" class="block hover:text-indigo-600">💬 Чаты</a>
+                <a href="/admin/calculators" class="block hover:text-indigo-600">🧮 Калькуляторы</a>
+
+                <a href="/manager/cabinet" class="block mt-4 pt-4 border-t border-slate-200 hover:text-indigo-600 font-semibold">
+                    🧑‍💼 Перейти в кабинет менеджера
+                </a>
+            </nav>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="flex-1 p-8">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    {% block extra_scripts %}{% endblock %}
+
+    <script>
+      (function () {
+        async function refreshNotifBadgeAdmin() {
+          const badge = document.getElementById("notifBadgeAdmin");
+          if (!badge) return;
+
+          try {
+            const r = await fetch("/notifications/unread_count", { credentials: "same-origin" });
+            const data = await r.json();
+            const n = Number(data.count || 0);
+
+            if (n > 0) {
+              badge.textContent = String(n);
+              badge.classList.remove("hidden");
+            } else {
+              badge.classList.add("hidden");
+            }
+          } catch (e) {
+          }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+          refreshNotifBadgeAdmin();
+          setInterval(refreshNotifBadgeAdmin, 15000);
+        });
+      })();
+    </script>
+</body>
+</html>

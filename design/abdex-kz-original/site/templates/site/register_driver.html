@@ -1,0 +1,120 @@
+{% extends "site/base.html" %}
+{% block title %}Регистрация перевозчика — AbdEX{% endblock %}
+
+{% block content %}
+
+<section class="py-10 max-w-xl mx-auto">
+  <h1 class="text-2xl font-semibold mb-4 text-slate-900">Регистрация перевозчика</h1>
+  <p class="text-sm text-slate-400 mb-6">
+    Для регистрации введите корректные данные.
+  </p>
+
+  {% if error %}
+    <div class="mb-4 p-3 rounded-lg border border-red-400 text-red-200 text-sm">
+      {{ error }}
+    </div>
+  {% endif %}
+
+  <form method="post" class="auth-form space-y-4">
+
+    <div>
+      <label class="block text-sm mb-1">Имя для отображения *</label>
+      <input
+        name="name"
+        required
+        value="{{ (form.name if form else '')|e }}"
+        class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm"
+      >
+    </div>
+
+    <div>
+      <label class="block text-sm mb-1">Телефон *</label>
+      <input
+        name="phone"
+        required
+        placeholder="+7..."
+        value="{{ (form.phone if form else '')|e }}"
+        class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm"
+      >
+    </div>
+
+    <div>
+      <label class="block text-sm mb-1">Email (необязательно)</label>
+      <input
+        name="email"
+        type="email"
+        value="{{ (form.email if form else '')|e }}"
+        class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm"
+      >
+    </div>
+
+    <div>
+      <label class="block text-sm mb-1">Пароль *</label>
+      <input
+        name="password"
+        type="password"
+        required
+        minlength="6"
+        class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm"
+      >
+      <p class="text-xs text-slate-500 mt-1">Минимум 6 символов</p>
+    </div>
+
+    <div>
+      <label class="block text-sm mb-1">Форма ведения бизнеса *</label>
+      <select
+        name="business_form"
+        required
+        class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm"
+      >
+        <option value="">Выбрать</option>
+        <option value="ТОО" {% if form and form.business_form=='ТОО' %}selected{% endif %}>ТОО</option>
+        <option value="ИП" {% if form and form.business_form=='ИП' %}selected{% endif %}>ИП</option>
+        <option value="ЧЛ" {% if form and form.business_form=='ЧЛ' %}selected{% endif %}>ЧЛ</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-sm mb-1">Название ТОО / ИП / ЧЛ *</label>
+      <input
+        name="entity_name"
+        required
+        value="{{ (form.entity_name if form else '')|e }}"
+        class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm"
+      >
+    </div>
+
+    <div>
+      <label class="block text-sm mb-1">ИИН/БИН *</label>
+      <input
+        name="iin"
+        required
+        maxlength="12"
+        placeholder="12 цифр"
+        value="{{ (form.iin if form else '')|e }}"
+        class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm"
+      >
+      <p class="text-xs text-slate-500 mt-1">ИИН (для ИП/ЧЛ), БИН для ТОО</p>
+    </div>
+
+    <div>
+      <label class="block text-sm mb-1">Авто *</label>
+      <input
+        name="car"
+        required
+        placeholder="Марка, модель, госномер"
+        value="{{ (form.car if form else '')|e }}"
+        class="auth-input rounded-lg border border-slate-700 px-3 py-2 text-sm"
+      >
+    </div>
+
+    <div style="margin-top: 24px;">
+      <button type="submit" class="btn-main">
+        Зарегистрироваться
+      </button>
+    </div>
+
+  </form>
+</section>
+
+{% endblock %}

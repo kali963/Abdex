@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% from "_macros.html" import route_line %}
+{% block title %}{{ t("orders.detail_page_title", number=order.order_number) }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>{{ order.order_number }} <span class="badge badge-{{ order.status.value }}">{{ t("orders.status_" + order.status.value) }}</span></h1>
+  <a href="/orders">{{ t("orders.back_to_list") }}</a>
+</div>
+
+<section>
+  <h2>{{ t("orders.detail_cargo_title") }}</h2>
+  <p>{{ order.cargo_name }} — {{ t("orders.detail_weight_label") }}: {{ order.cargo_weight_kg }} {{ t("orders.unit_kg") }}</p>
+  <p>{{ t("orders.detail_rate_label") }}: {{ order.desired_rate_minor|money(order.currency_code) if order.desired_rate_minor else t("orders.detail_no_rate") }}</p>
+</section>
+
+<section>
+  <h2>{{ t("orders.detail_route_title") }}</h2>
+  {% set loading = points|selectattr("point_type.value", "equalto", "loading")|first %}
+  {% set unloading = points|selectattr("point_type.value", "equalto", "unloading")|first %}
+  {{ route_line(loading.city if loading else None, unloading.city if unloading else None) }}
+  <table>
+    <tbody>
+    {% for point in points %}
+      <tr>
+        <td>{{ t("orders.detail_loading") if point.point_type.value == "loading" else t("orders.detail_unloading") }}</td>
+        <td>{{ point.planned_date_from|localtime if point.planned_date_from else (point.planned_date_to|localtime if point.planned_date_to else "—") }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if order.status.value == "draft" %}
+<section>
+  <form method="post" action="/orders/{{ order.id }}/publish">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit">{{ t("orders.publish_button") }}</button>
+  </form>
+</section>
+{% endif %}
+
+<section>
+  <h2>{{ t("orders.bids_title") }}</h2>
+  {% if order.status.value == "draft" %}
+  <p class="muted">{{ t("orders.bids_not_published_notice") }}</p>
+  {% elif bids %}
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t("orders.bid_col_carrier") }}</th>
+        <th>{{ t("orders.bid_col_price") }}</th>
+        <th>{{ t("orders.bid_col_valid_until") }}</th>
+        <th>{{ t("orders.bid_col_status") }}</th>
+        <th>{{ t("orders.bid_col_action") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in bids %}
+      <tr>
+        <td>{{ row.carrier_name }}</td>
+        <td>{{ row.bid.current_price_minor|money(row.bid.currency_code) }}</td>
+        <td>{{ row.bid.valid_until|localtime }}</td>
+        <td><span class="badge badge-{{ row.bid.status.value }}">{{ t("orders.bid_status_" + row.bid.status.value) }}</span></td>
+        <td>
+          <a href="/bids/{{ row.bid.id }}">{{ t("orders.bid_negotiate_link") }}</a>
+          {% if row.bid.status.value == "pending" and order.status.value == "published" %}
+          <form method="post" action="/orders/{{ order.id }}/bids/{{ row.bid.id }}/accept" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn-inline">{{ t("orders.bid_accept_button") }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("orders.bids_empty") }}</p>
+  {% endif %}
+</section>
+{% endblock %}

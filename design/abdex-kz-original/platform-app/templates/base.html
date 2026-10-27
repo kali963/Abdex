@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="{{ locale or 'ru' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}AbdEX{% endblock %}</title>
+  {% block head_extra %}{% endblock %}
+  <style>
+    :root {
+      color-scheme: light;
+      /* Matches the real abdex.kz site's own palette (pulled from its
+         static/site.css) — this project is meant to eventually replace
+         that site on the same domain, keeping the look it already has. */
+      --bg-main: #f5f2eb;     /* warm sand background */
+      --text-main: #1f3253;   /* deep navy ink */
+      --input-bg: #a9cac1;    /* sage green fields */
+      --button-bg: #44695f;   /* forest-green primary */
+      --button-bg-hover: #35564e;
+      --error: #d64545;
+      --success: #2e8b57;
+      --card-bg: #ffffff;
+      --border-soft: rgba(31,50,83,.14);
+      --muted: rgba(31,50,83,.72);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      background: var(--bg-main);
+      color: var(--text-main);
+      font-size: 17px;
+      line-height: 1.6;
+      position: relative;
+      overflow-x: hidden;
+    }
+    /* faint tiled wordmark watermark, same technique as the real site */
+    .watermark-field { position: fixed; inset: -25%; width: 150%; height: 150%; pointer-events: none; z-index: 0; }
+    header, main, footer { position: relative; z-index: 1; }
+
+    header {
+      background: var(--bg-main);
+      padding: 16px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      row-gap: 10px;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .wordmark { display: flex; align-items: center; gap: 10px; color: var(--text-main); text-decoration: none; }
+    .wordmark .logo-mark { display: block; height: 34px; width: auto; }
+    .wordmark .tagline { font-size: .72rem; color: var(--muted); font-weight: 600; max-width: 140px; line-height: 1.2; }
+    .locale-switch { font-size: .9rem; }
+    .locale-switch a { opacity: .6; margin-left: 8px; color: var(--text-main); text-decoration: none; }
+    .locale-switch a.active { opacity: 1; text-decoration: underline; }
+
+    main { max-width: 480px; margin: 44px auto; padding: 0 16px; }
+    body.wide main { max-width: 1100px; }
+
+    .card {
+      background: var(--card-bg);
+      border: 1.5px solid var(--border-soft);
+      border-radius: 24px;
+      padding: 30px;
+      box-shadow: 0 8px 24px rgba(31,50,83,.08), 0 2px 6px rgba(31,50,83,.04);
+    }
+
+    h1 { font-size: 1.7rem; font-weight: 800; margin: 0 0 20px; letter-spacing: -.3px; }
+    h2 { font-size: 1.2rem; margin: 0 0 14px; font-weight: 800; }
+    p { margin: 0 0 12px; max-width: 64ch; }
+
+    label { display: block; font-size: .95rem; margin-bottom: 6px; font-weight: 700; color: var(--text-main); }
+    input, select, textarea {
+      width: 100%; padding: 13px 14px; margin-bottom: 4px;
+      border: 1px solid rgba(68,105,95,.25); border-radius: 14px;
+      font-size: 1.05rem; font-family: inherit; background: var(--input-bg); color: var(--text-main);
+    }
+    input::placeholder, textarea::placeholder { color: rgba(31,50,83,.55); }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: rgba(68,105,95,.5); box-shadow: 0 0 0 3px rgba(68,105,95,.18);
+    }
+    .field { margin-bottom: 16px; }
+    .error { color: var(--error); font-size: .9rem; margin: 0 0 8px; }
+    tr.unread { font-weight: 700; }
+    .flash { background: rgba(214,69,69,.1); color: var(--error); border: 1px solid rgba(214,69,69,.25); border-radius: 14px; padding: 12px 16px; margin-bottom: 18px; font-size: .95rem; }
+    .notice { background: rgba(46,139,87,.1); color: var(--success); border: 1px solid rgba(46,139,87,.25); border-radius: 14px; padding: 12px 16px; margin-bottom: 18px; font-size: .95rem; }
+
+    button, .btn-link {
+      display: inline-block; width: auto; padding: 14px 22px;
+      background: var(--button-bg); color: #fff; border: none;
+      border-radius: 16px; font-size: 1.05rem; font-weight: 800; font-family: inherit;
+      cursor: pointer; text-decoration: none; text-align: center; white-space: nowrap;
+      box-shadow: 0 10px 22px rgba(68,105,95,.18);
+      transition: background .15s, transform .1s, box-shadow .15s;
+    }
+    form:not(.inline-form) > button:only-of-type, form:not(.inline-form) > button:last-child { width: 100%; }
+    button:hover, .btn-link:hover { background: var(--button-bg-hover); transform: translateY(-1px); }
+    button:active, .btn-link:active { transform: translateY(0); box-shadow: 0 6px 14px rgba(68,105,95,.16); }
+    button:focus-visible, .btn-link:focus-visible, a:focus-visible {
+      outline: 3px solid var(--button-bg); outline-offset: 2px;
+    }
+    .btn-secondary { background: #fff; color: var(--text-main); border: 1px solid rgba(31,50,83,.18); box-shadow: none; }
+    .btn-secondary:hover { background: rgba(31,50,83,.04); }
+    button.btn-inline, .btn-link.btn-small { padding: 9px 16px; font-size: .88rem; border-radius: 12px; box-shadow: none; }
+    form.inline-form { display: inline; }
+
+    .muted { color: var(--muted); font-size: .95rem; margin-top: 12px; }
+    a { color: var(--button-bg); text-decoration-color: rgba(68,105,95,.4); font-weight: 600; }
+    a:hover { text-decoration-color: var(--button-bg); }
+
+    .impersonation-banner {
+      background: #d64545; color: #fff; padding: 10px 24px; font-size: .92rem; font-weight: 700;
+      display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center;
+    }
+    .impersonation-banner a { color: #fff; text-decoration: underline; }
+    nav.top-nav { display: flex; flex-wrap: wrap; row-gap: 8px; }
+    nav.top-nav a { color: var(--text-main); opacity: .75; text-decoration: none; margin-left: 18px; font-size: 1rem; font-weight: 700; }
+    nav.top-nav a:hover { opacity: 1; }
+    .admin-nav a { color: var(--text-main); opacity: .6; text-decoration: none; margin-right: 18px; font-size: 1rem; font-weight: 700; }
+    .admin-nav a:hover, .admin-nav a.active { opacity: 1; color: var(--button-bg); }
+
+    /* Big selectable option cards — same role-card language as the
+       real site's home page (two equal-weight choices), reused for
+       any either/or decision (registration role, company type). */
+    .option-card { display: block; position: relative; cursor: pointer; margin-bottom: 12px; }
+    .option-card input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .option-card .option-body {
+      display: block; border-radius: 20px; padding: 20px 22px;
+      background: var(--button-bg); color: #fff;
+      transition: background .15s, transform .1s;
+    }
+    .option-card .option-body:hover { background: var(--button-bg-hover); transform: translateY(-1px); }
+    .option-card input:checked + .option-body { background: var(--button-bg-hover); box-shadow: 0 0 0 3px rgba(68,105,95,.35); }
+    .option-card input:focus-visible + .option-body { outline: 3px solid var(--text-main); outline-offset: 2px; }
+    .option-card .option-title { font-size: 1.2rem; font-weight: 800; display: block; }
+    .option-card .option-hint { font-size: .88rem; opacity: .9; display: block; margin-top: 4px; }
+
+    /* Role-picker landing — two equal-weight cards, same shape as the
+       real site's home page (register_role.html). */
+    .role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 20px; }
+    @media (max-width: 640px) {
+      .role-grid { grid-template-columns: 1fr; }
+      nav.top-nav a { margin-left: 12px; font-size: .92rem; }
+      header { padding: 14px 16px; }
+    }
+    a.role-card {
+      display: block; min-height: 160px; padding: 30px; border-radius: 24px;
+      background: var(--button-bg); color: #fff; text-decoration: none;
+      transition: background .15s, transform .15s, box-shadow .15s;
+      box-shadow: 0 10px 22px rgba(68,105,95,.18);
+    }
+    a.role-card:hover { background: var(--button-bg-hover); transform: translateY(-2px); box-shadow: 0 14px 32px rgba(68,105,95,.3); }
+    a.role-card .role-title { display: block; font-size: 1.7rem; font-weight: 800; margin-bottom: 8px; }
+    a.role-card .role-hint { display: block; font-size: .95rem; opacity: .9; line-height: 1.4; }
+
+    /* password field + show/hide toggle, matching the real site's login */
+    .pass-wrap { position: relative; }
+    .pass-wrap input { padding-right: 52px; }
+    .pass-eye {
+      position: absolute; right: 8px; top: 8px; width: 38px; height: 38px;
+      border-radius: 12px; border: 1px solid rgba(68,105,95,.25); background: rgba(255,255,255,.6);
+      box-shadow: none; padding: 0; font-size: 1rem; color: var(--text-main); line-height: 1;
+    }
+    .pass-eye:hover { background: rgba(255,255,255,.9); transform: none; }
+
+    .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; border-bottom: 1px solid var(--border-soft); padding-bottom: 14px; }
+    .filters { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; align-items: flex-end; }
+    .filters .field { margin-bottom: 0; min-width: 160px; }
+    .filters button { padding: 11px 18px; }
+
+    /* multi-field forms (e.g. new-order): horizontal, two-column fill on
+       desktop; back to the plain single-column stack on narrow screens. */
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 24px; align-items: start; }
+    .form-grid .field { margin-bottom: 16px; }
+    .form-grid > button, .form-grid > p.muted { grid-column: 1 / -1; }
+    @media (max-width: 640px) {
+      .form-grid { grid-template-columns: 1fr; }
+    }
+    .empty-state { text-align: center; padding: 36px 0; color: var(--muted); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 1rem; }
+    th { text-align: left; padding: 9px 6px; border-bottom: 1.5px solid var(--border-soft); color: var(--muted); font-weight: 700; font-size: .85rem; }
+    td { text-align: left; padding: 12px 6px; border-bottom: 1px solid var(--border-soft); }
+    tbody tr:hover { background: rgba(169,202,193,.15); }
+    td.num, th.num { text-align: right; }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .stat-card { background: var(--card-bg); border: 1px solid var(--border-soft); border-radius: 18px; padding: 16px; }
+    .stat-card .num { font-size: 1.7rem; font-weight: 800; color: var(--text-main); display: block; }
+    .stat-card .label { font-size: .78rem; color: var(--muted); }
+
+    .badge {
+      display: inline-flex; align-items: center; padding: 4px 12px; font-size: .85rem; font-weight: 700;
+      white-space: nowrap; border-radius: 999px; background: rgba(169,202,193,.35); color: var(--text-main);
+      border: 1px solid rgba(68,105,95,.2);
+    }
+    .badge-draft, .badge-withdrawn, .badge-expired, .badge-closed, .badge-l0_basic { background: rgba(31,50,83,.07); }
+    .badge-published, .badge-pending, .badge-active, .badge-in_review, .badge-open, .badge-under_review, .badge-in_progress, .badge-waiting_for_user, .badge-l1_documents { background: rgba(68,105,95,.15); color: var(--button-bg-hover); border-color: rgba(68,105,95,.3); }
+    .badge-in_deal, .badge-accepted, .badge-completed, .badge-signed, .badge-verified, .badge-approved, .badge-resolved, .badge-l2_registries, .badge-l3_enhanced { background: rgba(46,139,87,.14); color: var(--success); border-color: rgba(46,139,87,.3); }
+    .badge-cancelled, .badge-rejected { background: rgba(214,69,69,.12); color: var(--error); border-color: rgba(214,69,69,.3); }
+    .badge-generated, .badge-uploaded, .badge-required { background: rgba(68,105,95,.15); color: var(--button-bg-hover); border-color: rgba(68,105,95,.3); }
+    .badge-low { background: rgba(46,139,87,.14); color: var(--success); border-color: rgba(46,139,87,.3); }
+    .badge-medium { background: rgba(68,105,95,.15); color: var(--button-bg-hover); border-color: rgba(68,105,95,.3); }
+    .badge-high { background: rgba(214,69,69,.12); color: var(--error); border-color: rgba(214,69,69,.3); }
+
+    /* Route line — every origin -> destination in the system drawn the
+       same way (orders, bids, deals, trips, calculator). */
+    .route { display: flex; align-items: center; gap: 10px; margin: 2px 0; }
+    .route .city { font-weight: 800; font-size: 1.05rem; white-space: nowrap; }
+    .route .line { flex: 1 1 auto; position: relative; height: 2px; background: rgba(68,105,95,.25); border-radius: 2px; min-width: 32px; }
+    .route .line::before, .route .line::after { content: ""; position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%; transform: translateY(-50%); }
+    .route .line::before { left: 0; background: var(--button-bg); }
+    .route .line::after { right: 0; background: transparent; border: 2px solid var(--button-bg); }
+    .route.compact .city { font-size: .9rem; }
+    .route-meta { font-size: .8rem; color: var(--muted); margin-top: 3px; }
+
+    .chat-log { max-height: 360px; overflow-y: auto; border: 1px solid var(--border-soft); border-radius: 16px; padding: 14px; margin-bottom: 12px; background: #fff; }
+    .chat-message { margin-bottom: 10px; }
+    .chat-message .meta { font-size: .75rem; color: var(--muted); margin-bottom: 2px; }
+    .chat-message.system { color: var(--muted); font-style: italic; font-size: .85rem; }
+    section + section { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--border-soft); }
+  </style>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <svg class="watermark-field" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="wordmark-tile" patternUnits="userSpaceOnUse" width="900" height="900">
+        <text x="70" y="140" font-family="Arial, sans-serif" font-size="32" font-weight="800" fill="#1f3253" fill-opacity="0.07">AbdEX</text>
+        <text x="480" y="420" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#1f3253" fill-opacity="0.06">AbdEX</text>
+        <text x="210" y="690" font-family="Arial, sans-serif" font-size="33" font-weight="800" fill="#1f3253" fill-opacity="0.07">AbdEX</text>
+        <text x="650" y="180" font-family="Arial, sans-serif" font-size="28" font-weight="800" fill="#1f3253" fill-opacity="0.06">AbdEX</text>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#wordmark-tile)"/>
+  </svg>
+  {% if user and user.is_impersonating %}
+  <div class="impersonation-banner">
+    <span>{{ t("impersonation.banner_text", staff=(user.impersonation_staff_name or "—")) if t else "Вы работаете от имени другого пользователя" }}</span>
+    <a href="/impersonation/stop">{{ t("impersonation.banner_stop_link") if t else "Завершить подмену личности" }}</a>
+  </div>
+  {% endif %}
+  <header>
+    <a class="wordmark" href="/">
+      <img src="/static/logo.png" alt="AbdEX" class="logo-mark">
+      <span class="tagline">Торгово-экспедиторская платформа</span>
+    </a>
+    <span style="display:flex;align-items:center;">
+      <nav class="top-nav">
+        <a href="/calculator">{{ t("nav.calculator") if t else "Калькулятор" }}</a>
+        {% if user %}
+        {% if user.nav_client %}<a href="/orders">{{ t("nav.orders") if t else "Заявки" }}</a>{% endif %}
+        {% if user.nav_carrier %}<a href="/marketplace">{{ t("nav.marketplace") if t else "Витрина" }}</a>
+        <a href="/bids">{{ t("nav.bids") if t else "Мои предложения" }}</a>{% endif %}
+        {% if user.nav_client or user.nav_carrier %}<a href="/deals">{{ t("nav.deals") if t else "Сделки" }}</a>
+        <a href="/billing">{{ t("nav.billing") if t else "Биллинг" }}</a>
+        <a href="/kyc">{{ t("nav.kyc") if t else "Верификация" }}</a>
+        <a href="/settings/integrations">{{ t("nav.integrations") if t else "Интеграции" }}</a>
+        <a href="/settings/counterparties">{{ t("nav.counterparty_list") if t else "Контрагенты" }}</a>{% endif %}
+        {% if user.nav_driver %}<a href="/trips">{{ t("nav.trips") if t else "Мои рейсы" }}</a>
+        <a href="/driver/documents">{{ t("nav.driver_documents") if t else "Документы" }}</a>{% endif %}
+        {% if user.is_platform_staff %}<a href="/admin">{{ t("nav.admin") if t else "Админ" }}</a>{% endif %}
+        <a href="/support">{{ t("nav.support") if t else "Поддержка" }}</a>
+        <a href="/notifications">{{ t("nav.notifications") if t else "Уведомления" }}</a>
+        <a href="/profile">{{ t("nav.profile") if t else "Профиль" }}</a>
+        {% else %}
+        <a href="/login">{{ t("login.submit") if t else "Войти" }}</a>
+        <a href="/register">{{ t("login.register_link") if t else "Регистрация" }}</a>
+        {% endif %}
+      </nav>
+      <span class="locale-switch">
+        {% for code in (locales or ["ru", "kk", "en"]) %}<a href="/locale/{{ code }}" class="{{ 'active' if code == locale else '' }}">{{ code|upper }}</a>{% endfor %}
+      </span>
+      {% if user %}<a href="/logout" style="margin-left:16px; color: var(--text-main); opacity:.7; font-weight:700;">{{ t("common.logout") if t else "Выйти" }}</a>{% endif %}
+    </span>
+  </header>
+  <main>
+    <div class="card">
+      {% if error %}<p class="flash">{{ error }}</p>{% endif %}
+      {% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</body>
+</html>

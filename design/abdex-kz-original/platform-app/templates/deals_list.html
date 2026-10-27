@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ t("deal.list_page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<h1>{{ t("deal.list_title", company=company.name) }}</h1>
+
+{% if deals %}
+<table>
+  <thead>
+    <tr>
+      <th>{{ t("deal.col_order") }}</th>
+      <th>{{ t("deal.col_role") }}</th>
+      <th>{{ t("deal.col_counterparty") }}</th>
+      <th>{{ t("deal.col_status") }}</th>
+      <th>{{ t("orders.col_created") }}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in deals %}
+    <tr>
+      <td><a href="/deals/{{ row.deal.id }}">{{ row.order_number }}</a></td>
+      <td>{{ t(row.role_key) }}</td>
+      <td>{{ row.counterparty_name }}</td>
+      <td><span class="badge badge-{{ row.deal.status.value }}">{{ t("deal.status_" + row.deal.status.value) }}</span></td>
+      <td>{{ row.deal.created_at|localtime }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">{{ t("deal.empty_state") }}</p>
+{% endif %}
+{% endblock %}
