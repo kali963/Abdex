@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ t("notifications.page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<h1>{{ t("notifications.title") }}</h1>
+
+<section>
+  {% if messages %}
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t("notifications.col_text") }}</th>
+        <th>{{ t("notifications.col_category") }}</th>
+        <th>{{ t("orders.col_created") }}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for message in messages %}
+      <tr{% if not message.read_at %} class="unread"{% endif %}>
+        <td>{% if message.link_path %}<a href="{{ message.link_path }}">{{ message.rendered_text }}</a>{% else %}{{ message.rendered_text }}{% endif %}</td>
+        <td>{{ t("notifications.category_" + message.category.value) }}</td>
+        <td>{{ message.created_at|localtime }}</td>
+        <td>
+          {% if not message.read_at %}
+          <form method="post" action="/notifications/{{ message.id }}/read" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn-inline">{{ t("notifications.mark_read") }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("notifications.empty_state") }}</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>{{ t("notifications.section_preferences") }}</h2>
+  <form method="post" action="/notifications/preferences">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="field">
+      <label for="preferred_locale">{{ t("notifications.field_locale") }}</label>
+      <select id="preferred_locale" name="preferred_locale" required>
+        {% for code in locales %}
+        <option value="{{ code }}" {% if preference and preference.preferred_locale.value == code %}selected{% endif %}>{{ code|upper }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="quiet_hours_start_hour">{{ t("notifications.field_quiet_hours") }}</label>
+      <input type="number" id="quiet_hours_start_hour" name="quiet_hours_start_hour" min="0" max="23"
+             value="{{ preference.quiet_hours_start_hour if preference and preference.quiet_hours_start_hour is not none else '' }}"
+             placeholder="{{ t('notifications.field_quiet_hours_from') }}">
+      <input type="number" id="quiet_hours_end_hour" name="quiet_hours_end_hour" min="0" max="23"
+             value="{{ preference.quiet_hours_end_hour if preference and preference.quiet_hours_end_hour is not none else '' }}"
+             placeholder="{{ t('notifications.field_quiet_hours_to') }}" style="margin-left:8px;">
+    </div>
+    <div class="field">
+      <label><input type="checkbox" name="digest_enabled" {% if preference and preference.digest_enabled %}checked{% endif %}> {{ t("notifications.field_digest") }}</label>
+    </div>
+    <button type="submit" class="btn-secondary">{{ t("notifications.save_preferences") }}</button>
+  </form>
+</section>
+{% endblock %}

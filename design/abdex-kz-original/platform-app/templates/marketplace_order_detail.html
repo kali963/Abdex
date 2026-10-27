@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field, route_line %}
+{% block title %}{{ t("marketplace.detail_page_title", number=order.order_number) }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>{{ order.order_number }}{% if order.is_closed %} <span class="badge badge-pending">{{ t("marketplace.closed_badge") }}</span>{% endif %}</h1>
+  <a href="/marketplace">{{ t("marketplace.back_to_list") }}</a>
+</div>
+
+<section>
+  <h2>{{ t("marketplace.section_cargo") }}</h2>
+  <p>{{ t("orders.detail_weight_label") }}: {{ order.cargo_weight_kg }} {{ t("orders.unit_kg") }}{% if order.cargo_volume_m3 %}, {{ order.cargo_volume_m3 }} {{ t("marketplace.unit_m3") }}{% endif %}</p>
+  {% if order.required_body_type %}<p>{{ t("marketplace.required_body_type") }}: {{ order.required_body_type }}</p>{% endif %}
+  {% if order.adr_class %}<p>{{ t("marketplace.adr_class") }}: {{ order.adr_class }} {% if order.un_number %}(UN {{ order.un_number }}){% endif %}</p>{% endif %}
+  <p>{{ t("orders.detail_rate_label") }}: {{ order.desired_rate_minor|money(order.currency_code) if order.desired_rate_minor else t("orders.detail_no_rate") }}</p>
+  {% if order.distance_km %}<p>{{ t("marketplace.distance") }}: {{ order.distance_km }} {{ t("marketplace.unit_km") }}</p>{% endif %}
+</section>
+
+<section>
+  <h2>{{ t("orders.detail_route_title") }}</h2>
+  {% set loading = points|selectattr("point_type.value", "equalto", "loading")|first %}
+  {% set unloading = points|selectattr("point_type.value", "equalto", "unloading")|first %}
+  {{ route_line(loading.city if loading else None, unloading.city if unloading else None) }}
+  <p class="muted">{{ t("marketplace.address_hidden_notice") }}</p>
+</section>
+
+<section>
+  <h2>{{ t("marketplace.section_bid") }}</h2>
+  <form method="post" action="/marketplace/orders/{{ order.id }}/bid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {{ field("price", t("marketplace.field_price", currency=order.currency_code)) }}
+    {{ field("valid_until", t("marketplace.field_valid_until"), type="datetime-local") }}
+    <div class="field">
+      <label for="comment">{{ t("marketplace.field_comment") }}</label>
+      <textarea id="comment" name="comment" rows="3"></textarea>
+    </div>
+    <button type="submit">{{ t("marketplace.submit_bid") }}</button>
+  </form>
+</section>
+{% endblock %}

@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#f5f2eb">
   <meta name="color-scheme" content="light">
   <title>{% block title %}{{ _("app.name") }}{% endblock %} — AbdEX</title>
-  <link rel="stylesheet" href="/static/css/app.css?v=7">
+  <link rel="stylesheet" href="/static/css/app.css?v=8">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/img/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="/static/img/icon-192.png">
@@ -125,7 +125,7 @@
   {% endif %}
 </nav>
 {% endif %}
-<script src="/static/js/app.js?v=4" defer></script>
+<script src="/static/js/app.js?v=5" defer data-err-phone="{{ _('js.err_phone') }}" data-err-email="{{ _('js.err_email') }}" data-err-bin="{{ _('js.err_bin') }}" data-show-password="{{ _('js.show_password') }}" data-hide-password="{{ _('js.hide_password') }}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

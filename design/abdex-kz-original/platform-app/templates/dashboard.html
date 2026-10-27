@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ t("dashboard.page_title") }}{% endblock %}
+{% block content %}
+<h1>{{ t("dashboard.greeting", name=(user.full_name or user.phone or user.email)) }}</h1>
+<p class="muted">{{ t("dashboard.registered_since", date=user.created_at|localtime) }}</p>
+
+{% if memberships %}
+<table>
+  <thead><tr><th>{{ t("dashboard.table_company") }}</th><th>{{ t("dashboard.table_type") }}</th><th>{{ t("dashboard.table_role") }}</th></tr></thead>
+  <tbody>
+  {% for m in memberships %}
+    <tr>
+      <td>{{ m.company.name }}</td>
+      <td>{{ m.company.company_type.value }}</td>
+      <td>{{ m.role.value }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">{{ t("dashboard.no_memberships") }}</p>
+{% endif %}
+
+<p style="margin-top:20px"><a href="/companies/new">{{ t("dashboard.register_company_link") }}</a></p>
+{% endblock %}

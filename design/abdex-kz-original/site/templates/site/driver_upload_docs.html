@@ -1,0 +1,30 @@
+{% extends "site/base.html" %}
+{% block title %}Документы водителя | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 py-10">
+  <h1 class="text-2xl font-semibold mb-2">Загрузите документы</h1>
+  <p class="text-slate-600 mb-6">
+    Пожалуйста, отправьте <b>удостоверение личности</b> и <b>техпаспорт</b>.
+    Можно фото или файл (PDF/JPG/PNG).
+  </p>
+
+  {% if error %}
+    <div class="mb-4 p-3 rounded-lg bg-red-50 text-red-700 border border-red-200">{{ error }}</div>
+  {% endif %}
+
+  <form action="/driver/upload-docs" method="post" enctype="multipart/form-data" class="space-y-4">
+    <div class="bg-white rounded-2xl shadow p-5">
+      <label class="block font-semibold mb-2">Удостоверение личности</label>
+      <input type="file" name="id_card" accept=".pdf,image/*" required>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow p-5">
+      <label class="block font-semibold mb-2">Техпаспорт</label>
+      <input type="file" name="tech_passport" accept=".pdf,image/*" required>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-main">Отправить документы</button>
+  </form>
+</div>
+{% endblock %}

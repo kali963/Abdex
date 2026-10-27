@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}{{ t("company_new.page_title") }}{% endblock %}
+{% block content %}
+<h1>{{ t("company_new.title") }}</h1>
+<form method="post" action="/companies/new">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="field">
+    <label>{{ t("company_new.field_company_type") }}</label>
+    <label class="option-card">
+      <input type="radio" name="company_type" value="carrier" {% if form.company_type == "carrier" %}checked{% endif %} required>
+      <span class="option-body">
+        <span class="option-title">{{ t("company_new.option_carrier") }}</span>
+        <span class="option-hint">{{ t("register_role.option_carrier_hint") }}</span>
+      </span>
+    </label>
+    <label class="option-card">
+      <input type="radio" name="company_type" value="client" {% if form.company_type == "client" %}checked{% endif %} required>
+      <span class="option-body">
+        <span class="option-title">{{ t("company_new.option_client") }}</span>
+        <span class="option-hint">{{ t("register_role.option_client_hint") }}</span>
+      </span>
+    </label>
+    {% if errors.company_type %}<p class="error">{{ errors.company_type }}</p>{% endif %}
+  </div>
+  {{ field("name", t("company_new.field_name"), value=form.name, error=errors.name) }}
+  {{ field("bin_iin", t("company_new.field_bin_iin"), value=form.bin_iin, error=errors.bin_iin) }}
+  {{ field("legal_address", t("company_new.field_legal_address"), required=False, value=form.legal_address, error=errors.legal_address) }}
+  <button type="submit">{{ t("company_new.submit") }}</button>
+</form>
+{% endblock %}

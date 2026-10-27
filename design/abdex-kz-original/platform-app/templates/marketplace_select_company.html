@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ t("marketplace.select_company_page_title") }}{% endblock %}
+{% block content %}
+<h1>{{ t("marketplace.select_company_title") }}</h1>
+{% if carrier_memberships %}
+<p class="muted">{{ t("marketplace.select_company_intro") }}</p>
+<table>
+  <thead><tr><th>{{ t("dashboard.table_company") }}</th><th></th></tr></thead>
+  <tbody>
+  {% for m in carrier_memberships %}
+    <tr>
+      <td>{{ m.company.name }}</td>
+      <td><a href="/companies/{{ m.company.id }}/switch?next=/marketplace">{{ t("orders.select_company_switch") }}</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">{{ t("marketplace.no_carrier_company") }}</p>
+{% endif %}
+<p style="margin-top:20px"><a href="/companies/new">{{ t("dashboard.register_company_link") }}</a></p>
+{% endblock %}

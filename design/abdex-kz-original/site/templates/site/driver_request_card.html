@@ -1,0 +1,341 @@
+{% extends "site/base.html" %}
+{% block title %}Заявка #{{ v.id }} | Перевозчик | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+  <section class="cab-wrap driver-request">
+
+    {% set status_ru = {
+      "processing": "В обработке",
+      "published": "Опубликована",
+      "active": "В работе",
+      "sent_to_drivers": "Отправлена водителям",
+      "negotiation": "На согласовании",
+      "in_transit": "В пути",
+      "done": "Завершена",
+      "cancelled": "Отменена"
+    } %}
+
+    <!-- HEADER -->
+    <div class="cab-head">
+      <div>
+        <h1 class="cab-title">
+          Заявка #{{ v.id }}
+          <span class="cab-title-date">
+            {% if v.created_at %}
+              {% set d = (v.created_at|string)[:10] %}
+              {% set y = d[0:4]|int %}
+              {% set m = d[5:7]|int %}
+              {% set day = d[8:10]|int %}
+              {% set months = {
+                1:"января", 2:"февраля", 3:"марта", 4:"апреля",
+                5:"мая", 6:"июня", 7:"июля", 8:"августа",
+                9:"сентября", 10:"октября", 11:"ноября", 12:"декабря"
+              } %}
+              Заявка создана {{ day }} {{ months.get(m) }} {{ y }}
+            {% else %}
+              Заявка создана —
+            {% endif %}
+          </span>
+        </h1>
+
+        <p class="cab-sub cab-route">
+          {{ v.origin or "—" }} - {{ v.destination or "—" }}
+          {% if v.distance_km is not none %}
+            &nbsp; • &nbsp; {{ "%.0f"|format(v.distance_km) }} км
+          {% endif %}
+        </p>
+      </div>
+
+      <div class="cab-actions" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+        <a class="cab-link" href="/driver/requests/{{ r.id }}/chat">💬 Чат с клиентом</a>
+        <a class="btn-outline"
+           href="/driver/cabinet?tab=requests"
+           style="width:auto;padding:10px 14px;border-radius:14px;text-decoration:none;">
+          ← Назад
+        </a>
+      </div>
+    </div>
+
+    <!-- CARD -->
+    <div class="cab-card">
+      <div class="cab-card-title">Данные заявки</div>
+
+      <div class="req-grid" style="margin-top:14px;">
+
+        <div class="req-field">
+          <label>Дата загрузки</label>
+          <div class="cab-badge">
+            {% if v.load_date %}
+              {% set d = (v.load_date|string)[:10] %}
+              {% set y = d[0:4]|int %}
+              {% set m = d[5:7]|int %}
+              {% set day = d[8:10]|int %}
+              {% set months = {
+                1:"января", 2:"февраля", 3:"марта", 4:"апреля",
+                5:"мая", 6:"июня", 7:"июля", 8:"августа",
+                9:"сентября", 10:"октября", 11:"ноября", 12:"декабря"
+              } %}
+              {{ day }} {{ months[m] }} {{ y }}
+            {% else %}
+              —
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="req-field">
+          <label>Тип транспорта</label>
+          <div class="cab-badge">{{ v.truck_type or "—" }}</div>
+        </div>
+
+        <div class="req-field">
+          <label>Груз</label>
+          <div class="cab-badge">{{ v.cargo or "—" }}</div>
+        </div>
+
+        <div class="req-field">
+          <label>Вес</label>
+          <div class="cab-badge">
+            {% if v.weight_kg %}
+              {{ (v.weight_kg / 1000) | round(2) }} т
+            {% else %}—{% endif %}
+          </div>
+        </div>
+
+        <div class="req-field">
+          <label>Километраж</label>
+          <div class="cab-badge">
+            {% if v.distance_km is not none %}{{ '%.1f'|format(v.distance_km) }} км{% else %}—{% endif %}
+          </div>
+        </div>
+
+        <div class="req-field">
+          <label>Объём</label>
+          <div class="cab-badge">
+            {% if v.volume_m3 %}
+              {{ v.volume_m3 | round(2) }} м³
+            {% else %}—{% endif %}
+          </div>
+        </div>
+
+        <div class="req-field">
+          <label>Габариты (Д×Ш×В)</label>
+          <div class="cab-badge">{{ v.dims or "—" }}</div>
+        </div>
+
+        <div class="req-field">
+          <label>Кол-во мест</label>
+          <div class="cab-badge">{{ v.places or "—" }}</div>
+        </div>
+
+        <div class="req-field">
+          <label>Оплата</label>
+          <div class="cab-badge">{{ v.payment_type or "—" }}</div>
+        </div>
+
+        <div class="req-field req-field--full">
+          <label>Адрес загрузки</label>
+          <div class="cab-badge" style="white-space:normal;">{{ v.from_address or "—" }}</div>
+        </div>
+
+        <div class="req-field req-field--full">
+          <label>Адрес выгрузки</label>
+          <div class="cab-badge" style="white-space:normal;">{{ v.to_address or "—" }}</div>
+        </div>
+
+        <div class="req-field req-field--full">
+          <label>Ставка на перевозку</label>
+          <div class="cab-badge">
+            {% if v.driver_approved_kzt %}
+              {{ "{:,}".format(v.driver_approved_kzt).replace(",", " ") }} ₸
+            {% else %}
+              —
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="req-field req-field--full">
+          <label>Комментарий клиента</label>
+          <div class="cab-badge" style="white-space:normal;">{{ v.client_comment or "—" }}</div>
+        </div>
+
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+
+        <!-- Поле ставки + кнопка -->
+        <form method="post"
+              action="/driver/requests/{{ v.id }}/offer"
+              style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+
+          <input
+            type="number"
+            name="price_kzt"
+            min="1"
+            step="1"
+            required
+            value="{% if my_offer %}{{ my_offer.price_kzt | int }}{% endif %}"
+            placeholder="Ставка, ₸"
+            style="width:160px;padding:10px 12px;border-radius:12px;border:1px solid rgba(0,0,0,.12);"
+          />
+
+          <button class="btn-main"
+                  type="submit"
+                  style="width:auto;padding:10px 14px;border-radius:14px;">
+            Дать свою ставку
+          </button>
+        </form>
+
+        <!-- Кнопка принять -->
+        <form method="post"
+              action="/driver/requests/{{ v.id }}/accept"
+              style="display:flex;align-items:center;">
+          <button class="btn-outline"
+                  type="submit"
+                  style="width:auto;padding:10px 14px;border-radius:14px;">
+            Принять
+          </button>
+        </form>
+
+      </div>
+
+    </div>
+
+    <!-- MAP -->
+    <div class="cab-card" style="margin-top:14px;background:#ffffff80;">
+      <div class="cab-card-title">Маршрут</div>
+      <p class="cab-text">Карта маршрута (A → B).</p>
+
+      <div id="routeMap" style="height:360px;border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,.08);"></div>
+
+      {% if map_data and map_data.distance_km %}
+        <div class="cab-text" style="margin-top:10px;opacity:.85;">
+          Примерно: {{ map_data.distance_km }} км
+          {% if map_data.duration_min %} • {{ map_data.duration_min|int }} мин{% endif %}
+        </div>
+      {% endif %}
+    </div>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- JSON ДАННЫЕ ДЛЯ КАРТЫ (отдельным тегом, НЕ внутри JS) -->
+    <script id="map-data" type="application/json">{{ (map_data or {}) | tojson }}</script>
+
+    <!-- JS КАРТЫ -->
+    <script>
+    (function(){
+      const el = document.getElementById("map-data");
+      const raw = el ? el.textContent : "{}";
+      let data = {};
+      try { data = JSON.parse(raw || "{}"); } catch(e) { data = {}; }
+
+      if (!data || !data.line || !data.line.length) return;
+      if (!window.L) return;
+
+      const map = L.map('routeMap', { scrollWheelZoom: false });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(map);
+
+      const a = data.origin;
+      const b = data.destination;
+
+      if (a && a.lat && a.lon) L.marker([a.lat, a.lon]).addTo(map).bindPopup(a.name || 'A');
+      if (b && b.lat && b.lon) L.marker([b.lat, b.lon]).addTo(map).bindPopup(b.name || 'B');
+
+      const poly = L.polyline(data.line, { weight: 4, opacity: 0.9 }).addTo(map);
+      map.fitBounds(poly.getBounds(), { padding: [20, 20] });
+    })();
+    </script>
+
+    <!-- DOCUMENTS -->
+    <div class="cab-card" style="margin-top:14px;">
+      <div class="cab-card-title">Документы</div>
+
+      <form method="post"
+            enctype="multipart/form-data"
+            action="/driver/requests/{{ v.id }}/docs/upload"
+            style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+        <input type="file" name="documents" multiple style="max-width:360px;">
+        <button class="btn-outline" type="submit"
+                style="width:auto;padding:10px 14px;border-radius:14px;cursor:pointer;">
+          + Прикрепить документы
+        </button>
+      </form>
+
+      {% if docs and docs|length > 0 %}
+        <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;">
+          {% for d in docs %}
+            {% set is_img = (d.content_type and d.content_type.startswith("image/")) %}
+            <div style="
+              background:rgba(255,255,255,.32);
+              border:1px solid var(--border-soft);
+              border-radius:18px;
+              padding:12px;
+              box-shadow:0 8px 24px rgba(31,50,83,.05);
+            ">
+              {% if is_img %}
+                <a href="/driver/requests/{{ v.id }}/docs/{{ d.id }}?inline=1" target="_blank" style="text-decoration:none;">
+                  <img src="/driver/requests/{{ v.id }}/docs/{{ d.id }}?inline=1"
+                      alt="{{ d.original_name }}"
+                      loading="lazy"
+                      style="
+                        width:100%;
+                        height:150px;
+                        object-fit:cover;
+                        border-radius:14px;
+                        border:1px solid var(--border-soft);
+                        display:block;
+                      ">
+                </a>
+              {% else %}
+                <div style="
+                  width:100%;
+                  height:150px;
+                  border-radius:14px;
+                  border:1px dashed var(--border-soft);
+                  display:flex;
+                  align-items:center;
+                  justify-content:center;
+                  font-size:42px;
+                  background:rgba(255,255,255,.35);
+                ">
+                  📄
+                </div>
+              {% endif %}
+
+              <div style="
+                margin-top:10px;
+                font-weight:700;
+                line-height:1.25;
+                word-break:break-word;
+                color:var(--text-main);
+              ">
+                {{ d.original_name }}
+              </div>
+
+              <div style="margin-top:4px;font-size:13px;opacity:.75;">
+                {% if d.size_bytes %}{{ (d.size_bytes / 1024) | round(1) }} КБ{% else %}—{% endif %}
+                {% if d.created_at %} • {{ (d.created_at|string)[:10] }}{% endif %}
+              </div>
+
+              <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                <a class="btn-outline"
+                  href="/driver/requests/{{ v.id }}/docs/{{ d.id }}"
+                  style="width:auto;padding:8px 12px;border-radius:14px;text-decoration:none;">
+                  Скачать
+                </a>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="cab-empty" style="margin-top:12px;">Документов пока нет</div>
+      {% endif %}
+    </div>
+
+  </section>
+</div>
+{% endblock %}

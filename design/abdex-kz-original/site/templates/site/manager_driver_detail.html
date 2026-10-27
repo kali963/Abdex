@@ -1,0 +1,43 @@
+{% extends "site/base.html" %}
+{% block title %}Водитель #{{ driver.id }} | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-8">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-semibold">Водитель #{{ driver.id }}</h1>
+    <div class="flex gap-2">
+      <a class="cab-badge" style="text-decoration:none;" href="/manager/drivers">← К списку</a>
+      <a class="cab-badge" style="text-decoration:none;"
+         href="/manager/drivers/{{ driver.user_id }}/docs">Документы</a>
+      <a class="cab-badge" style="text-decoration:none;"
+         href="/manager/drivers/{{ driver.id }}/edit">Редактировать</a>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <table class="min-w-full text-sm">
+      <tbody>
+        <tr class="border-t"><td class="p-3 font-medium">Форма бизнеса</td><td class="p-3">{{ driver.business_form }}</td></tr>
+        <tr class="border-t"><td class="p-3 font-medium">Компания/название</td><td class="p-3">{{ driver.entity_name }}</td></tr>
+        <tr class="border-t"><td class="p-3 font-medium">ФИО</td><td class="p-3">{{ driver.full_name or "—" }}</td></tr>
+        <tr class="border-t"><td class="p-3 font-medium">Телефон</td><td class="p-3">{{ driver.phone or "—" }}</td></tr>
+        <tr class="border-t"><td class="p-3 font-medium">ИИН</td><td class="p-3">{{ driver.iin or "—" }}</td></tr>
+        <tr class="border-t"><td class="p-3 font-medium">№ удостоверения</td><td class="p-3">{{ driver.id_number or "—" }}</td></tr>
+        <tr class="border-t"><td class="p-3 font-medium">№ паспорта</td><td class="p-3">{{ driver.passport_number or "—" }}</td></tr>
+        <tr class="border-t"><td class="p-3 font-medium">Авто</td><td class="p-3">{{ driver.car or "—" }}</td></tr>
+        <tr class="border-t"><td class="p-3 font-medium">Прицеп</td><td class="p-3">{{ driver.trailer or "—" }}</td></tr>
+        <tr class="border-t">
+          <td class="p-3 font-medium">Грузоподъёмность</td>
+          <td class="p-3">
+            {% if driver.capacity_kg is not none %}
+              {{ "%.1f"|format((driver.capacity_kg / 1000)) }} т
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        <tr class="border-t"><td class="p-3 font-medium">Объём</td><td class="p-3">{{ driver.volume_m3 or "—" }} м³</td></tr>
+        <tr class="border-t"><td class="p-3 font-medium">Техпаспорт №</td><td class="p-3">{{ driver.tech_passport_number or "—" }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

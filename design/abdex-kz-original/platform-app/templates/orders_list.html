@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_macros.html" import route_line %}
+{% block title %}{{ t("orders.list_page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>{{ t("orders.list_title", company=company.name) }}</h1>
+  <a class="btn-link" href="/orders/new">{{ t("orders.new_link") }}</a>
+</div>
+
+<form method="get" action="/orders" class="filters">
+  <div class="field">
+    <label for="search">{{ t("orders.filter_search") }}</label>
+    <input type="text" id="search" name="search" value="{{ search or '' }}" placeholder="{{ t('orders.filter_search_placeholder') }}">
+  </div>
+  <div class="field">
+    <label for="status">{{ t("orders.filter_status") }}</label>
+    <select id="status" name="status">
+      <option value="">{{ t("orders.filter_status_all") }}</option>
+      {% for value, label in status_options %}
+      <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field"><button type="submit">{{ t("orders.filter_submit") }}</button></div>
+</form>
+
+{% if orders %}
+<table>
+  <thead>
+    <tr>
+      <th>{{ t("orders.col_number") }}</th>
+      <th>{{ t("orders.col_cargo") }}</th>
+      <th>{{ t("orders.col_route") }}</th>
+      <th>{{ t("orders.col_rate") }}</th>
+      <th>{{ t("orders.col_status") }}</th>
+      <th>{{ t("orders.col_bids") }}</th>
+      <th>{{ t("orders.col_created") }}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in orders %}
+    <tr>
+      <td><a href="/orders/{{ row.order.id }}">{{ row.order.order_number }}</a></td>
+      <td>{{ row.order.cargo_name }} ({{ row.order.cargo_weight_kg }} {{ t("orders.unit_kg") }})</td>
+      <td>{{ route_line(row.loading_city, row.unloading_city, compact=True) }}</td>
+      <td>{{ row.order.desired_rate_minor|money(row.order.currency_code) }}</td>
+      <td><span class="badge badge-{{ row.order.status.value }}">{{ t("orders.status_" + row.order.status.value) }}</span></td>
+      <td>{{ row.bids_count }}</td>
+      <td>{{ row.order.created_at|localtime }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">{{ t("orders.empty_state") }}</p>
+{% endif %}
+{% endblock %}

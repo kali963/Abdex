@@ -1,0 +1,61 @@
+<div class="card">
+  <h2 style="margin:0 0 8px 0;">Заявка №{{ v.id }}</h2>
+
+  <div style="display:flex; gap:16px; flex-wrap:wrap; opacity:.9; font-size:14px;">
+    <div><b>Статус:</b> {{ v.status or "—" }}</div>
+    <div><b>Создано:</b> {{ v.created_at or "—" }}</div>
+  </div>
+
+  <hr style="margin:12px 0; opacity:.2;">
+
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+    <div><b>Откуда:</b> {{ v.origin or "—" }}</div>
+    <div><b>Куда:</b> {{ v.destination or "—" }}</div>
+
+    <div><b>Груз:</b> {{ v.cargo or "—" }}</div>
+    <div><b>Тип авто:</b> {{ v.truck_type or "—" }}</div>
+
+    <div><b>Дата загрузки:</b> {{ v.load_date or "—" }}</div>
+    <div><b>Мест:</b> {{ v.places or "—" }}</div>
+
+    <div><b>Вес (кг):</b> {{ v.weight_kg or "—" }}</div>
+    <div><b>Объём (м³):</b> {{ v.volume_m3 or "—" }}</div>
+
+    <div><b>Габариты:</b> {{ v.dims or "—" }}</div>
+    <div><b>Бюджет (₸):</b> {{ v.budget_kzt or "—" }}</div>
+
+    <div><b>Оплата:</b> {{ v.payment_type or "—" }}</div>
+    <div></div>
+
+    <div style="grid-column: 1 / -1;">
+      <b>Адрес погрузки:</b> {{ v.from_address or "—" }}
+    </div>
+    <div style="grid-column: 1 / -1;">
+      <b>Адрес выгрузки:</b> {{ v.to_address or "—" }}
+    </div>
+
+    <div style="grid-column: 1 / -1;">
+      <b>Комментарий:</b> {{ v.client_comment or "—" }}
+    </div>
+  </div>
+
+  {% set has_calc = v.distance_km or v.fuel_cost_kzt or v.selfcost_total_kzt or v.client_quote_kzt %}
+  {% if has_calc %}
+    <hr style="margin:12px 0; opacity:.2;">
+    <h3 style="margin:0 0 8px 0;">Расчёт</h3>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+      <div><b>Дистанция (км):</b> {{ v.distance_km or "—" }}</div>
+      <div><b>Топливо (₸):</b> {{ v.fuel_cost_kzt or "—" }}</div>
+
+      <div><b>Амортизация (₸):</b> {{ v.depreciation_kzt or "—" }}</div>
+      <div><b>Платные дороги (₸):</b> {{ v.tolls_kzt or "—" }}</div>
+
+      <div><b>Себестоимость (₸):</b> {{ v.selfcost_total_kzt or "—" }}</div>
+      <div><b>Ставка водителя (₸):</b> {{ v.driver_approved_kzt or "—" }}</div>
+
+      <div><b>Цена клиенту (₸):</b> {{ v.client_quote_kzt or "—" }}</div>
+      <div><b>Без НДС (₸):</b> {{ v.client_quote_without_vat or "—" }}</div>
+    </div>
+  {% endif %}
+</div>

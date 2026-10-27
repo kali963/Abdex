@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field, select_field %}
+{% block title %}{{ t("counterparty_list.page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<h1>{{ t("counterparty_list.title") }}</h1>
+<p class="hint">{{ t("counterparty_list.hint") }}</p>
+
+<section>
+  {% if entries %}
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t("counterparty_list.col_company") }}</th>
+        <th>{{ t("counterparty_list.col_bin") }}</th>
+        <th>{{ t("counterparty_list.col_type") }}</th>
+        <th>{{ t("counterparty_list.col_note") }}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for entry in entries %}
+      {% set counterparty = companies_by_id.get(entry.counterparty_company_id) %}
+      <tr>
+        <td>{{ counterparty.name if counterparty else "—" }}</td>
+        <td><code>{{ counterparty.bin_iin if counterparty else "—" }}</code></td>
+        <td>
+          {% if entry.list_type.value == "blocked" %}
+          <span class="badge badge-rejected">{{ t("counterparty_list.type_blocked") }}</span>
+          {% else %}
+          <span class="badge badge-approved">{{ t("counterparty_list.type_preferred") }}</span>
+          {% endif %}
+        </td>
+        <td>{{ entry.note or "—" }}</td>
+        <td>
+          <form method="post" action="/settings/counterparties/{{ entry.counterparty_company_id }}/delete" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn-inline btn-secondary">{{ t("counterparty_list.remove") }}</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("counterparty_list.empty") }}</p>
+  {% endif %}
+
+  <form method="post" action="/settings/counterparties" class="filters">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {{ field("counterparty_bin_iin", t("counterparty_list.field_bin")) }}
+    {{ select_field("list_type", t("counterparty_list.field_type"), [
+      ("blocked", t("counterparty_list.type_blocked")),
+      ("preferred", t("counterparty_list.type_preferred")),
+    ]) }}
+    {{ field("note", t("counterparty_list.field_note"), required=False) }}
+    <button type="submit">{{ t("counterparty_list.add") }}</button>
+  </form>
+</section>
+{% endblock %}

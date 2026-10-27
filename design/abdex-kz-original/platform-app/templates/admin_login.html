@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Админ — AbdEX{% endblock %}
+{% block content %}
+<h1>Вход в админку</h1>
+<form method="post" action="/admin/login">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {{ field("username", "Логин") }}
+  {{ field("password", "Пароль", type="password") }}
+  <button type="submit">Войти</button>
+</form>
+<p class="muted">Временный доступ только для песочницы — не настоящий периметр персонала платформы.</p>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field, select_field %}
+{% block title %}{{ t("orders.new_page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<h1>{{ t("orders.new_title") }}</h1>
+<form method="post" action="/orders/new" class="form-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {{ field("cargo_name", t("orders.field_cargo_name"), value=form.cargo_name, error=errors.cargo_name) }}
+  {{ field("cargo_weight_kg", t("orders.field_cargo_weight_kg"), type="number", value=form.cargo_weight_kg, error=errors.cargo_weight_kg) }}
+  {{ field("loading_city", t("orders.field_loading_city"), value=form.loading_city) }}
+  {{ select_field("loading_country", t("orders.field_loading_country"), country_options, value=form.loading_country or "KZ") }}
+  {{ field("loading_date", t("orders.field_loading_date"), type="datetime-local", value=form.loading_date, error=errors.loading_date) }}
+  {{ field("unloading_city", t("orders.field_unloading_city"), value=form.unloading_city) }}
+  {{ select_field("unloading_country", t("orders.field_unloading_country"), country_options, value=form.unloading_country or "KZ") }}
+  {{ field("unloading_date", t("orders.field_unloading_date"), type="datetime-local", required=False, value=form.unloading_date, error=errors.unloading_date) }}
+  {{ field("desired_rate", t("orders.field_desired_rate"), type="number", required=False, value=form.desired_rate, error=errors.desired_rate) }}
+  {% if commission %}
+  <p class="muted" id="commission-hint">{{ t("orders.commission_hint_domestic", amount=commission.domestic) }}</p>
+  {% endif %}
+  <button type="submit">{{ t("orders.new_submit") }}</button>
+</form>
+{% if commission %}
+<script>
+  (function () {
+    var loadingSelect = document.getElementById("loading_country");
+    var unloadingSelect = document.getElementById("unloading_country");
+    var hint = document.getElementById("commission-hint");
+    var domesticText = {{ t("orders.commission_hint_domestic", amount=commission.domestic)|tojson }};
+    var internationalText = {{ t("orders.commission_hint_international", amount=commission.international)|tojson }};
+    function update() {
+      if (!loadingSelect || !unloadingSelect || !hint) return;
+      hint.textContent = loadingSelect.value === unloadingSelect.value ? domesticText : internationalText;
+    }
+    if (loadingSelect && unloadingSelect) {
+      loadingSelect.addEventListener("change", update);
+      unloadingSelect.addEventListener("change", update);
+      update();
+    }
+  })();
+</script>
+{% endif %}
+{% endblock %}

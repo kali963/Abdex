@@ -1,0 +1,108 @@
+{% extends "site/base.html" %}
+{% block title %}Чат | Менеджер{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-8">
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h1 class="text-2xl font-semibold">
+        {% if thread.chat_type == "support" %}
+          Чат техподдержки #{{ thread.id }}
+        {% else %}
+          Чат по заявке #{{ thread.request_id }}
+        {% endif %}
+      </h1>
+
+      <div class="text-slate-500 text-sm">
+        {% if thread.chat_type == "support" %}
+          {% if client %}
+            Клиент: {{ client.company_name or client.name or ("ID " ~ client.id) }}
+          {% elif driver %}
+            Водитель: {{ driver.name or ("ID " ~ driver.id) }}
+          {% else %}
+            Пользователь техподдержки
+          {% endif %}
+        {% else %}
+          {% if req_obj %}
+            {{ req_obj.origin or "—" }} → {{ req_obj.destination or "—" }}
+          {% endif %}
+          • Водитель:
+          {% if driver %}
+            {{ driver.name or ("ID " ~ driver.id) }}
+          {% else %}
+            —
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <a class="text-blue-600 hover:underline" href="/manager/chats">← Назад</a>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-4">
+    <div class="max-h-[60vh] overflow-auto flex flex-col gap-3">
+      {% for m in messages %}
+        {% set is_office = m.sender_role in ["admin", "manager", "office"] %}
+
+        <div class="px-3 py-2 rounded-xl {% if is_office %}bg-blue-50{% else %}bg-slate-100{% endif %}">
+          <div class="text-xs text-slate-500 mb-1">
+            {% if is_office %}
+              Менеджер
+            {% elif m.sender_role == "client" %}
+              Клиент
+            {% elif m.sender_role == "driver" %}
+              Водитель
+            {% else %}
+              {{ m.sender_role }}
+            {% endif %}
+            • {{ (m.created_at|string)[:16].replace("T"," ") }}
+          </div>
+
+          {% if m.text %}
+            <div class="text-sm whitespace-pre-wrap break-words">{{ m.text }}</div>
+          {% endif %}
+
+          {% if m.attachment_path %}
+            <div class="mt-2">
+              <a class="text-blue-600 hover:underline"
+                 href="/uploads/chat/{{ m.attachment_path }}"
+                 target="_blank">
+                📎 {{ m.attachment_name or "Файл" }}
+              </a>
+            </div>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="text-sm text-slate-500">
+          Сообщений пока нет.
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if thread.chat_type == "support" %}
+      <form class="mt-4"
+            method="post"
+            enctype="multipart/form-data"
+            action="/manager/chats/{{ thread.id }}/send">
+        <div class="flex gap-2">
+          <input class="w-full border rounded-lg px-3 py-2"
+                 name="text"
+                 placeholder="Сообщение в техподдержку..." />
+
+          <input class="border rounded-lg px-3 py-2"
+                 type="file"
+                 name="file" />
+
+          <button class="border rounded-lg px-4 py-2 bg-blue-600 text-white">
+            Отправить
+          </button>
+        </div>
+      </form>
+    {% else %}
+      <div class="mt-4 text-sm text-slate-500 bg-slate-50 rounded-lg p-3">
+        Это чат клиента и водителя. Менеджер имеет доступ только к просмотру.
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

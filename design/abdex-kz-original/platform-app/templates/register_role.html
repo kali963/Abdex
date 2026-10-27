@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ t("register_role.page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<div style="text-align:center;">
+  <h1>{{ t("register_role.title") }}</h1>
+  <p class="muted" style="margin:0 auto;">{{ t("register_role.intro") }}</p>
+</div>
+
+<div class="role-grid">
+  <a class="role-card" href="/register?role=carrier">
+    <span class="role-title">{{ t("register_role.option_carrier") }}</span>
+    <span class="role-hint">{{ t("register_role.option_carrier_hint") }}</span>
+  </a>
+  <a class="role-card" href="/register?role=client">
+    <span class="role-title">{{ t("register_role.option_client") }}</span>
+    <span class="role-hint">{{ t("register_role.option_client_hint") }}</span>
+  </a>
+</div>
+
+<p class="muted" style="margin-top:24px; text-align:center;">{{ t("register_role.have_account") }} <a href="/login">{{ t("register_role.login_link") }}</a></p>
+{% endblock %}

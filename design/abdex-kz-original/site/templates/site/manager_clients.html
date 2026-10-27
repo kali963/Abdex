@@ -1,0 +1,122 @@
+{% extends "site/base.html" %}
+{% block title %}Клиенты менеджера | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-semibold">Клиенты</h1>
+    <a href="/manager/cabinet" class="px-4 py-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200">Назад</a>
+  </div>
+
+  {% if error %}
+    <div class="mb-4 p-3 rounded bg-red-50 text-red-700 border border-red-200">{{ error }}</div>
+  {% endif %}
+  {% if ok %}
+    <div class="mb-4 p-3 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">{{ ok }}</div>
+  {% endif %}
+
+  <!-- Создание клиента -->
+  <div class="bg-white rounded-xl shadow p-5 mb-6">
+    <div class="text-lg font-semibold mb-3">Создать клиента</div>
+
+    <form method="post" action="/manager/clients/create" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm text-slate-600 mb-1">Имя</label>
+        <input type="text" name="name" class="border rounded p-2 w-full" placeholder="Напр. Алина" required>
+      </div>
+
+      <div>
+        <label class="block text-sm text-slate-600 mb-1">Логин (email)</label>
+        <input type="text" name="login" class="border rounded p-2 w-full" placeholder="email или логин" required>
+      </div>
+
+      <!-- Пароль убрали: генерит сервер -->
+      <div>
+        <label class="block text-sm text-slate-600 mb-1">Форма бизнеса (опц.)</label>
+        <input type="text" name="business_form" class="border rounded p-2 w-full" placeholder="ИП / ТОО / Физ.лицо">
+      </div>
+
+      <div>
+        <label class="block text-sm text-slate-600 mb-1">Компания (опц.)</label>
+        <input type="text" name="company_name" class="border rounded p-2 w-full" placeholder="Название компании">
+      </div>
+
+      <div class="md:col-span-2">
+        <div class="text-xs text-slate-500 mb-2">
+          Пароль клиенту будет сгенерирован автоматически (6 символов) и покажется в сообщении после создания.
+        </div>
+        <button class="px-5 py-2.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900">
+          Создать клиента
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Поиск -->
+  <form method="get" class="mb-4 flex flex-wrap gap-3 items-center">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="Поиск по имени / логину / компании"
+           class="border rounded p-2 w-80 max-w-full">
+    <button class="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900">Найти</button>
+  </form>
+
+  <!-- Список клиентов -->
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50">
+        <tr>
+          <th class="text-left p-3">ID</th>
+          <th class="text-left p-3">Имя</th>
+          <th class="text-left p-3">Логин</th>
+          <th class="text-left p-3">Компания</th>
+          <th class="text-left p-3">Создан</th>
+          <th class="text-left p-3">Передача</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in clients %}
+          <tr class="border-t align-top">
+            <td class="p-3">{{ u.id }}</td>
+            <td class="p-3">{{ u.name or '—' }}</td>
+            <td class="p-3">{{ u.email or '—' }}</td>
+            <td class="p-3">{{ u.company_name or '—' }}</td>
+            <td class="p-3">{{ u.created_at.strftime('%Y-%m-%d %H:%M') if u.created_at else '—' }}</td>
+
+            <td class="p-3">
+              {% if managers and managers|length > 0 %}
+                <form method="post" action="/manager/clients/{{ u.id }}/transfer" class="flex flex-col gap-2">
+                  <select name="to_manager_id" class="border rounded p-2">
+                    <option value="">Выбери менеджера</option>
+                    {% for m in managers %}
+                      {% if m.id != current_manager_id %}
+                        <option value="{{ m.id }}">{{ m.name or ('Менеджер #' ~ m.id) }}</option>
+                      {% endif %}
+                    {% endfor %}
+                  </select>
+
+                  <button type="submit"
+                          class="px-3 py-2 bg-slate-800 text-white rounded hover:bg-slate-900">
+                    Запросить передачу клиента
+                  </button>
+
+                  <div class="text-xs text-slate-500">
+                    Админ увидит запрос и подтвердит/отклонит.
+                  </div>
+                </form>
+              {% else %}
+                <div class="text-xs text-slate-500">
+                  Нет доступных менеджеров для передачи.
+                </div>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr class="border-t">
+            <td colspan="6" class="p-6 text-center text-slate-500">Пока нет клиентов</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

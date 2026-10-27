@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_macros.html" import route_line_from_points %}
+{% block title %}{{ t("dispute.detail_page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>{{ order.order_number if order else "" }} <span class="badge badge-{{ dispute.status.value }}">{{ t("dispute.status_" + dispute.status.value) }}</span></h1>
+  <a href="/deals/{{ deal.id }}">{{ t("dispute.back_to_deal") }}</a>
+</div>
+
+<section>
+  <h2>{{ dispute.subject }}</h2>
+  <p>{{ dispute.description }}</p>
+  {% if dispute.status.value == "resolved" %}
+  <p class="notice">{{ t("dispute.resolution_" + dispute.resolution.value) }}{% if dispute.resolution_notes %} — {{ dispute.resolution_notes }}{% endif %}</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>{{ t("dispute.section_positions") }}</h2>
+  {% if positions %}
+  <table>
+    <tbody>
+    {% for row in positions %}
+      <tr>
+        <td>{{ row.company_name }}</td>
+        <td>{{ row.position.statement }}</td>
+        <td>{{ row.position.created_at|localtime }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("dispute.positions_empty") }}</p>
+  {% endif %}
+
+  {% if dispute.status.value != "resolved" %}
+  <form method="post" action="/disputes/{{ dispute.id }}/positions">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="field">
+      <label for="statement">{{ t("dispute.field_statement") }}</label>
+      <textarea id="statement" name="statement" rows="3" required></textarea>
+    </div>
+    <button type="submit" class="btn-secondary">{{ t("dispute.submit_position") }}</button>
+  </form>
+  {% endif %}
+</section>
+
+<section>
+  <h2>{{ t("dispute.section_evidence") }}</h2>
+  {% if evidence %}
+  <table>
+    <thead><tr><th>{{ t("dispute.col_company") }}</th><th>{{ t("dispute.col_filename") }}</th><th>{{ t("orders.col_created") }}</th></tr></thead>
+    <tbody>
+    {% for row in evidence %}
+      <tr>
+        <td>{{ row.company_name }}</td>
+        <td>{{ row.evidence.original_filename }}</td>
+        <td>{{ row.evidence.created_at|localtime }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("dispute.evidence_empty") }}</p>
+  {% endif %}
+
+  {% if dispute.status.value != "resolved" %}
+  <form method="post" action="/disputes/{{ dispute.id }}/evidence" enctype="multipart/form-data" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="file" name="file" required>
+    <button type="submit" class="btn-inline">{{ t("dispute.upload_evidence") }}</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

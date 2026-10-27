@@ -1,0 +1,46 @@
+{% extends "site/base.html" %}
+{% block title %}Уведомления{% endblock %}
+
+{% block content %}
+<div class="py-6">
+  <div class="flex items-center justify-between gap-4 mb-4">
+    <h1 class="text-xl font-bold">Уведомления</h1>
+
+    {% if items %}
+      <form method="post" action="/notifications/read_all">
+        <button class="btn-outline" type="submit">Прочитать всё</button>
+      </form>
+    {% endif %}
+  </div>
+
+  {% if not items %}
+    <div class="text-sm text-gray-600">Пока пусто.</div>
+  {% else %}
+    <div class="space-y-3">
+      {% for n in items %}
+        <div class="p-4 rounded-xl border bg-white">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <div class="font-semibold">{{ n.title }}</div>
+              <div class="text-xs text-gray-400 mt-2">{{ n.created_at }}</div>
+
+              {% if n.link_url %}
+                <a class="text-sm text-blue-600 underline mt-2 inline-block"
+                   href="/notifications/{{ n.id }}/open">
+                  Открыть
+                </a>
+              {% endif %}
+            </div>
+
+            {% if not n.is_read %}
+              <form method="post" action="/notifications/{{ n.id }}/read">
+                <button class="btn-outline" type="submit">Прочитано</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

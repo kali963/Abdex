@@ -1,0 +1,88 @@
+{% extends "admin/base.html" %}
+{% block title %}Водители{% endblock %}
+
+{% block content %}
+<h2 class="text-2xl font-semibold mb-4">Все водители</h2>
+
+<form method="get" class="mb-4 flex gap-3 items-center">
+  <input type="text" name="q" value="{{ q or '' }}" placeholder="Поиск по имени, телефону, номеру авто"
+         class="border rounded p-2 w-80">
+  <button class="px-3 py-2 bg-slate-800 text-white rounded hover:bg-slate-900">Искать</button>
+  {% if q %}
+    <a class="text-sm text-slate-500 hover:text-slate-700" href="/admin/drivers">Сбросить</a>
+  {% endif %}
+</form>
+
+{% if items %}
+  <div class="overflow-x-auto bg-white rounded-xl shadow">
+    <table class="w-full text-left border-collapse">
+      <thead class="bg-slate-50">
+        <tr class="border-b">
+          <th class="p-2">ID</th>
+          <th class="p-2">Форма</th>
+          <th class="p-2">Название</th>
+          <th class="p-2">Имя</th>
+          <th class="p-2">Тип авто</th>
+          <th class="p-2">Г/п, т</th>
+          <th class="p-2">Объём, м³</th>
+          <th class="p-2">Статус</th>
+          <th class="p-2"></th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for d in items %}
+          <tr class="border-b hover:bg-slate-50">
+            <td class="p-2">{{ d.id }}</td>
+            <td class="p-2">{{ d.business_form or "—" }}</td>
+            <td class="p-2">{{ d.entity_name or "—" }}</td>
+            <td class="p-2">{{ d.full_name or "—" }}</td>
+            <td class="p-2">{{ d.car or "—" }}</td>
+
+            <td class="p-2">
+              {% if d.capacity_kg is not none %}
+                {{ "%.1f"|format((d.capacity_kg / 1000)) }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
+            <td class="p-2">
+              {% if d.volume_m3 is not none %}
+                {{ d.volume_m3 }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
+            <td class="p-2">
+              {% if d.active %}
+                <span class="text-green-700">активен</span>
+              {% else %}
+                <span class="text-slate-500">выкл</span>
+              {% endif %}
+            </td>
+
+            <td class="p-2 whitespace-nowrap">
+              <a class="text-indigo-600 hover:underline" href="/admin/drivers/{{ d.id }}">Открыть</a>
+
+              <!-- ВАЖНО: docs открываются по user_id -->
+              <a class="ml-3 text-emerald-700 hover:underline" href="/admin/drivers/{{ d.user_id }}/docs">Документы</a>
+
+              <form method="post" action="/admin/drivers/{{ d.user_id }}/delete"
+                    style="display:inline"
+                    onsubmit="return confirm('Удалить водителя? Это действие необратимо.')">
+                <button type="submit" class="ml-3 text-red-600 hover:underline">Удалить</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="p-6 bg-white rounded-xl shadow text-center text-slate-500">
+    Водителей пока нет
+  </div>
+{% endif %}
+{% endblock %}

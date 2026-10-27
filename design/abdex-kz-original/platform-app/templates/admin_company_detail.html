@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from "_macros.html" import admin_nav %}
+{% block title %}Админ — {{ company.name }} — AbdEX{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+{{ admin_nav("companies") }}
+<div class="toolbar">
+  <h1>{{ company.name }}</h1>
+  <a href="/admin/companies">← К компаниям</a>
+</div>
+<table>
+  <tbody>
+    <tr><td>Тип</td><td>{{ company.company_type.value }}</td></tr>
+    <tr><td>БИН/ИИН</td><td>{{ company.bin_iin or "—" }}</td></tr>
+    <tr><td>Статус</td><td>{{ "Заблокирована — " + (company.blocked_reason or "") if company.is_blocked else "Активна" }}</td></tr>
+    <tr><td>Создана</td><td>{{ company.created_at|localtime }}</td></tr>
+  </tbody>
+</table>
+
+{% if company.is_blocked %}
+<form method="post" action="/admin/companies/{{ company.id }}/unblock" style="margin-top:18px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="field">
+    <label for="reason">Причина разблокировки</label>
+    <input type="text" id="reason" name="reason" required>
+  </div>
+  <button type="submit">Разблокировать</button>
+</form>
+{% else %}
+<form method="post" action="/admin/companies/{{ company.id }}/block" style="margin-top:18px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="field">
+    <label for="reason">Причина блокировки</label>
+    <input type="text" id="reason" name="reason" required>
+  </div>
+  <button type="submit" class="btn-secondary">Заблокировать компанию</button>
+</form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "site/base.html" %}
+{% block title %}Загрузка документов — AbdEX{% endblock %}
+
+{% block content %}
+<section class="py-10 max-w-2xl mx-auto px-4">
+  <h1 class="text-2xl font-semibold mb-2 text-slate-900">Загрузка документов</h1>
+  <p class="text-sm text-slate-400 mb-6">
+    {{ name or "" }}, загрузите документы для активации профиля.
+  </p>
+
+  <form method="post" action="/register/driver/docs" enctype="multipart/form-data" class="auth-form">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <!-- ID CARD -->
+      <div class="md:col-span-2 rounded-2xl border border-slate-200 bg-white/40 p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="font-semibold text-slate-900">Удостоверение личности <span class="text-red-500">*</span></p>
+            <p class="text-xs text-slate-500 mt-1">Можно загрузить до 2 файлов (JPG/PNG/PDF)</p>
+          </div>
+        </div>
+
+        <input name="id_card" type="file" multiple required
+               class="auth-input mt-3 rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white/60">
+      </div>
+
+      <!-- TECH PASSPORT -->
+      <div class="md:col-span-2 rounded-2xl border border-slate-200 bg-white/40 p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="font-semibold text-slate-900">Техпаспорт <span class="text-red-500">*</span></p>
+            <p class="text-xs text-slate-500 mt-1">Можно загрузить до 2 файлов (JPG/PNG/PDF)</p>
+          </div>
+        </div>
+
+        <input name="tech_passport" type="file" multiple required
+               class="auth-input mt-3 rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white/60">
+      </div>
+
+      <!-- PAYMENT (OPTIONAL) -->
+      <div class="md:col-span-2 rounded-2xl border border-slate-200 bg-white/40 p-4">
+        <p class="font-semibold text-slate-900">Реквизиты для оплаты <span class="text-slate-500">(необязательно)</span></p>
+        <p class="text-xs text-slate-500 mt-1">1 файл (например фото карты/IBAN/Каспи QR)</p>
+
+        <input name="payment_details" type="file"
+               class="auth-input mt-3 rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white/60">
+      </div>
+
+    </div>
+
+    <button type="submit"
+            class="mt-6 w-full h-12 rounded-2xl bg-[#44695F] text-white font-semibold
+                   shadow-md shadow-[#44695F]/25 hover:opacity-95 active:scale-[0.99] transition">
+      Отправить документы
+    </button>
+  </form>
+</section>
+{% endblock %}

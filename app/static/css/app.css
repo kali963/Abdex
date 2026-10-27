@@ -650,3 +650,10 @@ footer.site .in { justify-content: center; text-align: center; }
 .stat { padding-right: 1.2rem; min-height: 0; }
 /* links inside running text are underlined: the green and the grey text are close in lightness (WCAG 1.4.1) */
 p a:not(.btn), li a:not(.btn), small a:not(.btn), .muted a:not(.btn), .hint a, td p a { text-decoration: underline; text-underline-offset: 2px; }
+/* password with the "eye" of the original site */
+.pw-wrap { position: relative; display: block; width: 100%; }
+.pw-wrap input { padding-right: 3rem; }
+.pw-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 36px; height: 34px; border: 0; border-radius: 10px;
+  background: rgba(255, 255, 255, .55); cursor: pointer; font-size: 1rem; line-height: 1; color: var(--text); }
+.pw-eye:hover { background: rgba(255, 255, 255, .85); }
+.pw-eye[aria-pressed="true"] { background: var(--brand); color: #fff; }

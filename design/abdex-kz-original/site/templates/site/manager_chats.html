@@ -1,0 +1,69 @@
+{% extends "site/base.html" %}
+{% block title %}Чаты менеджера | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-8">
+  <h1 class="text-2xl font-semibold mb-4">Чаты</h1>
+
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50">
+        <tr>
+          <th class="p-3 text-left">Тип</th>
+          <th class="p-3 text-left">Заявка / Чат</th>
+          <th class="p-3 text-left">Маршрут</th>
+          <th class="p-3 text-left">Действие</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in threads %}
+          {% set t = row.thread %}
+          {% set r = row.req %}
+
+          <tr class="border-t">
+            <td class="p-3">
+              {% if t.chat_type == "support" %}
+                <span class="text-blue-600 font-medium">Техподдержка</span>
+              {% else %}
+                <span class="text-slate-700">Чат заявки</span>
+              {% endif %}
+            </td>
+
+            <td class="p-3">
+              {% if t.chat_type == "support" %}
+                Чат #{{ t.id }}
+              {% else %}
+                #{{ r.id if r else t.request_id }}
+              {% endif %}
+            </td>
+
+            <td class="p-3">
+              {% if r %}
+                {{ r.origin or "—" }} → {{ r.destination or "—" }}
+              {% elif t.chat_type == "support" %}
+                {% if t.client_id %}
+                  Клиент → офис
+                {% elif t.driver_id %}
+                  Водитель → офис
+                {% else %}
+                  Пользователь → офис
+                {% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
+            <td class="p-3">
+              <a class="text-blue-600 hover:underline" href="/manager/chats/{{ t.id }}">Открыть</a>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td class="p-3 text-slate-500" colspan="4">Пока нет чатов</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

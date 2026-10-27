@@ -1,0 +1,10 @@
+{% extends "admin/base.html" %}
+{% block title %}Не найдено{% endblock %}
+
+{% block content %}
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-2xl font-semibold mb-2">Не найдено</h2>
+    <p class="text-slate-600 mb-4">{{ message or "Страница не найдена." }}</p>
+    <a href="/admin" class="btn btn-soft">← В админку</a>
+  </div>
+{% endblock %}

@@ -1,0 +1,151 @@
+{% extends "site/base.html" %}
+{% block title %}Редактирование заявки #{{ v.id }} | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+  <section class="cab-wrap">
+
+    <div class="cab-head">
+      <div>
+        <h1 class="cab-title">Редактирование заявки #{{ v.id }}</h1>
+        <p class="cab-sub">{{ v.origin or "—" }} → {{ v.destination or "—" }}</p>
+      </div>
+
+      <div class="cab-actions" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+        <a class="btn-outline"
+           href="/client/requests/{{ v.id }}"
+           style="width:auto;padding:10px 14px;border-radius:14px;text-decoration:none;">
+          ← Назад к заявке
+        </a>
+      </div>
+    </div>
+
+    <div class="cab-card">
+      <div class="cab-card-title">Поля заявки</div>
+      <p class="cab-text">Редактирование доступно только пока статус «В обработке».</p>
+
+      <form class="req-form" action="/client/requests/{{ v.id }}/edit" method="post">
+        <div class="req-grid">
+
+          <div class="req-field">
+            <label>Откуда</label>
+            <input type="text" name="origin" required value="{{ v.origin or '' }}">
+          </div>
+
+          <div class="req-field">
+            <label>Куда</label>
+            <input type="text" name="destination" required value="{{ v.destination or '' }}">
+          </div>
+
+          <div class="req-field">
+            <label>Дата загрузки</label>
+
+            <div class="abd-cal js-abd-cal" data-mode="single">
+              <input type="hidden" name="load_date" class="js-abd-cal-value" value="{{ v.load_date or '' }}">
+
+              <button type="button" class="abd-cal-trigger js-abd-cal-trigger">
+                <span class="js-abd-cal-label">{{ v.load_date or "Выберите дату" }}</span>
+                <span class="abd-cal-trigger-icon">📅</span>
+              </button>
+
+              <div class="abd-cal-popup js-abd-cal-popup" hidden>
+                <div class="abd-cal-toolbar">
+                  <div class="abd-cal-month js-abd-cal-month"></div>
+
+                  <div class="abd-cal-navs">
+                    <button type="button" class="abd-cal-nav js-abd-cal-prev">‹</button>
+                    <button type="button" class="abd-cal-nav js-abd-cal-next">›</button>
+                  </div>
+                </div>
+
+                <div class="abd-cal-weekdays">
+                  <span>Пн</span>
+                  <span>Вт</span>
+                  <span>Ср</span>
+                  <span>Чт</span>
+                  <span>Пт</span>
+                  <span>Сб</span>
+                  <span>Вс</span>
+                </div>
+
+                <div class="abd-cal-grid js-abd-cal-grid"></div>
+
+                <div class="abd-cal-actions">
+                  <button type="button" class="btn-outline js-abd-cal-clear" style="width:auto;padding:8px 12px;border-radius:12px;text-decoration:none;">
+                    Очистить
+                  </button>
+                  <button type="button" class="btn-main js-abd-cal-apply" style="width:auto;padding:8px 12px;border-radius:12px;">
+                    Готово
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="req-field">
+            <label>Груз</label>
+            <input type="text" name="cargo" value="{{ v.cargo or '' }}">
+          </div>
+
+          <div class="req-field">
+            <label>Тип транспорта</label>
+            <input type="text" name="truck_type" value="{{ v.truck_type or '' }}">
+          </div>
+
+          <div class="req-field">
+            <label>Вес (кг)</label>
+            <input type="number" step="0.1" name="weight_kg" value="{{ v.weight_kg or '' }}">
+          </div>
+
+          <div class="req-field">
+            <label>Объём (м³)</label>
+            <input type="number" step="0.1" name="volume_m3" value="{{ v.volume_m3 or '' }}">
+          </div>
+
+          <div class="req-field">
+            <label>Габариты</label>
+            <input type="text" name="dims" value="{{ v.dims or '' }}">
+          </div>
+
+          <div class="req-field">
+            <label>Мест</label>
+            <input type="number" name="places" value="{{ v.places or '' }}">
+          </div>
+
+          <div class="req-field">
+            <label>Адрес погрузки</label>
+            <input type="text" name="from_address" value="{{ v.from_address or '' }}">
+          </div>
+
+          <div class="req-field">
+            <label>Адрес выгрузки</label>
+            <input type="text" name="to_address" value="{{ v.to_address or '' }}">
+          </div>
+
+          <div class="req-field">
+            <label>Бюджет (KZT)</label>
+            <input type="number" name="budget" value="{{ v.budget_kzt or '' }}">
+          </div>
+
+          <div class="req-field">
+            <label>Оплата</label>
+            <input type="text" name="payment" value="{{ v.payment_type or '' }}">
+          </div>
+
+          <div class="req-field req-field--full">
+            <label>Комментарий</label>
+            <textarea name="comment" rows="3">{{ v.client_comment or '' }}</textarea>
+          </div>
+
+        </div>
+
+        <div class="req-actions" style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button type="submit" class="btn-main">Сохранить</button>
+          <a class="btn-outline" href="/client/requests/{{ v.id }}" style="text-decoration:none;">Отмена</a>
+        </div>
+      </form>
+    </div>
+
+  </section>
+</div>
+{% endblock %}

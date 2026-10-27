@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "_macros.html" import admin_nav %}
+{% block title %}Админ — Заявки — AbdEX{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+{{ admin_nav("orders") }}
+<h1>Заявки ({{ rows|length }})</h1>
+{% if rows %}
+<table>
+  <thead>
+    <tr><th>Номер</th><th>Компания</th><th>Груз</th><th>Статус</th><th>Создана</th></tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ row.order.order_number }}</td>
+      <td>{{ row.company_name }}</td>
+      <td>{{ row.order.cargo_name }}</td>
+      <td><span class="badge badge-{{ row.order.status.value }}">{{ row.order.status.value }}</span></td>
+      <td>{{ row.order.created_at|localtime }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">Заявок пока нет.</p>
+{% endif %}
+{% endblock %}

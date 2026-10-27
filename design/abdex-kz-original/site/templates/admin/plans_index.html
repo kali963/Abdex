@@ -1,0 +1,63 @@
+{% extends "admin/base.html" %}
+{% block title %}Планы отгрузок{% endblock %}
+
+{% block content %}
+<h2 class="text-2xl font-semibold mb-4">Планы отгрузок</h2>
+
+<div class="grid gap-3">
+  {% for item in items %}
+    {% set p = item.plan %}
+    {% set v = item.view %}
+    <div class="p-4 bg-white rounded-xl shadow hover:shadow-md transition">
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0 flex-1">
+          <a href="/admin/plans/{{ p.id }}" class="block hover:underline">
+            <div class="font-semibold truncate">
+              План #{{ p.id }} — {{ v.origin or "—" }} → {{ v.destination or "—" }}
+            </div>
+          </a>
+
+          <div class="mt-1 text-sm text-slate-600">
+            <span class="font-medium">Клиент:</span> {{ item.client_name }}
+          </div>
+
+          <div class="mt-1 text-sm text-slate-600">
+            <span class="font-medium">Период:</span>
+            {{ v.period_start.strftime('%d.%m.%Y') if v.period_start else '—' }}
+            {% if v.period_end %} — {{ v.period_end.strftime('%d.%m.%Y') }}{% endif %}
+          </div>
+
+          <div class="mt-1 text-sm text-slate-600">
+            <span class="font-medium">График:</span> {{ v.schedule_summary }}
+          </div>
+
+          <div class="mt-1 text-sm text-slate-600">
+            <span class="font-medium">Ближайшая дата:</span> {{ v.next_occurrence_display or "—" }}
+            <span class="ml-3 font-medium">Всего дат:</span> {{ v.occurrence_count }}
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <a href="/admin/plans/{{ p.id }}/edit"
+             class="px-3 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600">
+            ✏️
+          </a>
+
+          <form action="/admin/plans/{{ p.id }}/delete"
+                method="post"
+                onsubmit="return confirm('Удалить план #{{ p.id }}?');">
+            <button class="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700" type="submit">🗑</button>
+          </form>
+
+          <a href="/admin/plans/{{ p.id }}"
+             class="text-slate-400 text-2xl leading-none hover:text-slate-600">›</a>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="p-6 bg-white rounded-xl shadow text-center text-slate-500">
+      Планов пока нет
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

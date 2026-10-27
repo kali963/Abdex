@@ -1,0 +1,137 @@
+{% extends "site/base.html" %}
+{% block title %}Привязка Telegram | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-10">
+  <div style="text-align:center;margin-bottom:22px;">
+    <h1 style="font-size:48px;font-weight:800;line-height:1.1;color:#1f3253;">
+      Спасибо!
+    </h1>
+    <div style="margin-top:10px;color:#5d708f;font-size:18px;">
+      {{ subtitle }}
+    </div>
+  </div>
+
+  <div style="
+      max-width:760px;
+      margin:0 auto;
+      background:rgba(255,255,255,.72);
+      border:1px solid rgba(0,0,0,.08);
+      border-radius:22px;
+      padding:24px;
+      box-shadow:0 10px 30px rgba(31,50,83,.07);
+    ">
+    <div style="display:flex;align-items:flex-start;gap:14px;">
+      <div style="
+          width:44px;
+          height:44px;
+          min-width:44px;
+          border-radius:14px;
+          background:#b9dea3;
+          color:#1f3253;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-weight:800;
+        ">
+        TG
+      </div>
+
+      <div style="flex:1;">
+        <div style="font-size:30px;font-weight:800;color:#1f3253;margin-bottom:6px;">
+          {{ title }}
+        </div>
+
+        <div style="color:#5d708f;line-height:1.6;font-size:18px;">
+          1. Открой бота по кнопке ниже<br>
+          2. Нажми <b>Start</b> — бот привяжет аккаунт автоматически
+        </div>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:18px;">
+          <a href="{{ tg_link }}"
+             target="_blank"
+             style="
+                display:inline-flex;
+                align-items:center;
+                justify-content:center;
+                background:#44695F;
+                color:#fff;
+                text-decoration:none;
+                padding:14px 22px;
+                border-radius:14px;
+                font-weight:700;
+                box-shadow:0 8px 20px rgba(68,105,95,.22);
+             ">
+            Открыть Telegram-бота →
+          </a>
+
+          <a href="{{ back_url }}"
+             style="
+                display:inline-flex;
+                align-items:center;
+                justify-content:center;
+                background:#fff;
+                color:#1f3253;
+                text-decoration:none;
+                padding:14px 22px;
+                border-radius:14px;
+                border:1px solid rgba(31,50,83,.16);
+                font-weight:700;
+             ">
+            {{ back_text }}
+          </a>
+        </div>
+
+        <div style="
+            margin-top:22px;
+            background:rgba(245,242,235,.9);
+            border:1px solid rgba(0,0,0,.07);
+            border-radius:16px;
+            padding:16px;
+          ">
+          <div style="font-size:16px;color:#50617d;margin-bottom:8px;">
+            Если бот попросит токен — вот он:
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <input type="text"
+                   value="{{ token }}"
+                   readonly
+                   id="tg-token-input"
+                   style="
+                      flex:1;
+                      min-width:260px;
+                      background:#fff;
+                      border:1px solid rgba(31,50,83,.12);
+                      border-radius:12px;
+                      padding:12px 14px;
+                      color:#1f3253;
+                   ">
+            <button type="button"
+                    onclick="navigator.clipboard.writeText(document.getElementById('tg-token-input').value)"
+                    style="
+                      background:#fff;
+                      border:1px solid rgba(31,50,83,.12);
+                      border-radius:12px;
+                      padding:12px 16px;
+                      color:#1f3253;
+                      font-weight:700;
+                      cursor:pointer;
+                    ">
+              Копировать
+            </button>
+          </div>
+
+          <div style="margin-top:10px;font-size:14px;color:#6b7c96;">
+            Если ссылка не открывается — зайди в бота вручную и нажми Start.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;margin-top:18px;color:#6b7c96;">
+    Можно закрыть эту страницу после привязки Telegram.
+  </div>
+</div>
+{% endblock %}

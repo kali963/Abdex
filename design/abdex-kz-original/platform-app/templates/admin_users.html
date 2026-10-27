@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_macros.html" import admin_nav %}
+{% block title %}Админ — Пользователи — AbdEX{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+{{ admin_nav("users") }}
+<h1>Пользователи ({{ rows|length }})</h1>
+{% if rows %}
+<table>
+  <thead>
+    <tr><th>Телефон</th><th>Email</th><th>Имя</th><th>Персонал</th><th>2FA</th><th>Активен</th><th>Создан</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for u in rows %}
+    <tr>
+      <td>{{ u.phone or "—" }}</td>
+      <td>{{ u.email or "—" }}</td>
+      <td>{{ u.full_name or "—" }}</td>
+      <td>{{ "Да" if u.is_platform_staff else "—" }}</td>
+      <td>{{ "Вкл" if u.totp_enabled_at else "—" }}</td>
+      <td>{{ "Да" if u.is_active else "Нет" }}</td>
+      <td>{{ u.created_at|localtime }}</td>
+      <td><a href="/admin/users/{{ u.id }}">Открыть</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">Пользователей пока нет.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% from "_macros.html" import route_line %}
+{% block title %}{{ t("marketplace.list_page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>{{ t("marketplace.list_title", company=company.name) }}</h1>
+</div>
+
+<form method="get" action="/marketplace" class="filters">
+  <div class="field">
+    <label for="from_city">{{ t("marketplace.filter_from_city") }}</label>
+    <input type="text" id="from_city" name="from_city" value="{{ from_city }}">
+  </div>
+  <div class="field">
+    <label for="to_city">{{ t("marketplace.filter_to_city") }}</label>
+    <input type="text" id="to_city" name="to_city" value="{{ to_city }}">
+  </div>
+  <div class="field">
+    <label for="required_body_type">{{ t("marketplace.filter_body_type") }}</label>
+    <input type="text" id="required_body_type" name="required_body_type" value="{{ required_body_type }}">
+  </div>
+  <div class="field"><button type="submit">{{ t("orders.filter_submit") }}</button></div>
+</form>
+
+<section>
+  <h2>{{ t("marketplace.saved_filters_title") }}</h2>
+  <p class="hint">{{ t("marketplace.saved_filters_hint") }}</p>
+  {% if saved_filters %}
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t("marketplace.col_filter_name") }}</th>
+        <th>{{ t("marketplace.filter_from_city") }}</th>
+        <th>{{ t("marketplace.filter_to_city") }}</th>
+        <th></th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for saved_filter in saved_filters %}
+      <tr>
+        <td>{{ saved_filter.name }}</td>
+        <td>{{ saved_filter.filter_criteria.from_city or "—" }}</td>
+        <td>{{ saved_filter.filter_criteria.to_city or "—" }}</td>
+        <td>
+          <a class="btn-link" href="/marketplace?from_city={{ saved_filter.filter_criteria.from_city or '' }}&amp;to_city={{ saved_filter.filter_criteria.to_city or '' }}&amp;required_body_type={{ saved_filter.filter_criteria.required_body_type or '' }}">{{ t("marketplace.apply_filter") }}</a>
+        </td>
+        <td>
+          <form method="post" action="/marketplace/saved-filters/{{ saved_filter.id }}/delete" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn-inline btn-secondary">{{ t("marketplace.delete_filter") }}</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("marketplace.saved_filters_empty") }}</p>
+  {% endif %}
+
+  <form method="post" action="/marketplace/saved-filters" class="filters">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="from_city" value="{{ from_city }}">
+    <input type="hidden" name="to_city" value="{{ to_city }}">
+    <input type="hidden" name="required_body_type" value="{{ required_body_type }}">
+    <div class="field">
+      <label for="filter_name">{{ t("marketplace.field_filter_name") }}</label>
+      <input type="text" id="filter_name" name="name" required placeholder="{{ from_city }} → {{ to_city }}">
+    </div>
+    <button type="submit">{{ t("marketplace.save_current_filter") }}</button>
+  </form>
+</section>
+
+{% if orders %}
+<table>
+  <thead>
+    <tr>
+      <th>{{ t("orders.col_number") }}</th>
+      <th>{{ t("orders.col_route") }}</th>
+      <th>{{ t("marketplace.col_weight") }}</th>
+      <th>{{ t("orders.col_rate") }}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in orders %}
+    <tr>
+      <td><a href="/marketplace/orders/{{ row.order.id }}">{{ row.order.order_number }}</a></td>
+      <td>{{ route_line(row.loading_city, row.unloading_city, compact=True) }}</td>
+      <td>{{ row.order.cargo_weight_kg }} {{ t("orders.unit_kg") }}</td>
+      <td>{{ row.order.desired_rate_minor|money(row.order.currency_code) }}</td>
+      <td><a href="/marketplace/orders/{{ row.order.id }}">{{ t("marketplace.view_link") }}</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">{{ t("marketplace.empty_state") }}</p>
+{% endif %}
+{% endblock %}

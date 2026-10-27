@@ -1,0 +1,75 @@
+{% extends "site/base.html" %}
+{% block title %}Вход | AbdEX{% endblock %}
+
+{% block content %}
+<div class="auth-wrap">
+  <div class="auth-card">
+
+    <div class="auth-head">
+      <h1 class="auth-title">Вход</h1>
+      <p class="auth-sub">Введите логин и пароль</p>
+    </div>
+
+    {% if error %}
+      <div class="auth-alert auth-alert--error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/login" class="auth-form">
+
+      <label class="auth-label">Логин</label>
+      <input
+        type="text"
+        name="login"
+        placeholder="Email или логин"
+        autocomplete="username"
+        required
+        class="auth-input"
+      >
+
+      <label class="auth-label">Пароль</label>
+
+      <!-- пароль + глазик -->
+      <div class="auth-pass">
+        <input
+          id="password"
+          type="password"
+          name="password"
+          placeholder="Введите пароль"
+          autocomplete="current-password"
+          required
+          class="auth-input auth-input--pass"
+        >
+        <button type="button" class="auth-eye" id="togglePassword" aria-label="Показать пароль" title="Показать пароль">
+          👁
+        </button>
+      </div>
+
+      <button type="submit" class="auth-btn">Войти</button>
+
+      {% if show_forgot %}
+        <div class="auth-links">
+          <a href="/forgot-password" class="auth-link">Забыли пароль?</a>
+        </div>
+      {% endif %}
+    </form>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  const btn = document.getElementById('togglePassword');
+  const input = document.getElementById('password');
+  if (!btn || !input) return;
+
+  btn.addEventListener('click', function () {
+    const isHidden = input.type === 'password';
+    input.type = isHidden ? 'text' : 'password';
+    btn.textContent = isHidden ? '🙈' : '👁';
+    btn.setAttribute('aria-label', isHidden ? 'Скрыть пароль' : 'Показать пароль');
+    btn.title = isHidden ? 'Скрыть пароль' : 'Показать пароль';
+    input.focus();
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}{{ t("integrations.page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<h1>{{ t("integrations.title") }}</h1>
+
+<section>
+  <h2>{{ t("integrations.section_api_keys") }}</h2>
+  {% if api_keys %}
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t("integrations.col_name") }}</th>
+        <th>{{ t("integrations.col_prefix") }}</th>
+        <th>{{ t("integrations.col_status") }}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for key in api_keys %}
+      <tr>
+        <td>{{ key.name }}</td>
+        <td><code>{{ key.key_prefix }}…</code></td>
+        <td>
+          {% if key.revoked_at %}<span class="badge badge-rejected">{{ t("integrations.status_revoked") }}</span>
+          {% else %}<span class="badge badge-approved">{{ t("integrations.status_active") }}</span>{% endif %}
+        </td>
+        <td>
+          {% if not key.revoked_at %}
+          <form method="post" action="/settings/integrations/api-keys/{{ key.id }}/revoke" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn-inline btn-secondary">{{ t("integrations.revoke_key") }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("integrations.keys_empty") }}</p>
+  {% endif %}
+
+  <form method="post" action="/settings/integrations/api-keys" class="filters">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {{ field("name", t("integrations.field_key_name"), required=False) }}
+    <button type="submit">{{ t("integrations.create_key") }}</button>
+  </form>
+</section>
+
+<section>
+  <h2>{{ t("integrations.section_webhooks") }}</h2>
+  {% if subscriptions %}
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t("integrations.col_url") }}</th>
+        <th>{{ t("integrations.col_event") }}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for subscription in subscriptions %}
+      <tr>
+        <td>{{ subscription.url }}</td>
+        <td>{{ subscription.event_type.value }}</td>
+        <td>
+          <form method="post" action="/settings/integrations/webhooks/{{ subscription.id }}/delete" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn-inline btn-secondary">{{ t("integrations.delete_webhook") }}</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("integrations.webhooks_empty") }}</p>
+  {% endif %}
+
+  <form method="post" action="/settings/integrations/webhooks" class="filters">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="field">
+      <label for="url">{{ t("integrations.field_webhook_url") }}</label>
+      <input type="url" id="url" name="url" required placeholder="https://example.com/webhook">
+    </div>
+    <div class="field">
+      <label for="event_type">{{ t("integrations.field_event_type") }}</label>
+      <select id="event_type" name="event_type" required>
+        {% for event in event_types %}
+        <option value="{{ event.value }}">{{ event.value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit">{{ t("integrations.create_webhook") }}</button>
+  </form>
+</section>
+{% endblock %}

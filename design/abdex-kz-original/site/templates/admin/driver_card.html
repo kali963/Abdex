@@ -1,0 +1,109 @@
+{% extends "admin/base.html" %}
+{% block title %}Водитель #{{ profile.id }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-8">
+
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-semibold">Водитель #{{ profile.id }}</h1>
+
+    <div class="flex gap-2">
+      <a href="/admin/drivers/{{ profile.id }}/edit" class="btn-main">Редактировать</a>
+      <a href="/admin/drivers" class="btn-outline">← Назад</a>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <div class="p-6">
+      <div class="grid md:grid-cols-2 gap-x-10 gap-y-4">
+
+        <div>
+          <div class="text-slate-500 text-sm">Статус</div>
+          {% if profile.active %}
+            <div class="font-semibold text-emerald-700">Активен</div>
+          {% else %}
+            <div class="font-semibold text-rose-700">Не активен</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <div class="text-slate-500 text-sm">TG ID</div>
+          <div class="font-semibold">{{ user.tg_id if user else "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500 text-sm">Форма бизнеса</div>
+          <div class="font-semibold">{{ profile.business_form or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500 text-sm">Компания / название</div>
+          <div class="font-semibold">{{ profile.entity_name or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500 text-sm">ФИО</div>
+          <div class="font-semibold">{{ profile.full_name or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500 text-sm">Телефон</div>
+          <div class="font-semibold">{{ profile.phone or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500 text-sm">ИИН</div>
+          <div class="font-semibold">{{ profile.iin or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500 text-sm">№ удостоверения</div>
+          <div class="font-semibold">{{ profile.id_number or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500 text-sm">№ паспорта</div>
+          <div class="font-semibold">{{ profile.passport_number or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500 text-sm">№ техпаспорта</div>
+          <div class="font-semibold">{{ profile.tech_passport_number or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500 text-sm">Авто</div>
+          <div class="font-semibold">{{ profile.car or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500 text-sm">Прицеп</div>
+          <div class="font-semibold">{{ profile.trailer or "—" }}</div>
+        </div>
+
+        <div>
+          <div class="text-slate-500 text-sm">Грузоподъёмность</div>
+          {% if profile.capacity_kg %}
+            <div class="font-semibold">
+              {{ profile.capacity_kg }} кг · {{ (profile.capacity_kg / 1000) | round(2) }} т
+            </div>
+          {% else %}
+            <div class="font-semibold">—</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <div class="text-slate-500 text-sm">Объём</div>
+          {% if profile.volume_m3 %}
+            <div class="font-semibold">{{ profile.volume_m3 }} м³</div>
+          {% else %}
+            <div class="font-semibold">—</div>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

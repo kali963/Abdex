@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_macros.html" import admin_nav %}
+{% block title %}Админ — SLA поддержки — AbdEX{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+{{ admin_nav("sla") }}
+<h1>SLA обращений в поддержку (FR-SUP-02)</h1>
+
+<section>
+  <h2>Сроки ответа по категориям</h2>
+  <table>
+    <thead><tr><th>Категория</th><th>Срок, час</th><th></th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td>{{ row.category.value }}</td>
+        <td>{{ row.response_hours }}</td>
+        <td>
+          <form method="post" action="/admin/support/sla/policies" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="category" value="{{ row.category.value }}">
+            <input type="number" name="response_hours" value="{{ row.response_hours }}" min="1" style="width:80px;">
+            <button type="submit" class="btn-inline">Сохранить</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Эскалация просроченных обращений</h2>
+  <p>Сейчас просрочено и открыто: <strong>{{ overdue_count }}</strong></p>
+  <form method="post" action="/admin/support/sla/escalate">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit"{% if overdue_count == 0 %} disabled{% endif %}>Запустить эскалацию</button>
+  </form>
+</section>
+
+<section>
+  <h2>Отчёт по соблюдению SLA (последние 30 дней)</h2>
+  <table>
+    <tbody>
+      <tr><td>Решено в срок</td><td class="num">{{ report.resolved_within_sla }}</td></tr>
+      <tr><td>Решено с опозданием</td><td class="num">{{ report.resolved_late }}</td></tr>
+      <tr><td>Сейчас просрочено и открыто</td><td class="num">{{ report.currently_overdue_open }}</td></tr>
+      <tr><td>Соблюдение SLA</td><td class="num">{{ report.compliance_percent }}%</td></tr>
+    </tbody>
+  </table>
+</section>
+{% endblock %}

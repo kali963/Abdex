@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ t("kyc.driver_page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>{{ t("kyc.driver_title") }}</h1>
+  <span class="badge badge-{{ profile.level.value }}">{{ t("kyc.level_" + profile.level.value) }}</span>
+</div>
+
+{% if moderation %}
+<p class="notice">{{ t("kyc.moderation_pending_notice") }}</p>
+{% endif %}
+
+<section>
+  <h2>{{ t("kyc.section_documents") }}</h2>
+  {% if documents %}
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t("kyc.col_doc_type") }}</th>
+        <th>{{ t("kyc.col_filename") }}</th>
+        <th>{{ t("kyc.col_status") }}</th>
+        <th>{{ t("kyc.col_expires") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for document in documents %}
+      <tr>
+        <td>{{ t("kyc.doc_type_" + document.document_type.value) }}</td>
+        <td>{{ document.original_filename }}</td>
+        <td>
+          <span class="badge badge-{{ document.status.value }}">{{ t("kyc.status_" + document.status.value) }}</span>
+          {% if document.rejection_reason %} — {{ t("kyc.rejection_" + document.rejection_reason.value) }}{% endif %}
+        </td>
+        <td>{{ document.expires_at|localtime if document.expires_at else "—" }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("kyc.documents_empty") }}</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>{{ t("kyc.upload_section") }}</h2>
+  <form method="post" action="/driver/documents" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="field">
+      <label for="document_type">{{ t("kyc.field_document_type") }}</label>
+      <select id="document_type" name="document_type" required>
+        {% for doc_type in document_types %}
+        <option value="{{ doc_type.value }}">{{ t("kyc.doc_type_" + doc_type.value) }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="file">{{ t("kyc.field_file") }}</label>
+      <input type="file" id="file" name="file" required>
+    </div>
+    <button type="submit">{{ t("kyc.upload_submit") }}</button>
+  </form>
+</section>
+
+{% if not moderation %}
+<form method="post" action="/driver/documents/submit">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit" class="btn-secondary">{{ t("kyc.submit_for_moderation") }}</button>
+</form>
+{% endif %}
+{% endblock %}

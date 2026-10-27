@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "_macros.html" import admin_nav %}
+{% block title %}Админ — Сделки — AbdEX{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+{{ admin_nav("deals") }}
+<h1>Сделки ({{ rows|length }})</h1>
+{% if rows %}
+<table>
+  <thead>
+    <tr><th>Клиент</th><th>Перевозчик</th><th>Статус</th><th>Риск</th><th>Создана</th></tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ row.client_name }}</td>
+      <td>{{ row.carrier_name }}</td>
+      <td><span class="badge badge-{{ row.deal.status.value }}">{{ row.deal.status.value }}</span></td>
+      <td><span class="badge badge-{{ row.deal.risk_level.value }}">{{ row.deal.risk_level.value }}</span></td>
+      <td>{{ row.deal.created_at|localtime }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">Сделок пока нет.</p>
+{% endif %}
+{% endblock %}

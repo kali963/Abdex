@@ -1,0 +1,111 @@
+{% extends "admin/base.html" %}
+{% block title %}Клиенты{% endblock %}
+
+{% block content %}
+<h2 class="text-2xl font-semibold mb-4">Все клиенты</h2>
+
+<form method="get" class="mb-4 flex gap-3 items-center">
+  <input
+    type="text"
+    name="q"
+    value="{{ q or '' }}"
+    placeholder="Поиск по имени, компании или БИН/ИНН"
+    class="border rounded p-2 w-80"
+  >
+  <button type="submit" class="btn btn-primary btn-sm">Искать</button>
+
+  {% if q %}
+    <a class="btn btn-ghost btn-sm" href="/admin/clients">Сбросить</a>
+  {% endif %}
+</form>
+
+{% if items %}
+  <div class="overflow-x-auto bg-white rounded-xl shadow">
+    <table class="w-full text-left border-collapse">
+      <thead class="bg-slate-50">
+        <tr class="border-b">
+          <th class="p-2">ID</th>
+          <th class="p-2">Имя</th>
+          <th class="p-2">Компания</th>
+          <th class="p-2">Форма</th>
+          <th class="p-2">Должность</th>
+          <th class="p-2">БИН/ИНН</th>
+          <th class="p-2">Создан</th>
+          <th class="p-2 text-right">Действия</th>
+        </tr>
+      </thead>
+
+      <tbody>
+      {% for c in items %}
+        <tr class="border-b hover:bg-slate-50">
+          <td class="p-2">{{ c.id }}</td>
+
+          <td class="p-2">
+            <div class="font-semibold text-slate-900">{{ c.name or "—" }}</div>
+            {% if c.phone %}
+              <div class="text-xs text-slate-500">{{ c.phone }}</div>
+            {% endif %}
+          </td>
+
+          <td class="p-2">
+            {% if c.company_name %}
+              {{ c.company_name }}
+            {% else %}
+              <span class="text-slate-400">—</span>
+            {% endif %}
+          </td>
+
+          <td class="p-2">
+            {% if c.business_form %}
+              {{ c.business_form }}
+            {% else %}
+              <span class="text-slate-400">—</span>
+            {% endif %}
+          </td>
+
+          <td class="p-2">
+            {% if c.position %}
+              {{ c.position }}
+            {% else %}
+              <span class="text-slate-400">—</span>
+            {% endif %}
+          </td>
+
+          <td class="p-2">
+            {% if c.tax_id_type and c.tax_id_number %}
+              <span class="font-medium">{{ c.tax_id_type }}</span> {{ c.tax_id_number }}
+            {% else %}
+              <span class="text-slate-400">—</span>
+            {% endif %}
+          </td>
+
+          <td class="p-2 text-slate-500 text-sm">
+            {{ c.created_at }}
+          </td>
+
+          <td class="p-2 text-right whitespace-nowrap">
+            <a class="btn btn-soft btn-sm" href="/admin/clients/{{ c.id }}">Открыть</a>
+
+            <form
+              method="post"
+              action="/admin/clients/{{ c.id }}/delete"
+              style="display:inline"
+              onsubmit="return confirm('Удалить клиента? Будут удалены его заявки и связанные данные.')"
+            >
+              <button type="submit" class="btn btn-ghost btn-sm" style="margin-left:8px;color:#b42318;border-color:rgba(180,35,24,.2);">
+                Удалить
+              </button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+{% else %}
+  <div class="p-6 bg-white rounded-xl shadow text-center text-slate-500">
+    Клиентов пока нет
+  </div>
+{% endif %}
+{% endblock %}

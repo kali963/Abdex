@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field, route_line %}
+{% block title %}{{ t("bid.detail_page_title", number=order.order_number) }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>{{ order.order_number }} <span class="badge badge-{{ bid.status.value }}">{{ t("orders.bid_status_" + bid.status.value) }}</span></h1>
+  <a href="{{ ('/orders/' + order.id|string) if side == 'client' else '/bids' }}">{{ t("bid.back_link") }}</a>
+</div>
+{{ route_line(loading_city, unloading_city) }}
+
+<section>
+  <h2>{{ t("bid.section_current") }}</h2>
+  <p>{{ t("bid.current_price") }}: {{ bid.current_price_minor|money(bid.currency_code) }}</p>
+  <p>{{ t("orders.bid_col_valid_until") }}: {{ bid.valid_until|localtime }}</p>
+</section>
+
+<section>
+  <h2>{{ t("bid.section_history") }}</h2>
+  {% if entries %}
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t("bid.history_col_side") }}</th>
+        <th>{{ t("bid.history_col_price") }}</th>
+        <th>{{ t("bid.history_col_comment") }}</th>
+        <th>{{ t("orders.col_created") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in entries %}
+      <tr>
+        <td>{{ t("deal.role_client") if row.entry.proposed_by_side.value == "client" else t("deal.role_carrier") }} ({{ row.sender_name or "—" }})</td>
+        <td>{{ row.entry.price_minor|money(bid.currency_code) }}</td>
+        <td>{{ row.entry.comment or "—" }}</td>
+        <td>{{ row.entry.created_at|localtime }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">{{ t("bid.history_empty") }}</p>
+  {% endif %}
+</section>
+
+{% if bid.status.value == "pending" %}
+<section>
+  <h2>{{ t("bid.section_counter") }}</h2>
+  <form method="post" action="/bids/{{ bid.id }}/counter-offer">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {{ field("price", t("marketplace.field_price", currency=bid.currency_code)) }}
+    <div class="field">
+      <label for="comment">{{ t("marketplace.field_comment") }}</label>
+      <textarea id="comment" name="comment" rows="2"></textarea>
+    </div>
+    <button type="submit">{{ t("bid.submit_counter") }}</button>
+  </form>
+
+  <div class="toolbar" style="margin-top:16px;">
+    {% if side == "client" %}
+    <form method="post" action="/orders/{{ order.id }}/bids/{{ bid.id }}/accept">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit">{{ t("orders.bid_accept_button") }}</button>
+    </form>
+    {% else %}
+    <form method="post" action="/bids/{{ bid.id }}/withdraw">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn-secondary">{{ t("bid.withdraw_button") }}</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

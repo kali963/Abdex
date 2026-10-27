@@ -1,0 +1,66 @@
+{% macro field(name, label, type="text", value="", error=None, required=True) %}
+<div class="field">
+  <label for="{{ name }}">{{ label }}</label>
+  <input type="{{ type }}" id="{{ name }}" name="{{ name }}" value="{{ value or '' }}" {% if required %}required{% endif %}>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro select_field(name, label, options, value="", error=None, required=True, empty_label=None) %}
+<div class="field">
+  <label for="{{ name }}">{{ label }}</label>
+  <select id="{{ name }}" name="{{ name }}" {% if required %}required{% endif %}>
+    {% if empty_label is not none %}<option value="">{{ empty_label }}</option>{% endif %}
+    {% for opt_value, opt_label in options %}
+    <option value="{{ opt_value }}" {% if opt_value == value %}selected{% endif %}>{{ opt_label }}</option>
+    {% endfor %}
+  </select>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro status_badge(value, label) %}
+<span class="badge badge-{{ value }}">{{ label }}</span>
+{% endmacro %}
+
+{% macro route_line(loading_city, unloading_city, meta=None, compact=False) %}
+<div class="route{{ ' compact' if compact }}">
+  <span class="city">{{ loading_city or "—" }}</span>
+  <span class="line"></span>
+  <span class="city">{{ unloading_city or "—" }}</span>
+</div>
+{% if meta %}<div class="route-meta">{{ meta }}</div>{% endif %}
+{% endmacro %}
+
+{% macro route_line_from_points(points, meta=None, compact=False) %}
+{% set loading = points|selectattr("point_type.value", "equalto", "loading")|first %}
+{% set unloading = points|selectattr("point_type.value", "equalto", "unloading")|first %}
+{{ route_line(loading.city if loading else None, unloading.city if unloading else None, meta=meta, compact=compact) }}
+{% endmacro %}
+
+{% macro step_dots(current, total=4) %}
+<div style="display:flex; gap:6px; margin-bottom:22px;">
+  {% for i in range(1, total + 1) %}
+  <span style="flex:1; height:4px; border-radius:2px; background: {{ 'var(--button-bg)' if i <= current else 'var(--border-soft)' }};"></span>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro admin_nav(active) %}
+<div class="toolbar">
+  <nav class="admin-nav">
+    <a href="/admin" class="{{ 'active' if active == 'dashboard' else '' }}">Обзор</a>
+    <a href="/admin/users" class="{{ 'active' if active == 'users' else '' }}">Пользователи</a>
+    <a href="/admin/companies" class="{{ 'active' if active == 'companies' else '' }}">Компании</a>
+    <a href="/admin/orders" class="{{ 'active' if active == 'orders' else '' }}">Заявки</a>
+    <a href="/admin/deals" class="{{ 'active' if active == 'deals' else '' }}">Сделки</a>
+    <a href="/admin/billing" class="{{ 'active' if active == 'billing' else '' }}">Биллинг</a>
+    <a href="/admin/kyc" class="{{ 'active' if active == 'kyc' else '' }}">Верификация</a>
+    <a href="/admin/acl" class="{{ 'active' if active == 'acl' else '' }}">Права доступа</a>
+    <a href="/admin/support/sla" class="{{ 'active' if active == 'sla' else '' }}">SLA поддержки</a>
+    <a href="/admin/feature-flags" class="{{ 'active' if active == 'flags' else '' }}">Фиче-флаги</a>
+    <a href="/admin/action-log" class="{{ 'active' if active == 'log' else '' }}">Журнал действий</a>
+  </nav>
+  <a href="/admin/logout" class="btn-link">Выйти из админки</a>
+</div>
+{% endmacro %}

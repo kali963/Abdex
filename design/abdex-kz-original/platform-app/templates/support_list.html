@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ t("support.list_page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>{{ t("support.list_title") }}</h1>
+  <a class="btn-link" href="/support/new">{{ t("support.new_link") }}</a>
+</div>
+{% if tickets %}
+<table>
+  <thead>
+    <tr>
+      <th>{{ t("support.col_number") }}</th>
+      <th>{{ t("support.col_subject") }}</th>
+      <th>{{ t("support.col_category") }}</th>
+      <th>{{ t("support.col_status") }}</th>
+      <th>{{ t("orders.col_created") }}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for ticket in tickets %}
+    <tr>
+      <td><a href="/support/{{ ticket.id }}">{{ ticket.ticket_number }}</a></td>
+      <td>{{ ticket.subject }}</td>
+      <td>{{ t("support.category_" + ticket.category.value) }}</td>
+      <td><span class="badge badge-{{ ticket.status.value }}">{{ t("support.status_" + ticket.status.value) }}</span></td>
+      <td>{{ ticket.created_at|localtime }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">{{ t("support.empty_state") }}</p>
+{% endif %}
+{% endblock %}

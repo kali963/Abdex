@@ -1,0 +1,71 @@
+{% extends "site/base.html" %}
+{% block title %}Водители | AbdEX{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-semibold">Водители</h1>
+    <a href="/manager/cabinet" class="cab-badge" style="text-decoration:none;">← Назад</a>
+  </div>
+
+  <form method="get" class="mb-4 flex gap-3 items-center">
+    <input type="text" name="q" value="{{ q or '' }}"
+           placeholder="Поиск по имени, телефону, номеру авто"
+           class="border rounded p-2 w-80">
+    <button type="submit" class="btn btn-primary btn-sm">Искать</button>
+    {% if q %}
+      <a class="btn btn-ghost btn-sm" href="/manager/drivers">Сбросить</a>
+    {% endif %}
+  </form>
+
+  {% if items %}
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50">
+        <tr>
+          <th class="p-3 text-left">ID</th>
+          <th class="p-3 text-left">ФИО</th>
+          <th class="p-3 text-left">Телефон</th>
+          <th class="p-3 text-left">Авто</th>
+          <th class="p-3 text-left">Г/п (т)</th>
+          <th class="p-3 text-left">Объём (м³)</th>
+          <th class="p-3 text-left">Статус</th>
+          <th class="p-3 text-left">Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in items %}
+        <tr class="border-t">
+          <td class="p-3">{{ d.id }}</td>
+          <td class="p-3">{{ d.full_name or "—" }}</td>
+          <td class="p-3">{{ d.phone or "—" }}</td>
+          <td class="p-3">{{ d.car or "—" }}</td>
+          <td class="p-3">
+            {% if d.capacity_kg is not none %}
+              {{ "%.1f"|format((d.capacity_kg / 1000)) }}
+            {% else %}—{% endif %}
+          </td>
+          <td class="p-3">
+            {% if d.volume_m3 is not none %}{{ d.volume_m3 }}{% else %}—{% endif %}
+          </td>
+          <td class="p-3">
+            {% if d.active %}
+              <span class="text-green-700 font-semibold">активен</span>
+            {% else %}
+              <span class="text-slate-500">неактивен</span>
+            {% endif %}
+          </td>
+          <td class="p-3">
+            <a class="cab-badge" style="text-decoration:none;"
+               href="/manager/drivers/{{ d.id }}">Открыть</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="cab-empty">Водителей пока нет</div>
+  {% endif %}
+</div>
+{% endblock %}

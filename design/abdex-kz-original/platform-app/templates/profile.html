@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}{{ t("profile.page_title") }}{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+<h1>{{ t("profile.title") }}</h1>
+
+<section>
+  <h2>{{ t("profile.section_identity") }}</h2>
+  <table>
+    <tbody>
+      <tr><td>{{ t("profile.field_phone") }}</td><td>{{ user.phone or "—" }}</td></tr>
+      <tr><td>{{ t("profile.field_email") }}</td><td>{{ user.email or "—" }}</td></tr>
+      <tr><td>{{ t("profile.field_full_name") }}</td><td>{{ user.full_name or "—" }}</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>{{ t("profile.section_telegram") }}</h2>
+  {% if telegram_link %}
+  <p class="notice">{{ t("profile.telegram_linked") }}</p>
+  {% else %}
+  <p class="muted">{{ t("profile.telegram_not_linked") }}</p>
+  {% endif %}
+  <a class="btn-link" href="/profile/telegram">{{ t("profile.telegram_link_action") }}</a>
+</section>
+
+<section>
+  <h2>{{ t("profile.section_password") }}</h2>
+  <form method="post" action="/profile/password">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {{ field("current_password", t("profile.field_current_password"), type="password", error=errors.current_password) }}
+    {{ field("new_password", t("profile.field_new_password"), type="password", error=errors.new_password) }}
+    <button type="submit" class="btn-secondary">{{ t("profile.change_password_submit") }}</button>
+  </form>
+</section>
+{% endblock %}

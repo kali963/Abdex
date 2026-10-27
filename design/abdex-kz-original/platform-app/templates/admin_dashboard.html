@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "_macros.html" import admin_nav %}
+{% block title %}Админ — Обзор — AbdEX{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block content %}
+{{ admin_nav("dashboard") }}
+<h1>Обзор платформы</h1>
+<div class="stat-grid">
+  <div class="stat-card"><div class="num">{{ counts.users }}</div><div class="label">Пользователей</div></div>
+  <div class="stat-card"><div class="num">{{ counts.companies }}</div><div class="label">Компаний</div></div>
+  <div class="stat-card"><div class="num">{{ counts.orders }}</div><div class="label">Заявок</div></div>
+  <div class="stat-card"><div class="num">{{ counts.deals }}</div><div class="label">Сделок</div></div>
+  <div class="stat-card"><div class="num">{{ counts.bids }}</div><div class="label">Предложений</div></div>
+  <div class="stat-card"><div class="num">{{ counts.accruals }}</div><div class="label">Начислений</div></div>
+</div>
+<p class="muted">Полный доступ на просмотр: пользователи, компании, заявки, сделки, тарифы и начисления.</p>
+{% endblock %}
