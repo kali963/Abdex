@@ -14,6 +14,12 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _secret(name: str) -> str:
+    from app.core.secrets import secret  # files of the secret store first (GOV-R-07)
+
+    return secret(name)
+
+
 # Serverless hosting (Vercel): the filesystem is read-only except /tmp and there are no
 # long-running processes, so defaults change. Persistent data needs DATABASE_URL (PostgreSQL).
 ON_VERCEL = bool(os.getenv("VERCEL"))
@@ -54,7 +60,7 @@ def _int(name: str, default: int) -> int:
 @dataclass(frozen=True)
 class Settings:
     app_env: str = field(default_factory=lambda: os.getenv("APP_ENV", "development"))
-    secret_key: str = field(default_factory=lambda: os.getenv("SECRET_KEY", ""))
+    secret_key: str = field(default_factory=lambda: _secret("SECRET_KEY"))
     database_url: str = field(
         default_factory=lambda: _normalize_db_url(os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'var' / 'abdex.db'}"))
     )
@@ -63,6 +69,8 @@ class Settings:
     storage_dir: Path = field(default_factory=lambda: Path(os.getenv("STORAGE_DIR", str(BASE_DIR / "var" / "storage"))))
     # Admin interface lives on a separate host in production (FR-ACL-04). Empty = same host.
     admin_host: str = field(default_factory=lambda: os.getenv("ADMIN_HOST", ""))
+    # SEC-AZ-06: the admin interface answers only from these networks (office, VPN), e.g. "10.8.0.0/24,203.0.113.7"
+    admin_networks: str = field(default_factory=lambda: os.getenv("ADMIN_ALLOWED_NETWORKS", ""))
     secure_cookies: bool = field(default_factory=lambda: _bool("SECURE_COOKIES", False))
     # Take the client IP from X-Forwarded-For only behind a proxy that overwrites it; otherwise
     # anyone could spoof their IP and bypass per-IP rate limits (SEC-AUT-03, SEC-APP-06).
@@ -82,10 +90,10 @@ class Settings:
     session_absolute_days: int = field(default_factory=lambda: _int("SESSION_ABSOLUTE_DAYS", 30))
     # SEC-AUT-10: cooling-off period for new bank details
     iban_cooldown_hours: int = field(default_factory=lambda: _int("IBAN_COOLDOWN_HOURS", 24))
-    telegram_bot_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
+    telegram_bot_token: str = field(default_factory=lambda: _secret("TELEGRAM_BOT_TOKEN"))
     # Secret Telegram sends in X-Telegram-Bot-Api-Secret-Token (set via setWebhook secret_token)
-    telegram_webhook_secret: str = field(default_factory=lambda: os.getenv("TELEGRAM_WEBHOOK_SECRET", ""))
-    metrics_token: str = field(default_factory=lambda: os.getenv("METRICS_TOKEN", ""))  # NFR-OBS-01
+    telegram_webhook_secret: str = field(default_factory=lambda: _secret("TELEGRAM_WEBHOOK_SECRET"))
+    metrics_token: str = field(default_factory=lambda: _secret("METRICS_TOKEN"))  # NFR-OBS-01
     # GOV-DS-02: server-side verification of NCA RK signatures (NCANode); empty = development signer
     eds_ncanode_url: str = field(default_factory=lambda: os.getenv("EDS_NCANODE_URL", ""))
     # FR-LOC-04: official rates feed, e.g. https://nationalbank.kz/rss/get_rates.cfm (empty: simulator in development,
@@ -93,8 +101,8 @@ class Settings:
     fx_rates_url: str = field(default_factory=lambda: os.getenv("FX_RATES_URL", ""))
     # FR-BIL-06: hosted-checkout payment provider; empty URL = development simulator
     payment_provider_url: str = field(default_factory=lambda: os.getenv("PAYMENT_PROVIDER_URL", ""))
-    payment_provider_key: str = field(default_factory=lambda: os.getenv("PAYMENT_PROVIDER_KEY", ""))
-    payment_webhook_secret: str = field(default_factory=lambda: os.getenv("PAYMENT_WEBHOOK_SECRET", ""))
+    payment_provider_key: str = field(default_factory=lambda: _secret("PAYMENT_PROVIDER_KEY"))
+    payment_webhook_secret: str = field(default_factory=lambda: _secret("PAYMENT_WEBHOOK_SECRET"))
     public_base_url: str = field(default_factory=lambda: os.getenv("PUBLIC_BASE_URL", "http://localhost:8000"))
 
     @property

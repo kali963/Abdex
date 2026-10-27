@@ -12,7 +12,7 @@
 <h3>{{ _("fleet.drivers") }}</h3><ul>{% for d in drivers %}<li>{{ d.full_name }} · {{ _("fleet.iin") }} ••••{{ d.iin[-4:] }} · {{ ui.status(d.status) }}{% set b = bio.get(d.id) %}{% if b %} · <span class="badge {{ 'ok' if b.status == 'passed' else 'warn' }}">{{ _("bio.short") }}: {{ _("bio.st." ~ b.status) }}</span>{% endif %}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
 </section>
 <section class="stack">
-<div class="card"><h2>{{ _("kyc.registry") }}</h2>{% for ch in checks %}<p>{{ ch.source }} · <b>{{ ch.status }}</b> · {{ fmt_dt(ch.created_at) }} · {{ _("kyc.basis") }}: {{ ch.basis }}</p>{% else %}<p class="muted">{{ _("common.empty") }}</p>{% endfor %}</div>
+<div class="card"><h2>{{ _("kyc.registry") }}</h2>{% for ch in checks %}<p>{{ ch.source }} · <b>{{ ch.status }}</b>{% if ch.status == "unavailable" %} <span class="badge warn">{{ _("kyc.check_deferred_mod") }}</span>{% endif %} · {{ fmt_dt(ch.created_at) }} · {{ _("kyc.basis") }}: {{ ch.basis }}</p>{% else %}<p class="muted">{{ _("common.empty") }}</p>{% endfor %}</div>
 {% if alerts %}<div class="card warn"><h2>{{ _("admin.antifraud") }}</h2><ul>{% for a in alerts %}<li>{{ _("alert." ~ a.kind) }} · {{ ui.status(a.status) }}</li>{% endfor %}</ul></div>{% endif %}
 {% if req.status == "pending" %}
 <form class="card stack" method="post" action="/admin/moderation/{{ req.id }}">{{ ui.csrf() }}

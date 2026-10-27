@@ -20,6 +20,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.secrets import secret
 from app.config import settings
 from app.core.audit import audit
 from app.core.errors import AppError
@@ -52,7 +53,7 @@ class EsfAdapter(Adapter):
                 raise IntegrationUnavailable("ESF_GATEWAY_URL must be https")
             req = urllib.request.Request(url, data=xml, method="POST",  # noqa: S310 — configured https gateway
                                          headers={"Content-Type": "application/xml", "X-Document-Kind": kind,
-                                                  "Authorization": f"Bearer {os.getenv('ESF_GATEWAY_TOKEN', '')}"})
+                                                  "Authorization": f"Bearer {secret('ESF_GATEWAY_TOKEN')}"})
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 — configured https gateway
                 out = json.loads(resp.read(100_000))
             ok = str(out.get("status", "")).lower() == "accepted"

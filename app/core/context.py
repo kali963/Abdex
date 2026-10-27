@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 @dataclass
 class RequestContext:
     request_id: str = ""
+    trace_id: str = ""  # W3C trace id (app.core.tracing)
     ip: str = ""
     user_agent: str = ""
     device_id: str = ""

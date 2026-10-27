@@ -22,6 +22,7 @@ from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
+from app.core.secrets import secret
 from app.config import settings
 
 PUSH_HOSTS = ("fcm.googleapis.com", "updates.push.services.mozilla.com", "push.services.mozilla.com",
@@ -41,7 +42,7 @@ def b64u_dec(text: str) -> bytes:
 
 @lru_cache(maxsize=1)
 def _private_key() -> ec.EllipticCurvePrivateKey:
-    pem = os.getenv("VAPID_PRIVATE_KEY", "")
+    pem = secret("VAPID_PRIVATE_KEY")
     if pem:
         return serialization.load_pem_private_key(pem.replace("\\n", "\n").encode(), password=None)
     if settings.is_production:
@@ -57,7 +58,7 @@ def _private_key() -> ec.EllipticCurvePrivateKey:
 
 
 def enabled() -> bool:
-    return bool(os.getenv("VAPID_PRIVATE_KEY")) or not settings.is_production
+    return bool(secret("VAPID_PRIVATE_KEY")) or not settings.is_production
 
 
 def public_key() -> str:

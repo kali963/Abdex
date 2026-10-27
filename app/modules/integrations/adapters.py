@@ -11,6 +11,7 @@ import logging
 import math
 from datetime import timedelta
 
+from app.core.secrets import secret
 from app.db import utcnow
 from app.modules.integrations.base import Adapter
 
@@ -135,7 +136,7 @@ def sms_provider() -> str:
     name = os.getenv("SMS_PROVIDER", "").strip().lower()
     if name:
         return name
-    if os.getenv("MOBIZON_API_KEY"):
+    if secret("MOBIZON_API_KEY"):
         return "mobizon"
     if os.getenv("SMSC_LOGIN"):
         return "smsc"
@@ -192,7 +193,7 @@ class SmsAdapter(_OutboundAdapter):
         from urllib.parse import urlencode
 
         base = os.getenv("MOBIZON_API_URL", "https://api.mobizon.kz").rstrip("/")
-        query = urlencode({"output": "json", "api": "v1", "apiKey": os.getenv("MOBIZON_API_KEY", "")})
+        query = urlencode({"output": "json", "api": "v1", "apiKey": secret("MOBIZON_API_KEY")})
         form = {"recipient": phone, "text": body}
         if os.getenv("SMS_SENDER"):
             form["from"] = os.getenv("SMS_SENDER", "")
@@ -205,7 +206,7 @@ class SmsAdapter(_OutboundAdapter):
         import os
         from urllib.parse import urlencode
 
-        form = {"login": os.getenv("SMSC_LOGIN", ""), "psw": os.getenv("SMSC_PASSWORD", ""), "phones": phone,
+        form = {"login": os.getenv("SMSC_LOGIN", ""), "psw": secret("SMSC_PASSWORD"), "phones": phone,
                 "mes": body, "fmt": "3", "charset": "utf-8"}
         if os.getenv("SMS_SENDER"):
             form["sender"] = os.getenv("SMS_SENDER", "")
@@ -220,7 +221,7 @@ class SmsAdapter(_OutboundAdapter):
 
         self._post(os.getenv("SMS_GATEWAY_URL", ""), _json.dumps({"to": recipient, "text": body}).encode(),
                    {"Content-Type": "application/json",
-                    "Authorization": f"Bearer {os.getenv('SMS_GATEWAY_TOKEN', '')}"})
+                    "Authorization": f"Bearer {secret('SMS_GATEWAY_TOKEN')}"})
 
 
 class EmailAdapter(_OutboundAdapter):
@@ -253,7 +254,7 @@ class EmailAdapter(_OutboundAdapter):
             if port != 465:
                 smtp.starttls(context=context)
             if os.getenv("SMTP_USER"):
-                smtp.login(os.getenv("SMTP_USER", ""), os.getenv("SMTP_PASSWORD", ""))
+                smtp.login(os.getenv("SMTP_USER", ""), secret("SMTP_PASSWORD"))
             smtp.send_message(msg)
 
 

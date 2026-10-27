@@ -82,11 +82,19 @@ def check_env() -> list[Item]:
         add(WARN, "worker", "RUN_BACKGROUND_WORKER=true в веб-процессе: в бою фоновые задачи — отдельный контейнер")
     if not _env("CLAMAV_HOST"):
         add(WARN if not prod else ERROR, "antivirus", "CLAMAV_HOST не задан — загружаемые файлы не проверяются антивирусом")
-    if not settings.admin_host:
-        add(WARN, "admin_host", "ADMIN_HOST не задан — админка на том же адресе, что и сайт")
+    if not settings.admin_host:  # FR-ACL-04: a separate admin subdomain
+        add(ERROR if prod else WARN, "admin_host", "ADMIN_HOST не задан — админка должна быть на отдельном поддомене")
+    if not settings.admin_networks:  # SEC-AZ-06
+        add(WARN, "admin_networks", "ADMIN_ALLOWED_NETWORKS не задан — админка открыта из любой сети (задайте сеть офиса или VPN)")
     if not settings.metrics_token:
         add(WARN, "metrics", "METRICS_TOKEN не задан — /metrics недоступен для мониторинга")
-    if not _env("VAPID_PRIVATE_KEY"):
+    from app.core.secrets import has
+
+    if not has("AUDIT_ARCHIVE_KEY"):  # SEC-LOG-04
+        add(ERROR if prod else WARN, "audit_key", "AUDIT_ARCHIVE_KEY не задан — архив журнала безопасности нечем подписать")
+    if prod and not _env("AUDIT_ARCHIVE_DIR"):
+        add(WARN, "audit_dir", "AUDIT_ARCHIVE_DIR не задан — архив журнала лежит рядом с файлами, а не в отдельном томе")
+    if not has("VAPID_PRIVATE_KEY"):
         add(WARN, "vapid", "VAPID_PRIVATE_KEY не задан — push-уведомления в браузере выключены")
     return out
 
@@ -121,7 +129,24 @@ def check_db(db) -> list[Item]:
         if flag_enabled(db, flag):
             add(WARN, flag, f"флаг {flag} включён, но адаптер «{name}» пока без боевого подключения — проверки уйдут "
                             "модератору вручную")
+    out += _check_clock(db)
     return out
+
+
+def _check_clock(db) -> list[Item]:
+    """SEC-LOG-07: the journal's time stamps are trustworthy only with synchronised clocks (chrony/NTP on the
+    server): the application and the database must agree."""
+    import time
+
+    from sqlalchemy import text
+
+    if db.get_bind().dialect.name != "postgresql":
+        return []
+    skew = abs(float(db.execute(text("SELECT extract(epoch from clock_timestamp())")).scalar()) - time.time())
+    if skew > 2:
+        return [Item(ERROR, "clock", f"часы приложения и базы расходятся на {skew:.1f} с: включите синхронизацию "
+                                     "времени (chrony) на сервере")]
+    return [Item(OK, "clock", f"часы синхронизированы (расхождение {skew:.2f} с)")]
 
 
 def report(db=None) -> list[Item]:

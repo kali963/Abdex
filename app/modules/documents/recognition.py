@@ -17,6 +17,7 @@ import os
 import re
 from datetime import date
 
+from app.core.secrets import secret
 from app.db import utcnow
 
 from sqlalchemy.orm import Session
@@ -69,7 +70,7 @@ def _ocr_service(data: bytes, content_type: str) -> str:
         raise IntegrationUnavailable("OCR_SERVICE_URL must be https")
     req = urllib.request.Request(url, data=data, method="POST",  # noqa: S310 — configured https service
                                  headers={"Content-Type": content_type,
-                                          "Authorization": f"Bearer {os.getenv('OCR_SERVICE_TOKEN', '')}"})
+                                          "Authorization": f"Bearer {secret('OCR_SERVICE_TOKEN')}"})
     with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310 — configured https service
         return str(json.loads(resp.read(1_000_000)).get("text", ""))
 

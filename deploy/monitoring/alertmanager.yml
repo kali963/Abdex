@@ -1,0 +1,20 @@
+# Alerts to a Telegram chat of the duty team. The bot token is the file deploy/secrets/alert_telegram_token,
+# the chat id is ALERT_TELEGRAM_CHAT_ID in .env.production (__CHAT_ID__ is replaced at start).
+route:
+  receiver: telegram
+  group_by: [alertname]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="critical"]
+      receiver: telegram
+      repeat_interval: 1h
+
+receivers:
+  - name: telegram
+    telegram_configs:
+      - bot_token_file: /run/secrets/alert_telegram_token
+        chat_id: __CHAT_ID__
+        parse_mode: HTML
+        send_resolved: true

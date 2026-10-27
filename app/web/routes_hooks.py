@@ -78,7 +78,11 @@ def metrics(request: Request, db: Session = Depends(get_db)):
     sent = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
     if not settings.metrics_token or not hmac.compare_digest(sent, settings.metrics_token):
         raise NotFound()
-    return PlainTextResponse(render(db), media_type="text/plain; version=0.0.4")
+    from app.core import rls
+
+    with rls.system(db):  # platform-wide counts: every company's rows (read-only queries)
+        body = render(db)
+    return PlainTextResponse(body, media_type="text/plain; version=0.0.4")
 
 
 @router.post("/hooks/payments")

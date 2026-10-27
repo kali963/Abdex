@@ -6,6 +6,9 @@
 #
 # Only Caddy is reachable from the internet (80/443, automatic Let's Encrypt certificates). Everything else
 # lives on the internal network.
+#
+# Monitoring (Prometheus + Alertmanager → Telegram, NFR-OBS-01) is the "monitoring" profile:
+#   docker compose -f docker-compose.prod.yml --env-file .env.production --profile monitoring up -d
 
 x-env: &env
   APP_ENV: production
@@ -14,6 +17,8 @@ x-env: &env
   CLAMAV_HOST: clamav
   EDS_NCANODE_URL: http://ncanode:14579
   STORAGE_DIR: /data/storage
+  AUDIT_ARCHIVE_DIR: /data/audit-archive
+  BACKUP_STATUS_FILE: /backup-status/last_success
   FIELD_ENCRYPTION_KEYS_FILE: /run/secrets/field_keys
   TRUST_PROXY: "true"
   TRUSTED_PROXY_HOPS: "1"
@@ -26,10 +31,11 @@ x-app: &app
   image: abdex:${ABDEX_VERSION:-latest}
   restart: unless-stopped
   env_file: .env.production
-  secrets:
-    - field_keys
+  secrets: [field_keys, audit_archive_key, metrics_token]
   volumes:
     - storage:/data/storage
+    - audit_archive:/data/audit-archive
+    - ${BACKUP_DIR:-/var/backups/abdex}/status:/backup-status:ro
   logging: &logging
     driver: json-file
     options: { max-size: "20m", max-file: "10" }
@@ -85,11 +91,18 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    # OPS-05: every finished transaction log segment (WAL) is copied to /wal at once (at the latest every 5 min);
+    # with the daily base backup of backup.sh this restores the database to any moment (docs/launch.md).
+    entrypoint: ["sh", "-c", "mkdir -p /wal && chown postgres:postgres /wal && exec docker-entrypoint.sh \"$$@\"", "--"]
     command: ["postgres", "-c", "shared_buffers=512MB", "-c", "max_connections=200",
-              "-c", "log_min_duration_statement=1000", "-c", "idle_in_transaction_session_timeout=60000"]
+              "-c", "log_min_duration_statement=1000", "-c", "idle_in_transaction_session_timeout=60000",
+              "-c", "wal_level=replica", "-c", "archive_mode=on", "-c", "archive_timeout=300",
+              "-c", "archive_command=test ! -f /wal/%f && cp %p /wal/%f.part && mv /wal/%f.part /wal/%f",
+              "-c", "log_timezone=UTC", "-c", "timezone=UTC"]
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
+      - ${BACKUP_DIR:-/var/backups/abdex}/wal:/wal
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d abdex"]
       interval: 5s
@@ -115,12 +128,69 @@ services:
     expose: ["14579"]
     logging: *logging
 
+  # --- monitoring profile -------------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.53.2
+    profiles: [monitoring]
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus",
+              "--storage.tsdb.retention.time=30d"]
+    secrets: [metrics_token]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus:/prometheus
+    # the web UI only on the server itself: ssh -L 9090:127.0.0.1:9090 server
+    ports: ["127.0.0.1:9090:9090"]
+    logging: *logging
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    profiles: [monitoring]
+    restart: unless-stopped
+    environment:
+      ALERT_TELEGRAM_CHAT_ID: ${ALERT_TELEGRAM_CHAT_ID:-0}
+    # the chat id is put into the config at start (Alertmanager does not read environment variables)
+    entrypoint: ["sh", "-c", "sed \"s/__CHAT_ID__/$${ALERT_TELEGRAM_CHAT_ID}/\" /etc/alertmanager/alertmanager.yml.in > /tmp/am.yml && exec /bin/alertmanager --config.file=/tmp/am.yml --storage.path=/alertmanager"]
+    secrets: [alert_telegram_token]
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml.in:ro
+    ports: ["127.0.0.1:9093:9093"]
+    logging: *logging
+
+  node-exporter:   # disk, memory, CPU of the server
+    image: prom/node-exporter:v1.8.2
+    profiles: [monitoring]
+    restart: unless-stopped
+    command: ["--path.rootfs=/host"]
+    pid: host
+    volumes:
+      - /:/host:ro
+    logging: *logging
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    profiles: [monitoring]
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgresql://postgres:${POSTGRES_SUPERUSER_PASSWORD}@db:5432/abdex?sslmode=disable
+    depends_on: [db]
+    logging: *logging
+
 secrets:
   field_keys:
     file: ./secrets/field_keys
+  audit_archive_key:
+    file: ./secrets/audit_archive_key
+  metrics_token:
+    file: ./secrets/metrics_token
+  alert_telegram_token:
+    file: ./secrets/alert_telegram_token
 
 volumes:
   pgdata:
   storage:
+  audit_archive:
+  prometheus:
   caddy_data:
   caddy_config:

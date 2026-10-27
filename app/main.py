@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import logging
 import re
 import time
@@ -22,22 +21,10 @@ from app.core.security import token
 from app.db import uuid7
 
 
-class JsonFormatter(logging.Formatter):
-    """NFR-OBS-01: structured JSON logs carrying the request id."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        from app.core.context import get_ctx
-
-        return json.dumps({"ts": self.formatTime(record), "level": record.levelname, "logger": record.name,
-                           "msg": record.getMessage(), "request_id": get_ctx().request_id}, ensure_ascii=False)
-
-
 def _setup_logging() -> None:
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
-    root = logging.getLogger()
-    root.handlers[:] = [handler]
-    root.setLevel(logging.INFO)
+    from app.core.logsetup import setup
+
+    setup()
 
 
 _REQUEST_ID_RE = re.compile(r"[^A-Za-z0-9._-]")
@@ -105,7 +92,10 @@ def create_app() -> FastAPI:
         if not lang:  # FR-LOC-02: API partners choose the language of messages with Accept-Language
             wanted = [p.split(";")[0].strip()[:2].lower() for p in request.headers.get("accept-language", "").split(",")]
             lang = next((w for w in wanted if w in LOCALES), settings.default_locale)
-        ctx = RequestContext(request_id=rid, ip=ip, user_agent=request.headers.get("user-agent", "")[:300],
+        from app.core import tracing
+
+        trace_id = tracing.parse(request.headers.get("traceparent", "")) or tracing.new_trace_id()
+        ctx = RequestContext(request_id=rid, trace_id=trace_id, ip=ip, user_agent=request.headers.get("user-agent", "")[:300],
                              device_id=device, locale=lang if lang in LOCALES else "ru",
                              timezone=settings.default_timezone)
         tok = set_ctx(ctx)
@@ -123,6 +113,7 @@ def create_app() -> FastAPI:
 
             await asyncio.to_thread(flush_journal)
         response.headers["X-Request-ID"] = rid
+        response.headers["traceresponse"] = f"00-{trace_id}-{tracing.new_span_id()}-01"
         response.headers["Content-Security-Policy"] = CSP
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -142,8 +133,12 @@ def create_app() -> FastAPI:
         if new_pre:
             response.set_cookie("abdex_pre_csrf", new_pre, httponly=True, samesite="lax", secure=settings.secure_cookies)
         elapsed = time.monotonic() - started
-        logging.getLogger("abdex.http").info("%s %s %s %dms", request.method, request.url.path,
-                                             response.status_code, int(elapsed * 1000))
+        tok = set_ctx(ctx)  # the access log line carries the request and trace ids too
+        try:
+            logging.getLogger("abdex.http").info("%s %s %s %dms", request.method, request.url.path,
+                                                 response.status_code, int(elapsed * 1000))
+        finally:
+            reset_ctx(tok)
         from app.core.metrics import observe
 
         observe(request.method, request.url.path, response.status_code, elapsed)
@@ -283,6 +278,19 @@ def _install_error_handlers(app: FastAPI) -> None:
         return HTMLResponse(f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
                             f'<title>AbdEX</title><p style="font:16px system-ui;margin:2rem">{text}</p>',
                             status_code=503, headers=headers)
+
+    from app.modules.integrations.base import IntegrationUnavailable
+
+    @app.exception_handler(IntegrationUnavailable)
+    async def _service_down(request: Request, exc: IntegrationUnavailable):
+        """An external service (SMS gateway, e-mail, state registry …) is down and the action has no fallback:
+        "temporarily unavailable, try again" (the form comes back with the message), not an internal error.
+        The circuit breaker and the integration journal already record the outage for monitoring."""
+        logging.getLogger("abdex").warning("integration unavailable on %s %s: %s", request.method, request.url.path,
+                                           str(exc)[:200])
+        resp = await _app_error(request, AppError("service_unavailable", status_code=503))
+        resp.headers["Retry-After"] = "30"
+        return resp
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception):

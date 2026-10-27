@@ -52,3 +52,29 @@ jobs:
           fetch-depth: 0
       - name: Gitleaks (full history)
         run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 git /repo --redact --verbose
+
+  # OPS-01: the production image builds, starts and has no known critical vulnerabilities; the deploy
+  # configuration (compose file, Prometheus config and alert rules, Alertmanager config) is valid.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t abdex:ci .
+      - name: Image starts and answers /healthz
+        run: |
+          docker run -d --name abdex-ci -e APP_ENV=development -e SEED_DEMO_DATA=false -e WEB_CONCURRENCY=1 \
+            -e DATABASE_URL=sqlite:////tmp/ci.db -e STORAGE_DIR=/data/storage -p 8000:8000 abdex:ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/healthz && exit 0; sleep 2; done
+          docker logs abdex-ci; exit 1
+      - name: Image scan (critical, with a fix available)
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/aquasecurity/trivy:0.56.2 image --quiet --exit-code 1 --severity CRITICAL --ignore-unfixed abdex:ci
+      - name: Deploy configuration is valid
+        working-directory: deploy
+        run: |
+          cp .env.production.example .env.production
+          mkdir -p secrets && for f in field_keys audit_archive_key metrics_token alert_telegram_token; do echo x > secrets/$f; done
+          docker compose -f docker-compose.prod.yml --env-file .env.production --profile monitoring config -q
+          docker run --rm -v "$PWD/monitoring:/m:ro" --entrypoint promtool prom/prometheus:v2.53.2 check rules /m/alerts.yml
+          sed 's/__CHAT_ID__/12345/' monitoring/alertmanager.yml > /tmp/am.yml
+          docker run --rm -v /tmp/am.yml:/am.yml:ro --entrypoint amtool prom/alertmanager:v0.27.0 check-config /am.yml
