@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  <meta name="theme-color" content="#0a3d7a">
-  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f5f2eb">
+  <meta name="color-scheme" content="light">
   <title>{% block title %}{{ _("app.name") }}{% endblock %} — AbdEX</title>
-  <link rel="stylesheet" href="/static/css/app.css?v=6">
+  <link rel="stylesheet" href="/static/css/app.css?v=7">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/static/icons/icon.svg">
+  <link rel="icon" href="/static/img/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/img/icon-192.png">
 </head>
 {% macro icon(name, cls="ico") -%}<svg class="{{ cls }}" aria-hidden="true"><use href="/static/icons/sprite.svg#i-{{ name }}"></use></svg>{%- endmacro %}
 {# ---- navigation model: one list drives the desktop bar, the mobile tab bar and the "more" sheet ---- #}
@@ -64,7 +64,7 @@
 {% endif %}
 <header class="topbar">
   <div class="topbar-in">
-    <a class="logo" href="{{ '/dashboard' if me else '/' }}" aria-label="AbdEX"><span class="logo-mark" aria-hidden="true"></span>Abd<span>EX</span></a>
+    <a class="logo" href="{{ '/dashboard' if me else '/' }}" aria-label="AbdEX"><img class="logo-img" src="/static/img/logo.png" alt="" width="76" height="30"><span class="logo-text"><b>AbdEX</b><small>{{ _("app.platform_line") }}</small></span></a>
     <span class="spacer"></span>
     <nav class="lang" aria-label="{{ _('nav.language') }}">
       <a href="/lang/ru?next={{ request.url.path }}" class="{{ 'on' if locale == 'ru' }}">RU</a>

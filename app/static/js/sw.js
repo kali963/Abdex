@@ -1,7 +1,7 @@
 /* AbdEX service worker (FR-MOB-02): offline cache of the app shell and key driver screens.
    Personal data pages are never cached (network-only); only static assets and /trips shell. */
-var CACHE = "abdex-v5";
-var SHELL = ["/static/css/app.css?v=6", "/static/js/app.js?v=4", "/static/icons/icon.svg", "/static/icons/sprite.svg", "/manifest.webmanifest"];
+var CACHE = "abdex-v6";
+var SHELL = ["/static/css/app.css?v=7", "/static/js/app.js?v=4", "/static/img/logo.png", "/static/img/icon-192.png", "/static/icons/sprite.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }));
@@ -41,7 +41,7 @@ self.addEventListener("fetch", function (e) {
 self.addEventListener("push", function (e) {
   var data = {};
   try { data = e.data.json(); } catch (err) { data = { title: "AbdEX", body: e.data ? e.data.text() : "" }; }
-  e.waitUntil(self.registration.showNotification(data.title || "AbdEX", { body: data.body || "", icon: "/static/icons/icon.svg",
+  e.waitUntil(self.registration.showNotification(data.title || "AbdEX", { body: data.body || "", icon: "/static/img/icon-192.png",
     data: { url: data.url || "/notifications" } }));
 });
 

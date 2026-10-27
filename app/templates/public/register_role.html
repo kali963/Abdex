@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ _("auth.register_title") }}{% endblock %}
+{% block content %}
+{# "Who are you" — the first registration screen of the abdex.kz site #}
+<section class="home-hero">
+  <h1 class="home-title">{{ _("role.title") }}</h1>
+  <p class="home-subtitle">{{ _("role.subtitle") }}</p>
+</section>
+<div class="home-cards">
+  <a class="role-card" href="/register?type=carrier"><b>{{ _("role.carrier_t") }}</b><span>{{ _("role.carrier") }}</span></a>
+  <a class="role-card" href="/register?type=client"><b>{{ _("role.client_t") }}</b><span>{{ _("role.client") }}</span></a>
+  <a class="role-card" href="/register?type=driver"><b>{{ _("role.driver_t") }}</b><span>{{ _("role.driver") }}</span></a>
+</div>
+<p class="center"><a class="btn ghost" href="/login">{{ _("nav.login") }}</a></p>
+{% endblock %}

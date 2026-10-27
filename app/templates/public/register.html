@@ -5,6 +5,11 @@
 <h1>{{ _("auth.register_title") }}</h1>
 <form class="card" method="post" action="/register" novalidate>
   {{ ui.csrf() }}
+  {% if form.account_type in ("client", "carrier", "driver") %}
+  <div class="role-picked"><span class="badge brand">{{ _("auth.type_" ~ form.account_type) }}</span>
+    <a href="/register">{{ _("role.change") }}</a>
+    <input type="hidden" name="account_type" value="{{ form.account_type }}"></div>
+  {% else %}
   <fieldset><legend>{{ _("auth.account_type") }}</legend>
     <div class="grid three">
     {% for t in ("client", "carrier", "driver") %}
@@ -14,6 +19,7 @@
     </div>
     {% if errors.account_type %}<span class="err">{{ _(errors.account_type) }}</span>{% endif %}
   </fieldset>
+  {% endif %}
   <div class="form-grid">
     {{ ui.field("full_name", _("auth.full_name"), form.full_name, errors=errors, required=true, attrs='autocomplete="name"') }}
     {{ ui.field("phone", _("auth.phone"), form.phone, type="tel", errors=errors, required=true, hint="+7 7XX XXX XX XX", attrs='autocomplete="tel"') }}
