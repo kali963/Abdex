@@ -301,12 +301,18 @@ async def register(request: Request, db: Session = Depends(get_db)):
         password=str(form.get("password", "")), account_type=str(form.get("account_type", "")),
         company_name=str(form.get("company_name", "")), bin_iin=str(form.get("bin_iin", "")),
         consent_registration=bool(form.get("consent_registration")), locale=request.cookies.get(LANG_COOKIE, "ru"))
+    from app.modules.integrations.base import IntegrationUnavailable
+
+    safe = {k: v for k, v in form.items() if k not in ("password", "csrf_token")}
     try:
         user = accounts.register(db, data)
     except ValidationFailed as exc:
         db.rollback()
-        safe = {k: v for k, v in form.items() if k not in ("password", "csrf_token")}
         return render(request, "public/register.html", {"errors": exc.fields, "form": safe}, status_code=422)
+    except IntegrationUnavailable:  # the SMS gateway is down: nothing is saved, the filled-in form comes back
+        db.rollback()
+        return render(request, "public/register.html", {"errors": {"phone": "error.service_unavailable"}, "form": safe},
+                      status_code=503)
     raw, _ = accounts.create_session(db, user, mfa_passed=True)
     from app.modules.analytics.product import track
 

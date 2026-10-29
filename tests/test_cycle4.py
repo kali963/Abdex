@@ -42,7 +42,7 @@ def _company_package(company: Company, challenge: str, *, bin_iin: str | None = 
 
 
 def _carrier_l2(db, name: str) -> tuple[Company, Vehicle, Driver]:
-    from app.demo import make_bin
+    from tests.demo_data import make_bin
 
     c = Company(kind="carrier", name=name, bin_iin=make_bin(str(abs(hash(name)) % 10**11).zfill(11)), verification_level=2)
     db.add(c)
@@ -181,7 +181,7 @@ def test_driver_reverification_signs(login, db):
 
 
 def test_exchange_rates_and_foreign_currency_deal(login, db):
-    from app.demo import _form
+    from tests.demo_data import _form
     from app.modules.analytics.service import client_analytics
     from app.modules.bids.service import accept, place_bid
     from app.modules.orders.service import create_order, submit

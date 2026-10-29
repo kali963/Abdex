@@ -11,58 +11,29 @@
 
 ## Быстрый старт
 
-### Локально (SQLite, без установки БД)
+### Боевой сервер (Docker, сервер в Казахстане)
+
+Пошагово — **[docs/launch.md](docs/launch.md)**: подготовка сервера (`deploy/server-setup.sh`), ключи
+(`deploy/generate-secrets.sh`), настройки `deploy/.env.production`, запуск
+`docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.production up -d --build`.
+
+Демо-аккаунтов и демо-данных нет: база стартует пустой. При первом запуске создаются только
+**администратор** (`INITIAL_ADMIN_*`) и **один пользователь** — владелец компании (`INITIAL_USER_*`) из
+`.env.production`; пароли — в `deploy/secrets/initial_admin_password` и `initial_user_password`. Остальные
+клиенты регистрируются на сайте сами, сотрудники добавляются командой `python -m app.cli create-staff`.
+
+### Локальная разработка
 
 ```bash
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
-uvicorn app.main:app --reload
+INITIAL_ADMIN_PHONE=+77010000000 INITIAL_ADMIN_NAME="Админ" INITIAL_ADMIN_PASSWORD='придумайте-длинный-пароль' \
+  uvicorn app.main:app --reload
 ```
 
-Откройте <http://localhost:8000>. При первом запуске создаётся база `var/abdex.db` и демо-данные.
-
-### Docker (PostgreSQL + отдельный фоновый обработчик)
-
-```bash
-cp .env.example .env
-docker compose up --build
-```
-
-Миграции применяются автоматически (`alembic upgrade head`).
-
-### Vercel (быстро посмотреть демо)
-
-1. На <https://vercel.com> → **Add New → Project** → импортируйте репозиторий `kali963/Abdex`.
-   Framework Preset: **Other**, остальные настройки по умолчанию (используется `vercel.json`).
-2. **Deploy.** Сайт запустится в демо-режиме с демо-данными.
-
-Ограничения бесплатного варианта без базы: данные хранятся во временной SQLite в `/tmp` и **сбрасываются**
-при каждом холодном старте; загруженные файлы тоже временные. Чтобы данные сохранялись:
-
-- подключите PostgreSQL (Vercel → Storage → **Neon**, или любой Postgres) — переменная `DATABASE_URL`
-  подставится сама или укажите её вручную; таблицы создаются миграциями автоматически;
-- в Settings → Environment Variables задайте `SECRET_KEY` (длинная случайная строка).
-
-Режим `APP_ENV=development` оставлен специально: в нём есть демо-доступы и страница `/dev/outbox`,
-где видны SMS-коды (настоящие SMS на Vercel не отправляются). Для реальной эксплуатации нужен
-сервер в РК (требование NFR-LAW-01) — Vercel подходит только для демонстрации.
-
-### Демо-доступы (только режим разработки)
-
-Пароль для всех: `AbdexDemo2026!`
-
-| Роль | Логин |
-|---|---|
-| Владелец компании-клиента | `+77010000001` |
-| Логист клиента | `+77010000002` |
-| Бухгалтер клиента | `+77010000003` |
-| Владелец автопарка | `+77020000001` |
-| Диспетчер перевозчика | `+77020000002` |
-| Водитель | `+77020000003` |
-| Перевозчик‑ИП (уровень L1) | `+77030000001` |
-| Администратор / менеджер / модератор / финансы / аудитор ИБ | `admin@` / `manager@` / `moderator@` / `finance@` / `auditor@abdex.kz` |
-
-Коды из SMS и письма в режиме разработки никуда не уходят: их видно на странице `/dev/outbox`.
+Откройте <http://localhost:8000> (база `var/abdex.db`). SMS и письма в режиме разработки никуда не уходят: их
+видно на странице `/dev/outbox`. Тесты: `pytest` (тестовые компании и сделки создаются только в тестовой базе,
+`tests/demo_data.py`).
 
 ## Что реализовано
 

@@ -34,7 +34,7 @@ def db(client_app):
 @pytest.fixture(scope="module")
 def fresh_deal(client_app):
     """A new deal with an unsigned contract, so the demo deals stay untouched."""
-    from app.demo import _form
+    from tests.demo_data import _form
     from app.modules.bids.service import accept, place_bid
     from app.modules.orders.service import create_order, submit
 

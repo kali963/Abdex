@@ -18,24 +18,33 @@
 ## 1. Подготовка сервера
 
 ```bash
-# Docker
-curl -fsSL https://get.docker.com | sh
-# брандмауэр: снаружи только SSH, HTTP, HTTPS
-ufw allow OpenSSH && ufw allow 80,443/tcp && ufw allow 443/udp && ufw enable
-# код
 git clone https://github.com/kali963/Abdex.git /opt/abdex && cd /opt/abdex/deploy
+sudo sh server-setup.sh
 ```
+
+`server-setup.sh` один раз настраивает чистый Ubuntu: Docker, брандмауэр (снаружи только SSH, 80, 443),
+синхронизацию времени chrony (точное время нужно журналу безопасности), fail2ban от подбора пароля SSH,
+автоматические обновления безопасности, gpg и rclone для копий и ежедневный запуск `backup.sh` в 03:15.
+Его можно запускать повторно. После того как вход по SSH-ключу работает, отключите вход по паролю
+(`PasswordAuthentication no` в `/etc/ssh/sshd_config`).
 
 ## 2. Секреты и настройки
 
 ```bash
-sudo sh generate-secrets.sh          # ключ шифрования ПДн + строки для .env.production
+sudo sh generate-secrets.sh          # файлы ключей в deploy/secrets/ + строки для .env.production
 cp .env.production.example .env.production
-nano .env.production                  # домены, сгенерированные значения, SMS, SMTP
+nano .env.production                  # домены, администратор и пользователь, сгенерированные значения, SMS, SMTP, копии
 ```
 
-**Сохраните копию `deploy/secrets/field_keys` и `.env.production` в надёжном месте вне сервера.** Без ключа
+`deploy/secrets/` содержит: `field_keys` (ключ шифрования ПДн), `audit_archive_key` (ключ архива журнала
+безопасности), `metrics_token` (доступ Prometheus к метрикам), `alert_telegram_token` (токен бота для
+оповещений — впишите его сами). Ключи в контейнеры попадают как Docker secrets, в переменных окружения их нет.
+
+**Сохраните копию `deploy/secrets/` и `.env.production` в надёжном месте вне сервера.** Без ключа
 шифрования зашифрованные поля (ИИН, IBAN, телефоны водителей) прочитать невозможно — ни вам, ни нам.
+
+Админку дополнительно можно закрыть по сети: `ADMIN_ALLOWED_NETWORKS=203.0.113.0/24,10.8.0.0/16` (офис, VPN) —
+с других адресов `admin.abdex.kz` отвечает «не найдено», попытки пишутся в журнал безопасности.
 
 ## 3. Запуск
 
@@ -51,17 +60,30 @@ ClamAV загружает антивирусные базы (несколько 
 Если в настройках чего-то не хватает, приложение **не запустится** и напишет в журнал, чего именно:
 `docker compose -f docker-compose.prod.yml logs app | tail -30`.
 
-## 4. Первый администратор
+## 4. Администратор и первый пользователь
+
+Демо-аккаунтов нет — база стартует пустой. При первом запуске приложение само создаёт два аккаунта из
+`.env.production`:
+
+| Аккаунт | Настройки | Пароль |
+|---|---|---|
+| Администратор площадки | `INITIAL_ADMIN_PHONE`, `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_EMAIL` | `sudo cat deploy/secrets/initial_admin_password` |
+| Пользователь — владелец компании-клиента (или перевозчика) | `INITIAL_USER_PHONE`, `INITIAL_USER_NAME`, `INITIAL_USER_EMAIL`, `INITIAL_USER_TYPE` (`client`/`carrier`), `INITIAL_USER_COMPANY`, `INITIAL_USER_BIN` | `sudo cat deploy/secrets/initial_user_password` |
+
+Аккаунт создаётся один раз — когда пользователя с таким телефоном ещё нет; потом настройки и файлы паролей
+ни на что не влияют (смените пароль после первого входа). Если что-то заполнено неверно (короткий пароль,
+неверный БИН), аккаунт не создаётся, а причина видна в `docker compose ... logs app`.
+
+Вход администратора — на `https://admin.abdex.kz/login`. При первом входе админка потребует включить
+приложение-аутентификатор (Google Authenticator, Яндекс Ключ и т. п.): «Безопасность» → отсканировать QR →
+ввести код. Других сотрудников добавляйте командой (выведет одноразовый пароль):
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production exec app \
-  python -m app.cli create-staff --phone +77010000000 --name "Имя Фамилия" --role admin --email you@abdex.kz
+  python -m app.cli create-staff --phone +77010000000 --name "Имя Фамилия" --role moderator --email you@abdex.kz
 ```
 
-Команда выведет одноразовый пароль. Вход — на `https://admin.abdex.kz/login`. При первом входе админка
-потребует включить приложение-аутентификатор (Google Authenticator, Яндекс Ключ и т. п.): «Безопасность» →
-отсканировать QR → ввести код. Затем смените пароль. Других сотрудников добавляйте той же командой с ролью
-`manager`, `moderator`, `finance` или `auditor`.
+Роли: `admin`, `manager`, `moderator`, `finance`, `auditor`. Клиенты и перевозчики регистрируются на сайте сами.
 
 ## 5. Проверка готовности
 
@@ -78,35 +100,83 @@ docker compose -f docker-compose.prod.yml --env-file .env.production exec app py
 4. «Забыли пароль» — ссылка в SMS открывается и меняет пароль.
 5. В админке: модерация, финансы, флаги функций открываются.
 
-## 6. Резервные копии
+## 6. Резервные копии и восстановление на любой момент
+
+PostgreSQL непрерывно копирует журнал транзакций (WAL) в `$BACKUP_DIR/wal` — каждый сегмент сразу после
+заполнения и не реже раза в 5 минут. Каждую ночь `backup.sh` (cron ставит `server-setup.sh`) делает:
+
+| Файл | Что внутри |
+|---|---|
+| `base-….tar.gz.gpg` | физическая копия базы — вместе с WAL восстанавливает базу **на любую минуту** |
+| `db-….dump.gpg` | логический дамп — самый простой способ восстановить или посмотреть данные |
+| `storage-….tar.gpg` | загруженные и созданные файлы + архив журнала безопасности |
+| `wal-….tar.gpg` | сегменты WAL за сутки — для копии вне сервера |
+
+Всё шифруется AES-256 (`BACKUP_PASSPHRASE`), хранится `BACKUP_KEEP_DAYS` (30) дней. Копия вне сервера:
+`rclone config` (хранилище **в РК**), затем `BACKUP_REMOTE=имя:каталог` в `.env.production`. Время последней
+успешной копии видит мониторинг — если копии нет больше 26 часов, придёт оповещение.
+
+Восстановление (проверяйте **раз в квартал** на отдельном сервере):
 
 ```bash
-apt install -y gnupg
-crontab -e
-# 15 3 * * *  /opt/abdex/deploy/backup.sh >> /var/log/abdex-backup.log 2>&1
+cd /opt/abdex/deploy
+# на момент перед ошибкой (время по Алматы или UTC):
+./restore.sh pitr daily/base-20261027-031500.tar.gz.gpg "2026-10-27 14:05:00+05" daily/storage-20261027-031500.tar.gpg
+# или из логического дампа:
+./restore.sh dump daily/db-20261027-031500.dump.gpg daily/storage-20261027-031500.tar.gpg
 ```
 
-Копии шифруются (`BACKUP_PASSPHRASE`) и хранятся 30 дней в `/var/backups/abdex`. Настройте копирование
-этого каталога на хранилище вне сервера (rclone/rsync) и **раз в квартал проверяйте восстановление** на
-отдельном сервере: `./restore.sh <db-…dump.gpg> [<storage-…tar.gpg>]`.
+Перед обновлением версии `deploy.sh` дополнительно снимает дамп в `$BACKUP_DIR/predeploy` (хранится 14 дней).
 
-## 7. Мониторинг
+## 7. Мониторинг и оповещения
 
-* `https://abdex.kz/healthz` — внешняя проверка доступности (UptimeRobot, Zabbix и т. п.) раз в минуту.
-* `https://abdex.kz/metrics` с заголовком `Authorization: Bearer <METRICS_TOKEN>` — метрики для Prometheus.
-* Журналы: `docker compose -f docker-compose.prod.yml logs -f app worker` (JSON, без паролей и кодов).
-* Админка → KPI и журнал интеграций: ошибки SMS, ЭЦП, платежей.
+```bash
+# 1) создайте бота у @BotFather, токен — в deploy/secrets/alert_telegram_token
+# 2) добавьте бота в чат дежурных, id чата — в .env.production: ALERT_TELEGRAM_CHAT_ID=-100…
+docker compose -f docker-compose.prod.yml --env-file .env.production --profile monitoring up -d
+```
+
+Профиль `monitoring` запускает Prometheus (хранит метрики 30 дней), Alertmanager и сборщики метрик сервера
+и PostgreSQL. Оповещения в Telegram (правила — `deploy/monitoring/alerts.yml`): сайт или база недоступны,
+больше 2 % ошибок 5xx, медленные ответы (95-й перцентиль > 2,5 с), остановился фоновый обработчик, нет
+резервной копии > 26 ч, отстаёт архив журнала безопасности, задержка и сбои уведомлений, очередь модерации,
+ошибки интеграций, открытые события безопасности, расхождение часов, заканчивается диск или память.
+Интерфейсы — только с самого сервера: `ssh -L 9090:127.0.0.1:9090 -L 9093:127.0.0.1:9093 server`, затем
+`http://localhost:9090` (Prometheus) и `http://localhost:9093` (Alertmanager).
+
+Дополнительно:
+* `https://abdex.kz/healthz` — внешняя проверка доступности (UptimeRobot, Zabbix и т. п.) раз в минуту:
+  если упал весь сервер, свой Prometheus об этом не сообщит.
+* Журналы: `docker compose -f docker-compose.prod.yml logs -f app worker` — JSON, в каждой строке
+  `request_id` и `trace_id`. Trace id приходит в заголовке ответа `traceresponse` и передаётся во все внешние
+  вызовы (NCANode, SIGEX, ИС ЭСФ, SMS, оплата, OCR) заголовком `traceparent` — одну операцию можно
+  проследить по всем системам.
+* Журнал безопасности ежечасно копируется в архив с цепочкой HMAC (ключ `audit_archive_key`, срок хранения
+  не меньше 12 месяцев). Проверка целостности: `docker compose ... exec worker python -m app.cli audit-verify`.
+* Админка → KPI и журнал интеграций: ошибки SMS, ЭЦП, платежей. Суточные лимиты обращений к платным
+  внешним сервисам — настройка `integrations.daily_quota` в админке.
 
 ## 8. Обновление версии
 
+С сервера:
+
 ```bash
-cd /opt/abdex && git pull
-cd deploy && ./backup.sh                                  # копия перед обновлением
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+sudo sh /opt/abdex/deploy/deploy.sh            # последняя версия main; или: deploy.sh v1.2.0
 ```
 
-Миграции применяются автоматически при старте. Откат: `git checkout <предыдущий тег>` и та же команда; если
-релиз добавлял миграцию — сначала `docker compose ... exec app alembic downgrade <ревизия>`.
+`deploy.sh` снимает дамп базы, собирает образ, перезапускает приложение и обработчик (миграции применяются
+при старте), ждёт `/healthz` и запускает `preflight`. Если новая версия не поднялась — автоматически
+возвращает предыдущую. Миграции только добавляют таблицы и колонки, поэтому предыдущая версия работает на
+обновлённой базе.
+
+Из GitHub (Actions → **Deploy**): после зелёного CI в `main` версия сама выкатывается на **staging**; на
+**production** — кнопкой «Run workflow» и только после подтверждения ответственного. Настройка: Settings →
+Environments → `staging` и `production` (для production — Required reviewers); в каждом окружении переменные
+`DEPLOY_HOST`, `DEPLOY_USER` (`root` — ему доступны `deploy/secrets/`; вход только по ключу), `DEPLOY_PATH`
+(например `/opt/abdex`) и секреты `DEPLOY_SSH_KEY` (закрытый ключ, отдельный для GitHub; открытую часть — в
+`/root/.ssh/authorized_keys`) и `DEPLOY_KNOWN_HOSTS` (вывод `ssh-keyscan <сервер>`). Staging — такой же
+сервер в РК с копией настроек, но со своими ключами и **без боевых данных** (копию боевой базы туда можно
+перенести только после `python -m app.cli anonymize --confirm`).
 
 ## 9. Нагрузка
 
@@ -124,7 +194,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d --bui
 | Функция | Пока не подключено | Что происходит |
 |---|---|---|
 | ЭЦП (NCALayer, eGov) | флаги выключены | подписание кодом из SMS |
-| Проверка компании в госреестре | нет договора с поставщиком данных | проверку делает модератор вручную |
+| Проверка компании в госреестре | нет договора с поставщиком данных | проверку делает модератор вручную; если госсервис временно недоступен, проверка помечается «отложена» и повторяется автоматически каждые 30 минут в течение недели |
 | Биометрия водителя | нет лицензированного провайдера | модератор проверяет по документам |
 | ЭТТН, ЭСФ | нет шлюза | документы формируются, загрузка вручную |
 | Онлайн-оплата | нет договора с банком/эквайером | оплата по счёту, отметка бухгалтером |

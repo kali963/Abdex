@@ -1,0 +1,96 @@
+# Alert rules (NFR-OBS-01, OPS-05, SEC-LOG-04/07). Thresholds are a starting point: tune them after the first
+# weeks of real traffic. Every alert carries a Russian summary for the Telegram channel of the duty team.
+groups:
+  - name: abdex
+    rules:
+      - alert: AppDown
+        expr: up{job="abdex"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "Сайт не отвечает на /metrics больше 2 минут" }
+
+      - alert: PostgresDown
+        expr: pg_up == 0 or absent(pg_up)
+        for: 1m
+        labels: { severity: critical }
+        annotations: { summary: "PostgreSQL недоступна" }
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(abdex_http_requests_total{status="5xx"}[5m]))
+            / clamp_min(sum(rate(abdex_http_requests_total[5m])), 0.001) > 0.02
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "Больше 2% ответов с ошибкой 5xx за 5 минут" }
+
+      - alert: SlowResponses
+        expr: histogram_quantile(0.95, sum by (le) (rate(abdex_http_request_seconds_bucket[5m]))) > 2.5
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "95-й перцентиль времени ответа выше 2,5 с" }
+
+      - alert: WorkerStalled
+        expr: time() - abdex_worker_last_tick_timestamp > 300 or absent(abdex_worker_last_tick_timestamp)
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "Фоновый обработчик (worker) не работает больше 5 минут: уведомления, торги и сроки стоят" }
+
+      - alert: BackupMissing
+        expr: time() - abdex_backup_last_success_timestamp > 26 * 3600 or absent(abdex_backup_last_success_timestamp)
+        for: 15m
+        labels: { severity: critical }
+        annotations: { summary: "Резервная копия не создавалась больше 26 часов (проверьте cron и /var/log/abdex-backup.log)" }
+
+      - alert: AuditArchiveLag
+        expr: time() - abdex_audit_archive_last_record_timestamp > 3 * 3600
+        for: 30m
+        labels: { severity: warning }
+        annotations: { summary: "Архив журнала безопасности отстаёт больше 3 часов (python -m app.cli audit-verify)" }
+
+      - alert: NotificationsDelayed
+        expr: abdex_notification_delay_seconds > 600
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Уведомления (SMS/e-mail/push) ждут отправки больше 10 минут" }
+
+      - alert: NotificationsFailing
+        expr: abdex_notifications_failed_last_hour > 20
+        labels: { severity: warning }
+        annotations: { summary: "Больше 20 неотправленных уведомлений за час: проверьте баланс SMS-провайдера и SMTP" }
+
+      - alert: ModerationQueue
+        expr: abdex_moderation_queue > 30
+        for: 1h
+        labels: { severity: warning }
+        annotations: { summary: "Очередь модерации больше 30 заявок дольше часа" }
+
+      - alert: IntegrationErrors
+        expr: abdex_integration_errors_last_hour > 30
+        labels: { severity: warning }
+        annotations: { summary: "Больше 30 ошибок внешних интеграций за час (журнал: /admin/integrations)" }
+
+      - alert: SecurityAlertsOpen
+        expr: abdex_security_alerts_open > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Есть необработанные события безопасности (/admin/security)" }
+
+      - alert: ClockSkew
+        expr: abdex_clock_skew_seconds > 2
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Часы приложения и базы расходятся больше чем на 2 с (проверьте chrony)" }
+
+      - alert: DiskFilling
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"} < 0.15
+        for: 10m
+        labels: { severity: critical }
+        annotations: { summary: "На диске сервера меньше 15% свободного места" }
+
+      - alert: MemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.08
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Свободной памяти на сервере меньше 8%" }

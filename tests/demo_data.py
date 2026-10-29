@@ -1,8 +1,6 @@
-"""Demo data for development and acceptance demos (SEED_DEMO_DATA=true).
-
-Builds a realistic set of participants and deals through the real services, so the demo
-also exercises the status machine, documents and billing end-to-end.
-Password for every demo account: AbdexDemo2026!
+"""Test data: a realistic set of participants and deals built through the real services, so the tests also
+exercise the status machine, documents and billing end-to-end. Only the test suite loads it — the application
+itself has no demo accounts. Password of every test account: AbdexDemo2026!
 """
 from __future__ import annotations
 
@@ -17,20 +15,11 @@ from app.core.i18n import to_local_input
 from app.core.security import hash_password
 from app.db import utcnow
 from app.modules.accounts.models import BankAccount, Company, Membership, User
-from app.modules.accounts.service import bin_control_digit
+from app.modules.accounts.service import make_bin
 from app.modules.fleet.models import Driver, Vehicle
 
 log = logging.getLogger("abdex.demo")
 PASSWORD = "AbdexDemo2026!"  # noqa: S105 — public demo password, dev only
-
-
-def make_bin(prefix11: str) -> str:
-    for i in range(10):
-        candidate = prefix11[:10] + str(i)
-        cd = bin_control_digit(candidate)
-        if cd is not None:
-            return candidate + str(cd)
-    raise ValueError("cannot build BIN")
 
 
 def _user(db, phone, name, email=None, staff=None) -> User:

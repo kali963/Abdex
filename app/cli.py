@@ -5,6 +5,7 @@
                                              create a platform employee (or give an existing user the role);
                                              roles: admin, manager, moderator, finance, auditor; a one-time
                                              password is printed — change it and set up 2FA at first login
+    python -m app.cli audit-verify           check the security journal archive (SEC-LOG-04); exit code 1 if tampered
     python -m app.cli rotate-keys            re-encrypt personal-data fields with the newest key (SEC-DAT-03)
     python -m app.cli anonymize --confirm    anonymise a COPY of the database for development / testing (SEC-DAT-09)
 
@@ -55,7 +56,7 @@ def rotate_keys() -> dict[str, int]:
 
 
 def _fake_iin(n: int) -> str:
-    from app.demo import make_bin
+    from app.modules.accounts.service import make_bin
 
     return make_bin(f"{900101300000 + n:012d}"[:11])
 
@@ -222,6 +223,23 @@ def create_staff(phone: str, name: str, role: str, email: str = "") -> str:
 def main(argv: list[str]) -> int:
     if argv and argv[0] == "preflight":
         return preflight()
+    if argv and argv[0] == "audit-verify":
+        from app.core.audit_archive import export, verify
+        from app.db import SessionLocal
+
+        db = SessionLocal()
+        try:
+            _system(db.connection())
+            export(db)  # bring the archive up to date first
+            db.commit()
+            res = verify(db)
+        finally:
+            db.close()
+        print(f"records: {res['records']} in {res['files']} file(s), {res['first']} … {res['last']}")
+        for p in res["problems"]:
+            print("PROBLEM:", p)
+        print("archive intact" if res["ok"] else "ARCHIVE DOES NOT MATCH")
+        return 0 if res["ok"] else 1
     if argv and argv[0] == "create-staff":
         password = create_staff(_arg(argv, "--phone"), _arg(argv, "--name"), _arg(argv, "--role"),
                                 _arg(argv, "--email"))

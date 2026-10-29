@@ -119,6 +119,9 @@ SETTINGS = {
         "FR-PVD-05: пояснение о роли платформы"),
     "antifraud.risk_threshold": (50, "Порог риска для ручной проверки сделки"),
     "sla.moderation_hours": (24, "SLA модерации верификации, ч"),
+    "integrations.daily_quota": ({"registry": 2000, "biometrics": 500, "recognition": 2000},
+                                 "GOV-R-05: суточные лимиты обращений к внешним сервисам {адаптер: число} (тарификация, "
+                                 "защита от массового перебора); при исчерпании — ручной сценарий"),
     "orders.default_bidding_hours": (24, "Срок сбора предложений по умолчанию, ч"),
     "moderation.min_rate_per_km_minor": (15000, "Минимальная ставка за км (тиын) для автопроверки"),
     "moderation.manual_on_warning": (True, "Оставлять заявку на ручной модерации при предупреждениях"),
@@ -446,7 +449,7 @@ def init_db() -> None:
         Base.metadata.create_all(engine)
         _init_data()
         return
-    # PostgreSQL: several instances may start at once (serverless cold starts, rolling deploys); one at a time
+    # PostgreSQL: several processes may start at once (web workers, the background worker, rolling deploys); one at a time
     # migrates and seeds, the others wait and then find everything in place.
     from sqlalchemy import text
 
@@ -467,10 +470,9 @@ def _init_data() -> None:
 
         check_data_origin(db)  # SEC-DAT-09
         db.commit()
-        if settings.seed_demo_data:
-            from app.demo import seed_demo
+        from app.modules.accounts.initial import ensure_initial_accounts
 
-            seed_demo(db)
+        ensure_initial_accounts(db)  # the real administrator and the first user from the server settings
     finally:
         db.close()
         from app.modules.integrations.base import flush_journal

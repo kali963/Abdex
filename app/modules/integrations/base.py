@@ -75,6 +75,59 @@ class CircuitBreaker:
             self.opened_at = time.monotonic()
 
 
+QUOTA_SETTING = "integrations.daily_quota"
+_quota_cache: tuple[float, dict] = (0.0, {})
+_quota_local: dict[str, int] = {}
+_quota_lock = threading.Lock()
+
+
+def _quotas() -> dict:
+    """{adapter: calls per day} from the platform setting (/admin/settings), re-read once a minute."""
+    global _quota_cache
+    if time.monotonic() - _quota_cache[0] < 60:
+        return _quota_cache[1]
+    value: dict = {}
+    db = SessionLocal()
+    try:
+        from app.modules.platform.service import get_setting
+
+        raw = get_setting(db, QUOTA_SETTING, {}) or {}
+        value = {str(k): int(v) for k, v in raw.items() if str(v).lstrip("-").isdigit()} if isinstance(raw, dict) else {}
+    except Exception:  # noqa: BLE001 — a quota lookup never breaks a call
+        log.warning("could not read integration quotas")
+    finally:
+        db.close()
+    _quota_cache = (time.monotonic(), value)
+    return value
+
+
+def _quota_take(name: str) -> bool:
+    """Counts one call against today's quota (shared through Redis between processes). No quota → always True."""
+    limit = _quotas().get(name)
+    if not limit or limit < 0:
+        return True
+    from app.core.timeutil import local_today
+
+    key = f"abdex:q:{name}:{local_today().isoformat()}"
+    from app.core import ratelimit
+
+    r = ratelimit._client()
+    if r is not None:
+        try:
+            pipe = r.pipeline()
+            pipe.incr(key)
+            pipe.expire(key, 2 * 86400)
+            used = int(pipe.execute()[0])
+            return used <= limit
+        except Exception as exc:  # noqa: BLE001
+            ratelimit._redis_failed(exc)
+    with _quota_lock:
+        for k in [k for k in _quota_local if not k.endswith(key[-10:])]:
+            _quota_local.pop(k)  # yesterday's counters
+        _quota_local[key] = _quota_local.get(key, 0) + 1
+        return _quota_local[key] <= limit
+
+
 class NotRegistered(IntegrationUnavailable):
     """SEC-DAT-11: the transfer of personal data to this recipient is not in the processing register."""
 
@@ -106,6 +159,12 @@ class Adapter:
         if self.breaker.is_open:
             self._journal(operation, "circuit_open", 0, basis, initiator, summary)
             raise IntegrationUnavailable(self.name)
+        if not _quota_take(self.name):
+            # GOV-R-05: the daily volume agreed (and paid) with the provider is used up — the fallback scenario
+            # (manual check, later retry) takes over instead of an unbounded bill or mass lookups
+            self._journal(operation, "quota", 0, basis, initiator, summary)
+            log.warning("integration %s: daily quota reached", self.name)
+            raise IntegrationUnavailable(f"{self.name}: daily quota reached")
         delay = 0.2
         last_exc: Exception | None = None
         for attempt in range(self.retries + 1):

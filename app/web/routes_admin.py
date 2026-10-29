@@ -14,6 +14,7 @@ from app.core.timeutil import local_today
 from app.config import settings
 from app.core import ratelimit
 from app.core.audit import audit
+from app.core.context import get_ctx
 from app.core.errors import Forbidden, NotFound, ValidationFailed
 from app.core.money import to_minor
 from app.db import get_analytics_db, get_db, utcnow
@@ -49,8 +50,34 @@ from app.web.deps import Principal, csrf_protect, parse_uuid, redirect, render, 
 
 
 def _admin_host(request: Request):
+    """FR-ACL-04 / SEC-AZ-06: the admin interface lives on its own host and, when configured, answers only to
+    the listed networks (office, VPN). Everything else sees a plain 404."""
     if settings.admin_host and request.url.hostname != settings.admin_host:
         raise NotFound()
+    if not admin_network_allowed(get_ctx().ip):
+        import logging
+
+        logging.getLogger("abdex.security").warning("admin interface requested from a network that is not allowed")
+        raise NotFound()
+
+
+def admin_network_allowed(ip: str) -> bool:
+    import ipaddress
+
+    raw = [n.strip() for n in settings.admin_networks.split(",") if n.strip()]
+    if not raw:
+        return True
+    try:
+        addr = ipaddress.ip_address((ip or "").split("%")[0])
+    except ValueError:
+        return False
+    for net in raw:
+        try:
+            if addr in ipaddress.ip_network(net, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 router = APIRouter(prefix="/admin", dependencies=[Depends(_admin_host), Depends(csrf_protect)])

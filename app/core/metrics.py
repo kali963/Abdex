@@ -1,7 +1,7 @@
 """Application and business metrics in the Prometheus text format (NFR-OBS-01, NFR-OBS-02).
 
-HTTP counters and latency buckets are kept per process (each worker is scraped separately); business
-gauges are read from the database at scrape time. The endpoint /metrics answers only with the bearer token
+HTTP counters and latency buckets are shared through Redis when REDIS_URL is set (all web processes add to the
+same counters), otherwise kept per process; business and operations gauges are read at scrape time. The endpoint /metrics answers only with the bearer token
 from METRICS_TOKEN and is invisible (404) without it.
 """
 from __future__ import annotations
@@ -22,8 +22,32 @@ def _route_group(path: str) -> str:
     return seg if seg.isalpha() and len(seg) < 20 else "other"
 
 
+def _redis():
+    """Shared counters: with several worker processes Prometheus reaches one of them per scrape, so per-process
+    counters would jump back and forth. With REDIS_URL all processes add to the same counters."""
+    from app.core import ratelimit
+
+    return ratelimit._client()
+
+
 def observe(method: str, path: str, status: int, seconds: float) -> None:
     group = _route_group(path)
+    r = _redis()
+    if r is not None:
+        try:
+            pipe = r.pipeline(transaction=False)
+            pipe.hincrby("abdex:m:req", f"{method}|{status // 100}xx", 1)
+            for i, b in enumerate(BUCKETS):
+                if seconds <= b:
+                    pipe.hincrby("abdex:m:lat", f"{group}|{i}", 1)
+            pipe.hincrby("abdex:m:lat", f"{group}|inf", 1)
+            pipe.hincrbyfloat("abdex:m:sum", group, seconds)
+            pipe.execute()
+            return
+        except Exception as exc:  # noqa: BLE001 — metrics never break a request
+            from app.core import ratelimit
+
+            ratelimit._redis_failed(exc)
     with _lock:
         _requests[(method, f"{status // 100}xx")] += 1
         counts = _latency[group]
@@ -76,20 +100,69 @@ def _business(db) -> list[tuple[str, str, float]]:
     return out
 
 
-def render(db) -> str:
-    lines = ["# TYPE abdex_http_requests_total counter"]
+def _snapshot():
+    """(requests, latency buckets, latency sums) — shared ones from Redis when available."""
+    r = _redis()
+    if r is not None:
+        try:
+            req = {tuple(k.decode().split("|")): int(v) for k, v in r.hgetall("abdex:m:req").items()}
+            lat: dict[str, list[int]] = defaultdict(lambda: [0] * (len(BUCKETS) + 1))
+            for k, v in r.hgetall("abdex:m:lat").items():
+                group, idx = k.decode().split("|")
+                lat[group][len(BUCKETS) if idx == "inf" else int(idx)] = int(v)
+            sums = {k.decode(): float(v) for k, v in r.hgetall("abdex:m:sum").items()}
+            return req, lat, sums
+        except Exception as exc:  # noqa: BLE001
+            from app.core import ratelimit
+
+            ratelimit._redis_failed(exc)
     with _lock:
-        for (method, cls), n in sorted(_requests.items()):
-            lines.append(f'abdex_http_requests_total{{method="{method}",status="{cls}"}} {n}')
-        lines.append("# TYPE abdex_http_request_seconds histogram")
-        for group, counts in sorted(_latency.items()):
-            for b, n in zip(BUCKETS, counts, strict=False):
-                lines.append(f'abdex_http_request_seconds_bucket{{route="{group}",le="{b}"}} {n}')
-            lines.append(f'abdex_http_request_seconds_bucket{{route="{group}",le="+Inf"}} {counts[-1]}')
-            lines.append(f'abdex_http_request_seconds_count{{route="{group}"}} {counts[-1]}')
-            lines.append(f'abdex_http_request_seconds_sum{{route="{group}"}} {_latency_sum[group]:.4f}')
+        return dict(_requests), {k: list(v) for k, v in _latency.items()}, dict(_latency_sum)
+
+
+def _ops(db) -> list[tuple[str, str, float]]:
+    """Operations: backups, security journal archive, worker heartbeat, clock skew (OPS-05, SEC-LOG-04/07)."""
+    import os
+    import time
+    from datetime import datetime
+
+    from sqlalchemy import text
+
+    from app.modules.platform.service import get_setting
+
+    out = []
+    status = os.getenv("BACKUP_STATUS_FILE", "/backup-status/last_success")
+    try:
+        with open(status, encoding="utf-8") as fh:
+            out.append(("abdex_backup_last_success_timestamp", "", float(fh.read().strip() or 0)))
+    except (OSError, ValueError):
+        pass
+    cur = get_setting(db, "audit.archive_cursor", None) or {}
+    if cur.get("at"):
+        out.append(("abdex_audit_archive_last_record_timestamp", "", datetime.fromisoformat(cur["at"]).timestamp()))
+    beat = get_setting(db, "worker.heartbeat", None)
+    if beat:
+        out.append(("abdex_worker_last_tick_timestamp", "", float(beat)))
+    if db.get_bind().dialect.name == "postgresql":
+        db_now = db.execute(text("SELECT extract(epoch from clock_timestamp())")).scalar()
+        out.append(("abdex_clock_skew_seconds", "", round(abs(float(db_now) - time.time()), 3)))
+    return out
+
+
+def render(db) -> str:
+    requests, latency, sums = _snapshot()
+    lines = ["# TYPE abdex_http_requests_total counter"]
+    for (method, cls), n in sorted(requests.items()):
+        lines.append(f'abdex_http_requests_total{{method="{method}",status="{cls}"}} {n}')
+    lines.append("# TYPE abdex_http_request_seconds histogram")
+    for group, counts in sorted(latency.items()):
+        for b, n in zip(BUCKETS, counts, strict=False):
+            lines.append(f'abdex_http_request_seconds_bucket{{route="{group}",le="{b}"}} {n}')
+        lines.append(f'abdex_http_request_seconds_bucket{{route="{group}",le="+Inf"}} {counts[-1]}')
+        lines.append(f'abdex_http_request_seconds_count{{route="{group}"}} {counts[-1]}')
+        lines.append(f'abdex_http_request_seconds_sum{{route="{group}"}} {sums.get(group, 0.0):.4f}')
     seen = set()
-    for name, labels, value in _business(db):
+    for name, labels, value in _business(db) + _ops(db):
         if name not in seen:
             lines.append(f"# TYPE {name} gauge")
             seen.add(name)

@@ -13,7 +13,7 @@ COPY alembic.ini ./
 COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN useradd --system --uid 10001 --home /app abdex \
-    && mkdir -p /data/storage && chown -R abdex /data \
+    && mkdir -p /data/storage /data/audit-archive && chown -R abdex /data \
     && chmod +x /usr/local/bin/docker-entrypoint.sh
 USER abdex
 

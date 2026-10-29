@@ -195,8 +195,9 @@ def test_anonymize_command_on_a_copy():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     tmp = tempfile.mkdtemp(prefix="abdex-anon-")
     env = {**os.environ, "APP_ENV": "test", "DATABASE_URL": f"sqlite:///{tmp}/copy.db", "STORAGE_DIR": f"{tmp}/st",
-           "SEED_DEMO_DATA": "true", "RUN_BACKGROUND_WORKER": "false"}
-    subprocess.run([sys.executable, "-c", "from app.bootstrap import ensure_initialized; ensure_initialized()"],  # noqa: S603
+           "RUN_BACKGROUND_WORKER": "false"}
+    subprocess.run([sys.executable, "-c", "from app.bootstrap import ensure_initialized; ensure_initialized(); "  # noqa: S603
+                    "from app.db import SessionLocal; from tests.demo_data import seed_demo; seed_demo(SessionLocal())"],
                    cwd=root, env=env, check=True, capture_output=True)
     out = subprocess.run([sys.executable, "-m", "app.cli", "anonymize", "--confirm"], cwd=root, env=env,  # noqa: S603
                          check=True, capture_output=True, text=True)

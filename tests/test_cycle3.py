@@ -111,7 +111,7 @@ def test_eds_login(login, db):
 
 def _make_deals(cities, plan):
     """plan: [(company, price_kzt)]; returns created deal ids."""
-    from app.demo import _form
+    from tests.demo_data import _form
     from app.modules.bids.service import accept, place_bid
     from app.modules.orders.service import create_order, submit
 

@@ -47,7 +47,7 @@
   <h2>{{ _("kyc.requests") }}</h2>
   {% for r in reqs %}<p>{{ ui.status(r.status) }} {{ fmt_dt(r.created_at) }} → L{{ r.level_requested }}{% if r.reason_code %} · {{ reasons.get(r.reason_code, r.reason_code) }}{% endif %}{% if r.comment %}<br><small>{{ r.comment }}</small>{% endif %}</p>{% else %}<p class="muted">{{ _("common.empty") }}</p>{% endfor %}
   <h3>{{ _("kyc.registry") }}</h3>
-  {% for ch in checks %}<p>{{ ui.status("approved" if ch.status == "match" else "pending") }} {{ ch.source }} · {{ fmt_dt(ch.created_at) }}{% if ch.valid_until %} · {{ _("kyc.valid_until") }} {{ fmt_dt(ch.valid_until, false) }}{% endif %}</p>{% else %}<p class="muted">{{ _("common.empty") }}</p>{% endfor %}
+  {% for ch in checks %}<p>{{ ui.status("approved" if ch.status == "match" else "pending") }} {{ ch.source }} · {{ fmt_dt(ch.created_at) }}{% if ch.status == "unavailable" %}<br><small class="muted">{{ _("kyc.check_deferred") }}</small>{% endif %}{% if ch.valid_until %} · {{ _("kyc.valid_until") }} {{ fmt_dt(ch.valid_until, false) }}{% endif %}</p>{% else %}<p class="muted">{{ _("common.empty") }}</p>{% endfor %}
 </section>
 </div>
 <h2>{{ _("kyc.documents") }}</h2>

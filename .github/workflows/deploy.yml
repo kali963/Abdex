@@ -1,0 +1,57 @@
+# OPS-01 / OPS-03: delivery to our own servers in Kazakhstan.
+#   * staging    — automatically after every green CI run on main;
+#   * production — only by hand (Actions → Deploy → Run workflow), and GitHub asks the reviewers of the
+#                  "production" environment to approve first (Settings → Environments → production →
+#                  Required reviewers).
+# Each environment needs: variable DEPLOY_HOST (server address), DEPLOY_USER (ssh user), DEPLOY_PATH (the
+# checkout on the server, e.g. /opt/abdex) and secrets DEPLOY_SSH_KEY (private key) + DEPLOY_KNOWN_HOSTS (the
+# server's line from `ssh-keyscan <host>`). Without DEPLOY_HOST the job is skipped. See docs/launch.md.
+name: Deploy
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "where to deploy"
+        type: choice
+        options: [staging, production]
+        default: staging
+      ref:
+        description: "git revision (branch, tag or commit); empty = main"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.event.inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    steps:
+      - name: Deploy over SSH
+        if: vars.DEPLOY_HOST != ''
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          REF: ${{ github.event.inputs.ref || github.event.workflow_run.head_sha || 'origin/main' }}
+        run: |
+          case "$REF" in *[!A-Za-z0-9._/-]*) echo "bad ref"; exit 1;; esac
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DEPLOY_USER@$HOST" \
+            "cd '$DEPLOY_PATH' && git fetch --quiet origin && sh deploy/deploy.sh '$REF'"
+      - name: Not configured
+        if: vars.DEPLOY_HOST == ''
+        run: echo "DEPLOY_HOST is not set for this environment — nothing deployed (docs/launch.md, section Deploy)."

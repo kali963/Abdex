@@ -183,6 +183,38 @@ def run_registry_check(db: Session, company: Company, *, basis: str) -> Registry
     return rc
 
 
+RECHECK_AFTER = timedelta(minutes=30)
+RECHECK_WINDOW = timedelta(days=7)
+
+
+def recheck_deferred(db: Session, limit: int = 20) -> int:
+    """GOV-R-08 (worker job): a registry check that could not run because the state service was down is marked
+    "deferred" and the company is verified by the moderator by documents meanwhile; here it is repeated
+    automatically every 30 minutes for up to a week, until the source answers."""
+    now = utcnow()
+    candidates = db.execute(select(RegistryCheck.company_id, func.max(RegistryCheck.created_at))
+                            .where(RegistryCheck.company_id.is_not(None), RegistryCheck.created_at >= now - RECHECK_WINDOW)
+                            .group_by(RegistryCheck.company_id)).all()
+    done = 0
+    for company_id, last_at in candidates:
+        if done >= limit:
+            break
+        last = db.execute(select(RegistryCheck).where(RegistryCheck.company_id == company_id,
+                                                      RegistryCheck.created_at == last_at)).scalars().first()
+        if last is None or last.status != "unavailable" or last.created_at > now - RECHECK_AFTER:
+            continue
+        company = db.get(Company, company_id)
+        if company is None or company.is_blocked:
+            continue
+        rc = run_registry_check(db, company, basis="scheduled")
+        audit(db, "verification.registry_rechecked", object_type="company", object_id=company.id, role="system",
+              result="ok" if rc is not None and rc.status != "unavailable" else "error",
+              details={"status": rc.status if rc is not None else ""})
+        db.flush()
+        done += 1
+    return done
+
+
 def decide_verification(db: Session, req: VerificationRequest, *, approve: bool, reason_code: str, comment: str,
                         moderator: User) -> None:
     if req.status != "pending":

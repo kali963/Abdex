@@ -52,7 +52,7 @@ def _ctx(**kw):
 
 
 def _company(db, name: str, kind: str = "carrier", level: int = 1) -> Company:
-    from app.demo import make_bin
+    from tests.demo_data import make_bin
 
     c = Company(kind=kind, name=name, bin_iin=make_bin(str(abs(hash(name)) % 10**11).zfill(11)), verification_level=level)
     db.add(c)
@@ -109,7 +109,7 @@ def test_tariff_and_rollback_go_through_approval(login, db):
 
     client = db.execute(select(Company).where(Company.kind == "client")).scalars().first()
     tok = _ctx(company_id=client.id)
-    from app.demo import _form
+    from tests.demo_data import _form
 
     order = orders.create_order(db, client, _form([("Алматы", ""), ("Астана", "")], "Тест отката", 1000, 0, 5),
                                 rate_limited=False)

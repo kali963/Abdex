@@ -19,7 +19,11 @@ _last_hourly = 0.0
 
 
 def _run(name: str, job, stats: dict) -> None:
-    """Each job in its own session; one failing job never stops the others."""
+    """Each job in its own session and with its own trace id; one failing job never stops the others."""
+    from app.core import tracing
+    from app.core.context import get_ctx
+
+    get_ctx().trace_id = tracing.new_trace_id()
     db = SessionLocal()
     try:
         stats[name] = job(db)
@@ -59,8 +63,12 @@ def tick() -> dict:
 
         from app.modules.deals.telematics import pull_all as pull_telematics
 
+        from app.core.audit_archive import export as archive_audit
+        from app.modules.fleet.service import recheck_deferred
+
         for name, job in (("digests", process_digests), ("series", generate_due), ("subscriptions", renew_due),
-                          ("telematics", pull_telematics)):
+                          ("telematics", pull_telematics), ("audit_archive", archive_audit),
+                          ("registry_recheck", recheck_deferred)):
             _run(name, job, stats)
     if time.time() - _last_daily > 6 * 3600:
         _last_daily = time.time()
@@ -72,7 +80,18 @@ def tick() -> dict:
                           ("matching_ai", learn_matching),
                           ("retention", retention)):
             _run(name, job, stats)
+    _run("heartbeat", _heartbeat, stats)
     return stats
+
+
+def _heartbeat(db) -> float:
+    """Monitoring: the time of the last completed tick (alert "worker stalled", metric
+    abdex_worker_last_tick_timestamp)."""
+    from app.modules.platform.service import set_setting
+
+    now = time.time()
+    set_setting(db, "worker.heartbeat", now, "time of the last completed background worker tick")
+    return now
 
 
 async def run_forever(interval: float = 20.0) -> None:
@@ -82,7 +101,9 @@ async def run_forever(interval: float = 20.0) -> None:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    from app.core.logsetup import setup as setup_logging
+
+    setup_logging()
     from app.bootstrap import init_db
     from app.core.preflight import enforce
 
