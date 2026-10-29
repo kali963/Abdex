@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import audit
 from app.core.i18n import LOCALES
+from app.config import settings
 from app.core.errors import AppError, Forbidden, NotFound, ValidationFailed
 from app.core.security import mask_phone, new_totp_secret, token, totp_uri
 from app.core.storage import save_upload
@@ -150,7 +151,10 @@ def security(request: Request, db: Session = Depends(get_db), me: Principal = De
     from app.modules.accounts import eds_login
     from app.modules.documents.eds import is_dev_signer
 
+    from app.modules.accounts import egov_mobile
+
     ctx["eds_login"] = eds_login.enabled(db)
+    ctx["egov_login"] = egov_mobile.enabled(db)
     ctx["eds_mode"] = "dev" if is_dev_signer() else "ncalayer"
     return render(request, "account/security.html", ctx)
 
@@ -174,6 +178,56 @@ async def eds_link(request: Request, db: Session = Depends(get_db), me: Principa
         return resp
     db.commit()
     return redirect("/account/security#eds", flash=("success", "eds.linked"))
+
+
+EGOV_LINK_COOKIE = "abdex_egov_link"
+
+
+@router.post("/account/egov/link/start")
+def egov_link_start(request: Request, db: Session = Depends(get_db), me: Principal = Depends(get_principal)):
+    """FR-AUTH-09: bind the EDS kept in eGov mobile / eGov Business (QR code or a button on the same phone)."""
+    from fastapi.responses import JSONResponse
+
+    from app.modules.accounts import egov_mobile
+    from app.web.routes_public import _public_base
+
+    if not egov_mobile.enabled(db):
+        raise NotFound()
+    if me.session.impersonator_id:
+        raise Forbidden("impersonation_forbidden")
+    token, browser, show = egov_mobile.start_safely(db, base=_public_base(request), link_user_id=me.user.id)
+    db.commit()
+    if "launch" in show:
+        show.pop("launch")()  # SIGEX: wait for the signature in the background
+    data = egov_mobile.for_browser(token, show, f"/account/egov/link/{token}/status")
+    resp = JSONResponse(data, headers={"Cache-Control": "no-store"})
+    resp.set_cookie(EGOV_LINK_COOKIE, browser, max_age=300, httponly=True, secure=settings.secure_cookies,
+                    samesite="strict", path="/account/egov")
+    return resp
+
+
+@router.get("/account/egov/link/{token}/status")
+def egov_link_status(token: str, request: Request, db: Session = Depends(get_db),
+                     me: Principal = Depends(get_principal)):
+    from fastapi.responses import JSONResponse
+
+    from app.core.i18n import translate
+    from app.modules.accounts import egov_mobile
+
+    try:
+        state = egov_mobile.poll_link(db, token, request.cookies.get(EGOV_LINK_COOKIE, ""), user_id=me.user.id)
+    except AppError as exc:
+        if isinstance(exc, NotFound):
+            raise
+        db.commit()
+        return JSONResponse({"status": "failed", "message": translate(exc.message_key, **exc.params)})
+    db.commit()
+    if state != "signed":
+        return JSONResponse({"status": state})
+    resp = JSONResponse({"status": "signed", "redirect": "/account/security#eds"})
+    set_flash(resp, "success", "eds.linked")
+    resp.delete_cookie(EGOV_LINK_COOKIE, path="/account/egov")
+    return resp
 
 
 @router.post("/account/eds/unlink")

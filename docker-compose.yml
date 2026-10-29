@@ -24,6 +24,10 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://abdex:abdex@db:5432/abdex
       RUN_BACKGROUND_WORKER: "false"
+      # EDS login and signing: signatures are verified by NCANode (below); eGov mobile goes through SIGEX,
+      # which needs no public address of this computer
+      EDS_NCANODE_URL: ${EDS_NCANODE_URL:-http://ncanode:14579}
+      EGOV_PROVIDER: ${EGOV_PROVIDER:-sigex}
     ports:
       - "${APP_PORT:-8000}:8000"   # APP_PORT in .env when 8000 is taken on this computer
     volumes:
@@ -37,6 +41,8 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://abdex:abdex@db:5432/abdex
+      EDS_NCANODE_URL: ${EDS_NCANODE_URL:-http://ncanode:14579}
+      EGOV_PROVIDER: ${EGOV_PROVIDER:-sigex}
       MIGRATE_ON_START: "false"   # the app container migrates; the worker waits for it
     command: ["python", "-m", "app.worker"]
     healthcheck:
@@ -48,12 +54,10 @@ services:
         condition: service_healthy
 
   # GOV-DS-02: verification of NCA RK signatures (NCALayer, eGov mobile, eGov Business) — CMS, chain, OCSP, TSP.
-  # Start with:  docker compose --profile eds up -d   and set EDS_NCANODE_URL=http://ncanode:14579 in .env.
-  # NCANode needs outbound access to ocsp.pki.gov.kz, tsp.pki.gov.kz and crl.pki.gov.kz; it is never exposed
-  # to the internet (only the app talks to it). Pin the image tag you have tested.
+  # Needs outbound access to ocsp.pki.gov.kz, tsp.pki.gov.kz and crl.pki.gov.kz (downloads the revocation lists
+  # at start, about a minute); only the app talks to it. Pin the image tag you have tested.
   ncanode:
     image: malikzh/ncanode:latest
-    profiles: ["eds"]
     restart: unless-stopped
     expose:
       - "14579"

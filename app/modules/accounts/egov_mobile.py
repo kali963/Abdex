@@ -67,18 +67,20 @@ def provider() -> str:
     return name if name in ("direct", "sigex") else "direct"
 
 
-def start(db: Session, *, document=None, user_id=None, company_id=None, base: str = "") -> tuple[str, str, dict]:
+def start(db: Session, *, document=None, user_id=None, company_id=None, base: str = "",
+          link_user_id=None) -> tuple[str, str, dict]:
     """Returns (token, browser secret for the cookie, what the browser shows: QR image, QR text, deep links).
     With ``document`` the attempt signs that deal document on behalf of ``user_id`` / ``company_id`` (checked by
-    the caller). For SIGEX the returned ``launch`` callable must be called after the commit."""
+    the caller). With ``link_user_id`` the signed certificate is bound to that (signed-in) user for EDS login.
+    For SIGEX the returned ``launch`` callable must be called after the commit."""
     ratelimit.hit("eds_challenge", get_ctx().ip or "local")
     token, browser = secrets.token_urlsafe(24), secrets.token_urlsafe(24)
-    purpose = "document" if document is not None else "login"
+    purpose = "document" if document is not None else ("link" if link_user_id is not None else "login")
     challenge = f"AbdEX {purpose} via eGov mobile {utcnow():%Y-%m-%dT%H:%M:%SZ} {secrets.token_hex(16)}"
     s = EgovSignSession(token_hash=_h(token), auth_token_hash=_h(_auth_token(token)), browser_hash=_h(browser),
                         challenge=challenge, expires_at=utcnow() + TTL, purpose=purpose,
                         document_id=document.id if document is not None else None,
-                        user_id=user_id if document is not None else None, company_id=company_id)
+                        user_id=user_id if document is not None else link_user_id, company_id=company_id)
     db.add(s)
     db.flush()
     if provider() == "sigex":
@@ -217,7 +219,7 @@ def _sigex_wait(session_id, reg: dict, documents: list, wait: float) -> None:
     except Exception as exc:  # noqa: BLE001 — timeouts, network: the attempt simply fails
         logging.getLogger("abdex.integrations").warning("sigex exchange failed: %s", type(exc).__name__)
         out = {"error": "unavailable"}
-    tok = set_ctx(RequestContext(request_id=f"sigex-{session_id}"))
+    tok = set_ctx(RequestContext(request_id=f"sigex-{session_id.hex}"))
     db = SessionLocal()
     try:
         s = db.execute(select(EgovSignSession).where(EgovSignSession.id == session_id).with_for_update()
@@ -431,7 +433,11 @@ def _complete(db: Session, s: EgovSignSession, data_b64: str) -> None:
     iin = str(res.signer.get("iin", ""))
     if not checks or not all(checks.values()) or len(iin) != 12:
         s.status, s.error = "failed", ",".join(k for k, v in checks.items() if not v)[:100] or "invalid"
-        audit(db, "auth.egov_rejected", object_type="user", object_id="", result="denied", details={"checks": checks})
+        audit(db, "auth.egov_rejected", object_type="user", object_id="", result="denied",
+              details={"checks": checks, "error": res.error})
+        return
+    if s.purpose == "link":
+        _link(db, s, iin, res.signer)
         return
     user = db.execute(select(User).where(User.iin_index == blind_index(iin, "iin"), User.is_deleted.is_(False))
                       ).scalar_one_or_none()
@@ -440,6 +446,39 @@ def _complete(db: Session, s: EgovSignSession, data_b64: str) -> None:
         audit(db, "auth.login_failed", object_type="user", object_id="", result="denied", details={"method": "egov"})
         return
     s.status, s.user_id = "signed", user.id
+
+
+def _link(db: Session, s: EgovSignSession, iin: str, signer: dict) -> None:
+    """Binding the certificate's IIN to the user who started the attempt (security settings)."""
+    from app.core.crypto import blind_index
+
+    user = db.get(User, s.user_id)
+    if user is None or user.is_deleted or user.is_blocked:
+        s.status, s.error = "failed", "invalid"
+        return
+    other = db.execute(select(User.id).where(User.iin_index == blind_index(iin, "iin"), User.id != user.id)).first()
+    if other:
+        audit(db, "auth.eds_link_conflict", object_type="user", object_id=user.id, result="denied")
+        s.status, s.error = "failed", "iin_taken"
+        return
+    user.iin, user.eds_linked_at = iin, utcnow()
+    audit(db, "auth.eds_linked", object_type="user", object_id=user.id,
+          details={"serial": signer.get("serial", ""), "via": "egov"})
+    s.status = "signed"
+
+
+def poll_link(db: Session, token: str, browser_secret: str, *, user_id) -> str:
+    """The signed-in browser that started a binding learns its result."""
+    s = _get(db, token, lock=True)
+    if (s.purpose != "link" or s.user_id != user_id or not browser_secret
+            or not secrets.compare_digest(_h(browser_secret), s.browser_hash)):
+        raise NotFound()
+    if s.status == "signed":
+        s.status = "used"
+        return "signed"
+    if s.status == "failed":
+        raise _failure(s.error)
+    return s.status
 
 
 def poll(db: Session, token: str, browser_secret: str) -> tuple[str, User | None]:
@@ -460,6 +499,8 @@ def poll(db: Session, token: str, browser_secret: str) -> tuple[str, User | None
 def _failure(error: str) -> AppError:
     if error == "not_linked":
         return AppError("eds_not_linked", status_code=422)
+    if error == "iin_taken":
+        return AppError("eds_iin_taken", status_code=409)
     if error in ("cancelled", "egov_unavailable"):
         return AppError("egov_cancelled" if error == "cancelled" else "egov_unavailable", status_code=422)
     code, sep, checks = error.partition(":")

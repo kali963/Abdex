@@ -38,7 +38,7 @@ def audit(db: Session, action: str, *, object_type: str = "", object_id=None, re
         result=result,
         ip=ctx.ip,
         device=ctx.device_id,
-        request_id=ctx.request_id,
+        request_id=(ctx.request_id or "")[:40],  # column width: a long id never loses the record
         reason=reason[:300],
         details=json.dumps(mask(details or {}), ensure_ascii=False, default=str),
     )

@@ -230,14 +230,20 @@ class NcaNodeVerifier(Adapter):
         res.checks = {"integrity": bool(out.get("valid")), "chain": bool(cert.get("valid", out.get("valid"))),
                       # validity at the signing time; no dates in the answer means not proven
                       "validity": bool(nb and na and nb <= at <= na),
-                      # an OCSP answer must exist and say "not revoked"; the platform's own list is checked too
-                      "revocation": bool(revocations) and all(r.get("revoked") is False for r in revocations)
+                      # an OCSP answer must exist and say "not revoked"; NCANode also reports revoked=false when OCSP
+                      # could not be asked at all (the error is then in "reason"), which proves nothing.
+                      # The platform's own list is checked too.
+                      "revocation": bool(revocations) and all(r.get("revoked") is False and not r.get("reason")
+                                                              for r in revocations)
                       and serial.lower() not in {str(x).lower() for x in revoked},
                       "owner": bool(expected_bin) and expected_bin in (subject.get("bin", ""), subject.get("iin", ""))}
         res.signer = {"iin": subject.get("iin", ""), "bin": subject.get("bin", ""),
                       "name": subject.get("commonName", ""), "serial": cert.get("serialNumber", ""),
                       "issuer": (cert.get("issuer") or {}).get("commonName", ""), "not_after": cert.get("notAfter", "")}
         res.valid = all(res.checks.values())
+        if not res.valid:  # why, for the journal (no personal data: NCANode's own words)
+            reasons = [str(r.get("reason"))[:120] for r in revocations if r.get("reason")]
+            res.error = "; ".join(filter(None, [str(signer.get("message") or "")[:120], *reasons]))[:300]
         return res
 
 

@@ -1,0 +1,51 @@
+{
+ "status": 200,
+ "message": "OK",
+ "valid": false,
+ "signers": [
+  {
+   "certificates": [
+    {
+     "valid": false,
+     "revocations": [
+      {
+       "revoked": false,
+       "by": "OCSP",
+       "revocationTime": null,
+       "reason": "Cannot find root certificate in NCANode. Try add it using NCANODE_CA_URL variable."
+      }
+     ],
+     "notBefore": "2026-10-29T10:16:56.000+00:00",
+     "notAfter": "2026-11-28T10:16:56.000+00:00",
+     "keyUsage": "AUTH",
+     "serialNumber": "1f45875549271264e715d1e9b6417f72e4b1aa60",
+     "signAlg": "SHA256WithRSAEncryption",
+     "keyUser": [],
+     "subject": {
+      "commonName": "ТЕСТОВ ТЕСТ",
+      "surName": "ТЕСТОВ",
+      "organization": "ТОО Тест",
+      "iin": "123456789012",
+      "bin": "123456789021",
+      "country": "KZ",
+      "dn": "GIVENNAME=ТЕСТОВИЧ, O=ТОО Тест, OU=BIN123456789021, C=KZ, SERIALNUMBER=IIN123456789012, SURNAME=ТЕСТОВ, CN=ТЕСТОВ ТЕСТ"
+     },
+     "issuer": {
+      "commonName": "ТЕСТОВ ТЕСТ",
+      "surName": "ТЕСТОВ",
+      "organization": "ТОО Тест",
+      "iin": "123456789012",
+      "bin": "123456789021",
+      "country": "KZ",
+      "dn": "GIVENNAME=ТЕСТОВИЧ, O=ТОО Тест, OU=BIN123456789021, C=KZ, SERIALNUMBER=IIN123456789012, SURNAME=ТЕСТОВ, CN=ТЕСТОВ ТЕСТ"
+     }
+    }
+   ],
+   "adesLevel": "B",
+   "bestSignatureTime": "2026-10-29T10:19:12.615+00:00",
+   "status": "INDETERMINATE",
+   "subIndication": "CHAIN_INCOMPLETE",
+   "message": "No trusted issuer certificate for the signer"
+  }
+ ]
+}

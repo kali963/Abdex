@@ -83,7 +83,8 @@ def _verify(db: Session, package: str, challenge: str, binding: str = "") -> dic
     checks = {k: v for k, v in res.checks.items() if k != "owner"}
     if not checks or not all(checks.values()):
         failed = [k for k, v in checks.items() if not v] or [res.error or "invalid"]
-        audit(db, "auth.eds_rejected", object_type="user", object_id="", result="denied", details={"checks": failed})
+        audit(db, "auth.eds_rejected", object_type="user", object_id="", result="denied",
+              details={"checks": failed, "error": res.error})
         raise AppError("eds_invalid", status_code=422, checks=", ".join(failed))
     iin = str(res.signer.get("iin", ""))
     if not re.fullmatch(r"\d{12}", iin):
