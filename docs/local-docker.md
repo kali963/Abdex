@@ -32,6 +32,7 @@ docker compose ps                   # app — healthy, db — healthy, worker �
 | журнал приложения | `docker compose logs -f app` |
 | остановить | `docker compose down` |
 | обновить код и перезапустить | `git pull && docker compose up -d --build` |
+| другой порт (8000 занят) | в `.env`: `APP_PORT=8080` и `PUBLIC_BASE_URL=http://localhost:8080`, затем `docker compose up -d` |
 | начать с чистой базы | `docker compose down -v && docker compose up -d` |
 
 Если аккаунт администратора не появился — в `docker compose logs app` будет причина (короткий пароль, неверный
