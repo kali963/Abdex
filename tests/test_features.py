@@ -155,7 +155,7 @@ def test_order_import_all_or_nothing(login):
 
 
 def test_account_deletion_anonymises(client_app):
-    from app.demo import make_bin
+    from tests.demo_data import make_bin
 
     c = TestClient(app)
     tok = csrf_from(c.get("/register").text)

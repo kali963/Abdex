@@ -56,7 +56,7 @@ def rotate_keys() -> dict[str, int]:
 
 
 def _fake_iin(n: int) -> str:
-    from app.demo import make_bin
+    from app.modules.accounts.service import make_bin
 
     return make_bin(f"{900101300000 + n:012d}"[:11])
 

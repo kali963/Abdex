@@ -97,7 +97,6 @@
   {% endif %}
 </header>
 <main id="main">
-  {% if settings.ephemeral_db %}<div class="alert warn" role="alert">{{ _("demo.ephemeral_db") }}</div>{% endif %}
   {% if flash %}<div class="alert {{ flash.k }}" role="status">{{ _(flash.m, **flash.p) }}</div>{% endif %}
   {% block content %}{% endblock %}
 </main>

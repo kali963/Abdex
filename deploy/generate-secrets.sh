@@ -24,6 +24,11 @@ mk field_keys 10001 400 "python3 -c \"import base64,os;print('1:'+base64.b64enco
 mk audit_archive_key 10001 400 "python3 -c \"import secrets;print(secrets.token_urlsafe(48))\""
 # read by the application and by Prometheus (another user): the directory itself stays closed (700)
 mk metrics_token 10001 444 "python3 -c \"import secrets;print(secrets.token_urlsafe(32))\""
+# passwords of the first accounts (INITIAL_ADMIN_* / INITIAL_USER_* in .env.production): read them with
+#   sudo cat deploy/secrets/initial_admin_password
+# and change them after the first sign-in — the files are only used when the account is created
+mk initial_admin_password 10001 400 "python3 -c \"import secrets;print(secrets.token_urlsafe(18))\""
+mk initial_user_password 10001 400 "python3 -c \"import secrets;print(secrets.token_urlsafe(18))\""
 # Telegram bot token for alerts (monitoring profile): put the token of the alerts bot into this file
 [ -e secrets/alert_telegram_token ] || : > secrets/alert_telegram_token
 chmod 444 secrets/alert_telegram_token

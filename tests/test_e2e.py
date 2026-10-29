@@ -281,7 +281,7 @@ def test_registration_with_otp(client_app):
 
     c = TestClient(app)
     tok = csrf_from(c.get("/register").text)
-    from app.demo import make_bin
+    from tests.demo_data import make_bin
 
     data = {"csrf_token": tok, "account_type": "carrier", "full_name": "Новый Перевозчик", "phone": "+7 705 123 45 67",
             "email": "new@carrier.kz", "password": "Very-Strong-Pass-2026", "company_name": "ТОО Новый",

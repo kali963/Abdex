@@ -20,25 +20,8 @@ def _secret(name: str) -> str:
     return secret(name)
 
 
-# Serverless hosting (Vercel): the filesystem is read-only except /tmp and there are no
-# long-running processes, so defaults change. Persistent data needs DATABASE_URL (PostgreSQL).
-ON_VERCEL = bool(os.getenv("VERCEL"))
-if ON_VERCEL:
-    # Vercel Postgres / Neon integration fill these in; every instance must share one database, otherwise a
-    # request served by another instance does not find the session and the user is sent back to the login page.
-    for _name in ("POSTGRES_URL", "POSTGRES_PRISMA_URL", "NEON_DATABASE_URL"):
-        if not os.getenv("DATABASE_URL") and os.getenv(_name):
-            os.environ["DATABASE_URL"] = os.environ[_name]
-    os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/abdex.db")
-    os.environ.setdefault("STORAGE_DIR", "/tmp/abdex-storage")  # noqa: S108 — only writable, per-instance dir on Vercel
-    os.environ.setdefault("RUN_BACKGROUND_WORKER", "false")
-    os.environ.setdefault("AUTO_MIGRATE", "true")
-    os.environ.setdefault("SECURE_COOKIES", "true")  # Vercel always serves HTTPS
-    os.environ.setdefault("TRUST_PROXY", "true")  # Vercel's edge sets X-Forwarded-For itself
-
-
 def _normalize_db_url(url: str) -> str:
-    """Hosted PostgreSQL providers (Neon, Vercel Postgres) give postgres:// URLs."""
+    """Accept plain postgres:// / postgresql:// URLs (the driver is psycopg 3)."""
     for prefix in ("postgres://", "postgresql://"):
         if url.startswith(prefix):
             return "postgresql+psycopg://" + url[len(prefix):]
@@ -80,7 +63,6 @@ class Settings:
     trusted_proxy_hops: int = field(default_factory=lambda: max(1, int(os.getenv("TRUSTED_PROXY_HOPS", "1") or 1)))
     require_2fa_privileged: bool = field(default_factory=lambda: _bool("REQUIRE_2FA_PRIVILEGED", False))
     run_background_worker: bool = field(default_factory=lambda: _bool("RUN_BACKGROUND_WORKER", True))
-    seed_demo_data: bool = field(default_factory=lambda: _bool("SEED_DEMO_DATA", True))
     default_locale: str = field(default_factory=lambda: os.getenv("DEFAULT_LOCALE", "ru"))
     default_timezone: str = field(default_factory=lambda: os.getenv("DEFAULT_TIMEZONE", "Asia/Almaty"))
     max_upload_mb: int = field(default_factory=lambda: _int("MAX_UPLOAD_MB", 15))
@@ -113,29 +95,13 @@ class Settings:
     def is_dev(self) -> bool:
         return self.app_env in {"development", "test"}
 
-    @property
-    def ephemeral_db(self) -> bool:
-        """A serverless instance with its own throw-away SQLite: logins and data do not survive between
-        instances. Only a demo; the site shows a warning (docs/vercel.md explains how to attach PostgreSQL)."""
-        return ON_VERCEL and self.database_url.startswith("sqlite")
-
 
 def load_settings() -> Settings:
     s = Settings()
     if not s.secret_key:
         if s.is_production:
             raise RuntimeError("SECRET_KEY must be set in production")
-        if ON_VERCEL and os.getenv("VERCEL_PROJECT_ID"):
-            # Demo deploy without SECRET_KEY: instances must share a key or logins break between them.
-            # Not secret — set SECRET_KEY in the Vercel project settings for anything beyond a demo.
-            import hashlib
-            import logging
-
-            logging.getLogger("abdex").warning("SECRET_KEY is not set; using a derived demo key")
-            object.__setattr__(s, "secret_key", hashlib.sha256(
-                ("abdex-demo:" + os.environ["VERCEL_PROJECT_ID"]).encode()).hexdigest())
-        else:
-            object.__setattr__(s, "secret_key", secrets.token_urlsafe(48))
+        object.__setattr__(s, "secret_key", secrets.token_urlsafe(48))
     for name in ("eds_ncanode_url", "payment_provider_url", "fx_rates_url"):  # external endpoints: http(s) only
         value = getattr(s, name)
         if value and not value.startswith(("https://", "http://")):
@@ -144,7 +110,6 @@ def load_settings() -> Settings:
         # Hard rules that cannot be relaxed in production.
         object.__setattr__(s, "require_2fa_privileged", True)
         object.__setattr__(s, "secure_cookies", True)
-        object.__setattr__(s, "seed_demo_data", _bool("SEED_DEMO_DATA", False))
     return s
 
 

@@ -23,7 +23,6 @@ x-env: &env
   TRUST_PROXY: "true"
   TRUSTED_PROXY_HOPS: "1"
   SECURE_COOKIES: "true"
-  SEED_DEMO_DATA: "false"
   RUN_BACKGROUND_WORKER: "false"
 
 x-app: &app
@@ -31,7 +30,7 @@ x-app: &app
   image: abdex:${ABDEX_VERSION:-latest}
   restart: unless-stopped
   env_file: .env.production
-  secrets: [field_keys, audit_archive_key, metrics_token]
+  secrets: [field_keys, audit_archive_key, metrics_token, initial_admin_password, initial_user_password]
   volumes:
     - storage:/data/storage
     - audit_archive:/data/audit-archive
@@ -186,6 +185,10 @@ secrets:
     file: ./secrets/metrics_token
   alert_telegram_token:
     file: ./secrets/alert_telegram_token
+  initial_admin_password:
+    file: ./secrets/initial_admin_password
+  initial_user_password:
+    file: ./secrets/initial_user_password
 
 volumes:
   pgdata:

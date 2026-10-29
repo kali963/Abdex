@@ -449,7 +449,7 @@ def init_db() -> None:
         Base.metadata.create_all(engine)
         _init_data()
         return
-    # PostgreSQL: several instances may start at once (serverless cold starts, rolling deploys); one at a time
+    # PostgreSQL: several processes may start at once (web workers, the background worker, rolling deploys); one at a time
     # migrates and seeds, the others wait and then find everything in place.
     from sqlalchemy import text
 
@@ -470,10 +470,9 @@ def _init_data() -> None:
 
         check_data_origin(db)  # SEC-DAT-09
         db.commit()
-        if settings.seed_demo_data:
-            from app.demo import seed_demo
+        from app.modules.accounts.initial import ensure_initial_accounts
 
-            seed_demo(db)
+        ensure_initial_accounts(db)  # the real administrator and the first user from the server settings
     finally:
         db.close()
         from app.modules.integrations.base import flush_journal

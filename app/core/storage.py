@@ -101,14 +101,12 @@ class DbStorage:
 
 
 def _make_storage():
-    """``STORAGE_BACKEND``: "disk" (default) or "db". On Vercel with a shared database the files go to the
-    database too, otherwise a document made by one instance could not be opened through another."""
+    """``STORAGE_BACKEND``: "disk" (default, the storage volume) or "db" (files in the database — for several
+    application servers without a shared disk)."""
     import os
 
-    from app.config import ON_VERCEL
-
     backend = os.getenv("STORAGE_BACKEND", "").strip().lower()
-    if backend == "db" or (not backend and ON_VERCEL and not settings.database_url.startswith("sqlite")):
+    if backend == "db":
         return DbStorage()
     return LocalStorage(settings.storage_dir)
 

@@ -124,7 +124,7 @@ def test_recognition_reads_bin_and_flags_a_mismatch(db):
     assert client.bin_iin in rec["ids"] and rec["checks"] == {"bin": True}
     assert rec["expiry"] == "2030-12-31" and doc.expires_on.isoformat() == "2030-12-31"
     other = "990540001234" if extract("990540001234")["ids"] else None
-    from app.demo import make_bin
+    from tests.demo_data import make_bin
 
     stranger = make_bin("98765432101")
     f2 = save_generated(db, data=_pdf(f"BIN {stranger}"), name="x.pdf", content_type="application/pdf",
@@ -246,7 +246,7 @@ def test_ai_matching_weights_and_replica(login, db):
 
 
 def _new_deal_with_contract(db):
-    from app.demo import _form
+    from tests.demo_data import _form
     from app.modules.bids.service import accept, place_bid
     from app.modules.orders.service import create_order, submit
 
@@ -355,27 +355,9 @@ def test_db_storage_backend(client_app):
         st.get("test/blob-1")
 
 
-def test_vercel_database_env():
-    """On Vercel the Postgres variables of the Neon / Vercel Postgres integration are picked up."""
-    import importlib
-    import os
+def test_plain_postgres_urls_are_accepted():
+    from app.config import _normalize_db_url
 
-    import app.config as config
-
-    saved = dict(os.environ)
-    original = config.settings, config.ON_VERCEL
-    try:
-        os.environ.pop("DATABASE_URL", None)
-        os.environ.update({"VERCEL": "1", "POSTGRES_URL": "postgres://u:p@db.example/neondb?sslmode=require"})
-        importlib.reload(config)
-        assert config.settings.database_url == "postgresql+psycopg://u:p@db.example/neondb?sslmode=require"
-        assert not config.settings.ephemeral_db
-        os.environ.pop("POSTGRES_URL")
-        os.environ.pop("DATABASE_URL")
-        importlib.reload(config)
-        assert config.settings.ephemeral_db and config.settings.database_url.startswith("sqlite")
-    finally:
-        os.environ.clear()
-        os.environ.update(saved)
-        importlib.reload(config)
-        config.settings, config.ON_VERCEL = original  # every module keeps seeing the same settings object
+    assert _normalize_db_url("postgres://u:p@db/abdex") == "postgresql+psycopg://u:p@db/abdex"
+    assert _normalize_db_url("postgresql://u:p@db/abdex") == "postgresql+psycopg://u:p@db/abdex"
+    assert _normalize_db_url("sqlite:///x.db") == "sqlite:///x.db"

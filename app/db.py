@@ -121,22 +121,13 @@ def _make_engine():
         kwargs["connect_args"] = {"check_same_thread": False}
     else:
         kwargs["pool_pre_ping"] = True
-        from app.config import ON_VERCEL
-
-        if ON_VERCEL:  # serverless: instances come and go, the provider's pooler keeps the connections
-            from sqlalchemy.pool import NullPool
-
-            kwargs["poolclass"] = NullPool
-            # no server-side prepared statements: a transaction-mode pooler may switch backends between them
-            kwargs["connect_args"] = {"prepare_threshold": None}
-        else:
-            # Per process. A request uses one connection (pages and checks share it, see get_db), so the pool must
-            # cover the request threads of one process; past that a request fails fast instead of hanging.
-            # Size it with PostgreSQL max_connections in mind: processes × (size + overflow) + worker + admin.
-            kwargs["pool_size"] = int(os.getenv("DB_POOL_SIZE", "10"))
-            kwargs["max_overflow"] = int(os.getenv("DB_MAX_OVERFLOW", "15"))
-            kwargs["pool_timeout"] = float(os.getenv("DB_POOL_TIMEOUT", "10"))
-            kwargs["pool_recycle"] = 1800
+        # Per process. A request uses one connection (pages and checks share it, see get_db), so the pool must
+        # cover the request threads of one process; past that a request fails fast instead of hanging.
+        # Size it with PostgreSQL max_connections in mind: processes × (size + overflow) + worker + admin.
+        kwargs["pool_size"] = int(os.getenv("DB_POOL_SIZE", "10"))
+        kwargs["max_overflow"] = int(os.getenv("DB_MAX_OVERFLOW", "15"))
+        kwargs["pool_timeout"] = float(os.getenv("DB_POOL_TIMEOUT", "10"))
+        kwargs["pool_recycle"] = 1800
     eng = create_engine(url, **kwargs)
     if url.startswith("sqlite"):
         @event.listens_for(eng, "connect")

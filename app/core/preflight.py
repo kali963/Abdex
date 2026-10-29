@@ -71,8 +71,6 @@ def check_env() -> list[Item]:
         add(OK, "sms", f"SMS: {provider}")
     if not _env("SMTP_HOST"):
         add(WARN, "smtp", "SMTP_HOST не задан — письма (счета, восстановление пароля по e-mail) не уходят")
-    if settings.seed_demo_data and prod:
-        add(ERROR, "demo", "SEED_DEMO_DATA=true: демо-аккаунты с известными паролями в боевой базе")
     if not settings.trust_proxy:
         add(WARN, "proxy", "TRUST_PROXY=false: за обратным прокси все клиенты будут с одного адреса (лимиты, журнал)")
     if not _env("REDIS_URL"):
@@ -112,7 +110,8 @@ def check_db(db) -> list[Item]:
     admins = db.execute(select(func.count(User.id)).where(User.staff_role == STAFF_ADMIN, User.is_blocked.is_(False),
                                                           User.is_deleted.is_(False))).scalar_one()
     if not admins:
-        add(ERROR, "admin", "нет ни одного администратора: python -m app.cli create-staff --role admin ...")
+        add(ERROR, "admin", "нет ни одного администратора: задайте INITIAL_ADMIN_* в .env.production и перезапустите "
+                            "приложение (или python -m app.cli create-staff --role admin ...)")
     else:
         add(OK, "admin", f"администраторов: {admins}")
     if flag_enabled(db, "online_payments"):

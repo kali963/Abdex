@@ -78,6 +78,16 @@ def bin_control_digit(first11: str) -> int | None:
     return s
 
 
+def make_bin(prefix11: str) -> str:
+    """A valid BIN/IIN starting with the given digits (used for anonymised copies and tests)."""
+    for i in range(10):
+        candidate = prefix11[:10] + str(i)
+        cd = bin_control_digit(candidate)
+        if cd is not None:
+            return candidate + str(cd)
+    raise ValueError("cannot build BIN")
+
+
 # ------------------------------------------------------------------------ OTP (SEC-AUT-04)
 
 

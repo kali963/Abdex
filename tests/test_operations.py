@@ -280,7 +280,7 @@ def test_sms_outage_is_not_an_internal_error(client_app, monkeypatch):
     """GOV-R-08 / INT-GEN-03: an external service that is down gives "try again later", the form is kept."""
     from app.modules.accounts import service as accounts
     from app.modules.integrations.base import IntegrationUnavailable
-    from app.demo import make_bin
+    from tests.demo_data import make_bin
     from tests.conftest import csrf_from
 
     def down(*a, **k):

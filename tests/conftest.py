@@ -13,7 +13,6 @@ os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL") or f"sqlite:///{_tmp}/test.db"
 os.environ["STORAGE_DIR"] = f"{_tmp}/storage"
 os.environ["RUN_BACKGROUND_WORKER"] = "false"
-os.environ["SEED_DEMO_DATA"] = "true"
 os.environ["REQUIRE_2FA_PRIVILEGED"] = "false"
 
 if os.environ["DATABASE_URL"].startswith("postgresql"):
@@ -48,12 +47,28 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.core import ratelimit  # noqa: E402
 from app.main import app  # noqa: E402
 
+def seed_test_data() -> None:
+    """Test companies, users and deals (tests/demo_data.py) — only in the test database."""
+    from app.db import SessionLocal
+    from tests.demo_data import seed_demo
+
+    db = SessionLocal()
+    try:
+        seed_demo(db)
+    finally:
+        db.close()
+    from app.modules.integrations.base import flush_journal
+
+    flush_journal()
+
+
 PASSWORD = "AbdexDemo2026!"  # noqa: S105 — public demo password, dev only
 
 
 @pytest.fixture(scope="session")
 def client_app():
     with TestClient(app) as c:
+        seed_test_data()
         yield c
     shutil.rmtree(_tmp, ignore_errors=True)
 

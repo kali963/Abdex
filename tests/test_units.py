@@ -14,7 +14,7 @@ from app.modules.chat.leaks import mask_contacts
 from app.modules.documents.service import validate_template_body
 from app.core.errors import ValidationFailed
 from app.modules.orders import flow
-from app.demo import make_bin
+from tests.demo_data import make_bin
 
 
 # ------------------------------------------------------------------ status machine (FR-FLOW-01)

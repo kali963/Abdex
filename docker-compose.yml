@@ -33,7 +33,6 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://abdex:abdex@db:5432/abdex
-      SEED_DEMO_DATA: "false"
     command: ["python", "-m", "app.worker"]
     volumes:
       - storage:/data/storage

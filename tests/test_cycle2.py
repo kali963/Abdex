@@ -33,7 +33,7 @@ def _ctx(user_id=None, company_id=None):
 
 
 def _company(db, name: str, kind: str = "carrier", level: int = 1) -> Company:
-    from app.demo import make_bin
+    from tests.demo_data import make_bin
 
     c = Company(kind=kind, name=name, bin_iin=make_bin(str(abs(hash(name)) % 10**11).zfill(11)), verification_level=level)
     db.add(c)

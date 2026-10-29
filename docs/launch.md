@@ -33,7 +33,7 @@ sudo sh server-setup.sh
 ```bash
 sudo sh generate-secrets.sh          # файлы ключей в deploy/secrets/ + строки для .env.production
 cp .env.production.example .env.production
-nano .env.production                  # домены, сгенерированные значения, SMS, SMTP, копии
+nano .env.production                  # домены, администратор и пользователь, сгенерированные значения, SMS, SMTP, копии
 ```
 
 `deploy/secrets/` содержит: `field_keys` (ключ шифрования ПДн), `audit_archive_key` (ключ архива журнала
@@ -60,17 +60,30 @@ ClamAV загружает антивирусные базы (несколько 
 Если в настройках чего-то не хватает, приложение **не запустится** и напишет в журнал, чего именно:
 `docker compose -f docker-compose.prod.yml logs app | tail -30`.
 
-## 4. Первый администратор
+## 4. Администратор и первый пользователь
+
+Демо-аккаунтов нет — база стартует пустой. При первом запуске приложение само создаёт два аккаунта из
+`.env.production`:
+
+| Аккаунт | Настройки | Пароль |
+|---|---|---|
+| Администратор площадки | `INITIAL_ADMIN_PHONE`, `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_EMAIL` | `sudo cat deploy/secrets/initial_admin_password` |
+| Пользователь — владелец компании-клиента (или перевозчика) | `INITIAL_USER_PHONE`, `INITIAL_USER_NAME`, `INITIAL_USER_EMAIL`, `INITIAL_USER_TYPE` (`client`/`carrier`), `INITIAL_USER_COMPANY`, `INITIAL_USER_BIN` | `sudo cat deploy/secrets/initial_user_password` |
+
+Аккаунт создаётся один раз — когда пользователя с таким телефоном ещё нет; потом настройки и файлы паролей
+ни на что не влияют (смените пароль после первого входа). Если что-то заполнено неверно (короткий пароль,
+неверный БИН), аккаунт не создаётся, а причина видна в `docker compose ... logs app`.
+
+Вход администратора — на `https://admin.abdex.kz/login`. При первом входе админка потребует включить
+приложение-аутентификатор (Google Authenticator, Яндекс Ключ и т. п.): «Безопасность» → отсканировать QR →
+ввести код. Других сотрудников добавляйте командой (выведет одноразовый пароль):
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production exec app \
-  python -m app.cli create-staff --phone +77010000000 --name "Имя Фамилия" --role admin --email you@abdex.kz
+  python -m app.cli create-staff --phone +77010000000 --name "Имя Фамилия" --role moderator --email you@abdex.kz
 ```
 
-Команда выведет одноразовый пароль. Вход — на `https://admin.abdex.kz/login`. При первом входе админка
-потребует включить приложение-аутентификатор (Google Authenticator, Яндекс Ключ и т. п.): «Безопасность» →
-отсканировать QR → ввести код. Затем смените пароль. Других сотрудников добавляйте той же командой с ролью
-`manager`, `moderator`, `finance` или `auditor`.
+Роли: `admin`, `manager`, `moderator`, `finance`, `auditor`. Клиенты и перевозчики регистрируются на сайте сами.
 
 ## 5. Проверка готовности
 
