@@ -320,7 +320,8 @@ async def biometrics_run(request: Request, db: Session = Depends(get_db), me: Pr
         data[name] = await f.read() if f is not None and getattr(f, "filename", "") else b""
     check = biometrics.run_check(db, db.get(User, me.user.id), **data)
     db.commit()
-    return redirect("/trips/biometrics", flash=("success" if check.status == "passed" else "error", f"bio.{check.status}"))
+    return redirect("/trips/biometrics", flash=("success" if check.status in ("passed", "pending") else "error",
+                                                f"bio.{check.status}"))
 
 
 # ------------------------------------------------------------------ development signer (never in production)

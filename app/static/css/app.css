@@ -657,3 +657,9 @@ p a:not(.btn), li a:not(.btn), small a:not(.btn), .muted a:not(.btn), .hint a, t
   background: rgba(255, 255, 255, .55); cursor: pointer; font-size: 1rem; line-height: 1; color: var(--text); }
 .pw-eye:hover { background: rgba(255, 255, 255, .85); }
 .pw-eye[aria-pressed="true"] { background: var(--brand); color: #fff; }
+
+/* biometrics review: the two selfies and the document side by side, large enough to compare faces */
+.bio-photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin: 1rem 0; }
+.bio-photos figure { margin: 0; padding: .6rem; }
+.bio-photos img { display: block; width: 100%; height: 320px; object-fit: contain; background: #111; border-radius: 10px; }
+.bio-photos figcaption { margin-top: .4rem; font-weight: 600; text-align: center; }

@@ -9,11 +9,12 @@
 <section class="card {{ 'warn' if check.status != 'passed' }}">
   <h2>{{ _("bio.last") }}</h2>
   <dl class="kv">
-    <dt>{{ _("common.status") }}</dt><dd><span class="badge {{ 'ok' if check.status == 'passed' else ('warn' if check.status == 'unavailable' else 'err') }}">{{ _("bio.st." ~ check.status) }}</span></dd>
-    <dt>{{ _("bio.match") }}</dt><dd>{{ _("common.yes") if check.match else _("common.no") }} ({{ check.score }}/100)</dd>
-    <dt>{{ _("bio.liveness") }}</dt><dd>{{ _("common.yes") if check.liveness else _("common.no") }}</dd>
+    <dt>{{ _("common.status") }}</dt><dd><span class="badge {{ 'ok' if check.status == 'passed' else ('warn' if check.status in ('pending', 'unavailable', 'withdrawn') else 'err') }}">{{ _("bio.st." ~ check.status) }}</span></dd>
+    {% if check.status == "failed" and check.review_reason %}<dt>{{ _("admin.reason") }}</dt><dd>{{ _("bio.rr." ~ check.review_reason) }}{% if check.review_comment %}<br><small>{{ check.review_comment }}</small>{% endif %}</dd>{% endif %}
+    {% if check.status == "passed" %}<dt>{{ _("bio.match") }}</dt><dd>{{ _("common.yes") if check.match else _("common.no") }}</dd>
+    <dt>{{ _("bio.liveness") }}</dt><dd>{{ _("common.yes") if check.liveness else _("common.no") }}</dd>{% endif %}
     <dt>{{ _("common.date") }}</dt><dd>{{ fmt_dt(check.created_at) }}{% if check.valid_until %} · {{ _("company.until") }} {{ fmt_date(check.valid_until) }}{% endif %}</dd>
-    <dt>{{ _("bio.images") }}</dt><dd>{% if check.images_deleted_at %}{{ _("bio.images_deleted", at=fmt_dt(check.images_deleted_at)) }}{% else %}{{ _("bio.images_until", at=fmt_dt(check.images_delete_after)) }}{% endif %}</dd>
+    <dt>{{ _("bio.images") }}</dt><dd>{% if check.images_deleted_at %}{{ _("bio.images_deleted", at=fmt_dt(check.images_deleted_at)) }}{% elif check.images_delete_after %}{{ _("bio.images_until", at=fmt_dt(check.images_delete_after)) }}{% else %}{{ _("bio.images_until_decision") }}{% endif %}</dd>
   </dl>
 </section>
 {% endif %}
@@ -22,6 +23,8 @@
   <p>{{ _("bio.need_consent") }}</p>
   <form method="post" action="/account/consents/biometrics">{{ ui.csrf() }}<input type="hidden" name="grant" value="1"><input type="hidden" name="next" value="/trips/biometrics"><button class="btn primary">{{ _("bio.give_consent") }}</button></form>
 </section>
+{% elif check and check.status == "pending" %}
+<section class="card note"><p>{{ _("bio.pending_text") }}</p></section>
 {% else %}
 <form method="post" action="/trips/biometrics" enctype="multipart/form-data" class="card stack">{{ ui.csrf() }}
   <h2>{{ _("bio.run") }}</h2>

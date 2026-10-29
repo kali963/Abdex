@@ -307,6 +307,57 @@ async def moderation_decide(rid: str, request: Request, db: Session = Depends(ge
     return redirect("/admin/moderation", flash=("success", "msg.saved"))
 
 
+# ------------------------------------------------------------------ driver biometrics (FR-KYC-08)
+
+
+@router.get("/biometrics")
+def biometrics_queue(request: Request, db: Session = Depends(get_db),
+                     me: Principal = Depends(require("admin.moderation"))):
+    from app.modules.fleet import biometrics
+
+    return render(request, "admin/biometrics.html", {
+        "pending": biometrics.queue(db), "decided": biometrics.queue(db, status="decided", limit=50),
+        "companies": {c.id: c for c in db.execute(select(Company)).scalars()}})
+
+
+@router.get("/biometrics/{bid}")
+def biometrics_item(bid: str, request: Request, db: Session = Depends(get_db),
+                    me: Principal = Depends(require("admin.moderation"))):
+    from app.modules.fleet.models import BiometricCheck, Driver
+
+    check = db.get(BiometricCheck, parse_uuid(bid))
+    if check is None:
+        raise NotFound()
+    driver = db.get(Driver, check.driver_id)
+    audit(db, "staff.biometrics_viewed", object_type="driver", object_id=check.driver_id,
+          details={"check": str(check.id)})
+    db.commit()
+    from app.modules.fleet.biometrics import REJECT_REASONS
+
+    return render(request, "admin/biometrics_item.html", {
+        "check": check, "driver": driver, "company": db.get(Company, driver.company_id) if driver else None,
+        "reviewer": db.get(User, check.reviewed_by) if check.reviewed_by else None, "reasons": REJECT_REASONS})
+
+
+@router.post("/biometrics/{bid}")
+async def biometrics_decide(bid: str, request: Request, db: Session = Depends(get_db),
+                            me: Principal = Depends(require("admin.moderation"))):
+    from app.modules.fleet import biometrics
+    from app.modules.fleet.models import BiometricCheck
+
+    form = await request.form()
+    check = db.get(BiometricCheck, parse_uuid(bid))
+    if check is None:
+        raise NotFound()
+    approve = form.get("decision") == "approve"
+    biometrics.review(db, check, moderator=db.get(User, me.user.id), approve=approve,
+                      face_match=bool(form.get("face_match")), live=bool(form.get("live")),
+                      document_ok=bool(form.get("document_ok")), reason=str(form.get("reason", "")),
+                      comment=str(form.get("comment", "")))
+    db.commit()
+    return redirect("/admin/biometrics", flash=("success", "bio.reviewed_ok" if approve else "bio.reviewed_rejected"))
+
+
 # ------------------------------------------------------------------ companies & users
 
 

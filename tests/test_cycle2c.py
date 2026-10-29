@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import io
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -12,12 +13,13 @@ import tempfile
 
 import pytest
 from PIL import Image
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 
 from app.core import crypto
 from app.core.context import RequestContext, reset_ctx, set_ctx
 from app.db import SessionLocal, engine, utcnow
 from app.modules.accounts.models import BankAccount, Company, User
+from tests.conftest import csrf_from
 
 PG = engine.dialect.name == "postgresql"
 
@@ -131,7 +133,8 @@ def test_processing_register_gates_transfers(login, db):
     assert db.execute(select(ProcessingRecord).where(ProcessingRecord.code == "abroad_x")).first() is None
 
 
-def test_driver_biometrics_keeps_only_the_result(login, db):
+def test_driver_biometrics_decided_by_moderator(login, db):
+    """FR-KYC-08: nothing passes automatically — a moderator compares the photos; SEC-DAT-10 storage rules."""
     from datetime import timedelta
 
     from app.core.storage import storage
@@ -144,35 +147,73 @@ def test_driver_biometrics_keeps_only_the_result(login, db):
              "document": ("d.png", _png((20, 40, 200)), "image/png")}
     assert s.post("/trips/biometrics", files=files).status_code == 403  # no separate consent yet
     s.post("/account/consents/biometrics", data={"grant": "1"})
-    r = s.post("/trips/biometrics", files=files)
-    assert r.status_code == 303
+    before = db.execute(select(func.count(BiometricCheck.id))).scalar_one()
+    # the same picture twice is refused at once, nothing is stored
+    s.post("/trips/biometrics", files=dict(files, selfie2=files["selfie"]))
+    db.expire_all()
+    assert db.execute(select(func.count(BiometricCheck.id))).scalar_one() == before
+
+    assert s.post("/trips/biometrics", files=files).status_code == 303
     db.expire_all()
     check = db.execute(select(BiometricCheck).order_by(BiometricCheck.created_at.desc())).scalars().first()
-    assert check.status == "passed" and check.match and check.liveness and check.valid_until
-    selfie = db.get(StoredFile, check.selfie_file_id)
-    assert storage.get(selfie.storage_key)
-    assert "Биометрическая проверка" in s.get("/trips/biometrics").text
-    # same picture twice: liveness fails
-    same = dict(files, selfie2=files["selfie"])
-    s.post("/trips/biometrics", files=same)
+    assert check.status == "pending" and not check.match and check.valid_until is None
+    assert check.selfie2_file_id and check.images_delete_after is None  # kept for the moderator
+    assert "на проверке у модератора" in s.get("/trips/biometrics").text.lower()
+    s.post("/trips/biometrics", files=files)  # no second check while one waits
     db.expire_all()
-    failed = db.execute(select(BiometricCheck).order_by(BiometricCheck.created_at.desc())).scalars().first()
-    assert failed.status == "failed" and not failed.liveness
-    # images disappear after the short period, the result stays
-    n = purge_images(db, now=utcnow() + timedelta(hours=25))
+    assert db.execute(select(func.count(BiometricCheck.id)).where(BiometricCheck.status == "pending")).scalar_one() == 1
+    # images of a waiting check are not purged by time
+    purge_images(db, now=utcnow() + timedelta(days=3))
     db.commit()
-    assert n >= 2
+    db.expire_all()
+    assert db.get(BiometricCheck, check.id).selfie_file_id is not None
+
+    mod = login("moderator@abdex.kz")
+    assert "Ждут проверки" in mod.c.get("/admin/biometrics").text
+    page = mod.c.get(f"/admin/biometrics/{check.id}").text
+    photos = re.findall(r'<figure class="card"><a href="[^"]+" target="_blank" rel="noopener"><img src="([^"]+)"', page)
+    assert len(photos) == 3  # both selfies and the document
+    img = photos[0].replace("&amp;", "&")
+    assert mod.c.get(img).status_code == 200  # the moderator sees the photos
+    token = csrf_from(page)
+    # approval needs all three confirmations
+    mod.c.post(f"/admin/biometrics/{check.id}", data={"csrf_token": token, "decision": "approve", "face_match": "on"})
+    db.expire_all()
+    assert db.get(BiometricCheck, check.id).status == "pending"
+    mod.c.post(f"/admin/biometrics/{check.id}", data={"csrf_token": token, "decision": "approve", "face_match": "on",
+                                                      "live": "on", "document_ok": "on"})
+    db.expire_all()
+    done = db.get(BiometricCheck, check.id)
+    assert done.status == "passed" and done.match and done.liveness and done.valid_until and done.reviewed_by
+    assert done.images_delete_after is not None
+    selfie = db.get(StoredFile, done.selfie_file_id)
+    # images disappear after the short period, the result stays
+    purge_images(db, now=utcnow() + timedelta(hours=25))
+    db.commit()
     db.expire_all()
     with pytest.raises(FileNotFoundError):
         storage.get(selfie.storage_key)
     kept = db.get(BiometricCheck, check.id)
-    assert kept.images_deleted_at and kept.selfie_file_id is None and kept.status == "passed"
-    # revoking the consent deletes images of a fresh check immediately
-    s.post("/trips/biometrics", files=files)
+    assert kept.images_deleted_at and kept.selfie_file_id is None and kept.selfie2_file_id is None
+    assert kept.status == "passed"
+
+    # a rejection carries the reason to the driver
+    s.post("/trips/biometrics", files={k: (n, _png((i * 40, 90, 60)), t) for i, (k, (n, _, t)) in enumerate(files.items(), 1)})
+    db.expire_all()
+    second = db.execute(select(BiometricCheck).order_by(BiometricCheck.created_at.desc())).scalars().first()
+    page = mod.c.get(f"/admin/biometrics/{second.id}").text
+    mod.c.post(f"/admin/biometrics/{second.id}", data={"csrf_token": csrf_from(page), "decision": "reject",
+                                                       "reason": "not_a_document"})
+    db.expire_all()
+    assert db.get(BiometricCheck, second.id).status == "failed"
+    assert "не удостоверение" in s.get("/trips/biometrics").text
+
+    # revoking the consent while a check waits: images deleted at once, the check is withdrawn
+    s.post("/trips/biometrics", files={k: (n, _png((i * 30, 20, 99)), t) for i, (k, (n, _, t)) in enumerate(files.items(), 1)})
     s.post("/account/consents/biometrics", data={})
     db.expire_all()
     latest = db.execute(select(BiometricCheck).order_by(BiometricCheck.created_at.desc())).scalars().first()
-    assert latest.images_deleted_at is not None
+    assert latest.images_deleted_at is not None and latest.status == "withdrawn"
 
 
 # ------------------------------------------------------------------ SEC-DAT-09

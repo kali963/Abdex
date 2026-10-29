@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#f5f2eb">
   <meta name="color-scheme" content="light">
   <title>{% block title %}{{ _("app.name") }}{% endblock %} — AbdEX</title>
-  <link rel="stylesheet" href="/static/css/app.css?v=8">
+  <link rel="stylesheet" href="/static/css/app.css?v=9">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/img/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="/static/img/icon-192.png">
@@ -21,6 +21,7 @@
     {% set _n = nav.append(("/admin/approvals", "admin.approvals", "check", p.startswith("/admin/approvals"))) %}
     {% if me.can("admin.orders") %}{% set _n = nav.append(("/admin/orders", "admin.orders", "box", p.startswith("/admin/orders"))) %}{% endif %}
     {% if me.can("admin.moderation") %}{% set _n = nav.append(("/admin/moderation", "admin.moderation", "shield", p.startswith("/admin/moderation"))) %}{% endif %}
+    {% if me.can("admin.moderation") %}{% set _n = nav.append(("/admin/biometrics", "admin.biometrics", "user", p.startswith("/admin/biometrics"))) %}{% endif %}
     {% if me.can("admin.antifraud") %}{% set _n = nav.append(("/admin/antifraud", "admin.antifraud", "alert", p.startswith("/admin/antifraud"))) %}{% endif %}
     {% if me.can("admin.disputes") %}{% set _n = nav.append(("/admin/disputes", "admin.disputes", "deal", p.startswith("/admin/disputes"))) %}{% endif %}
     {% if me.can("admin.users") %}{% set _n = nav.append(("/admin/companies", "admin.companies", "building", p.startswith("/admin/companies"))) %}{% set _n = nav.append(("/admin/users", "admin.users", "user", p.startswith("/admin/users"))) %}{% endif %}
