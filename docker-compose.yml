@@ -1,6 +1,7 @@
 # Local stack for trying the site on your own computer: app + background worker + PostgreSQL.
 #   cp .env.example .env      # fill in INITIAL_ADMIN_* / INITIAL_USER_* (passwords of 12+ characters)
 #   docker compose up -d --build   ->  http://localhost:8000
+# Port 8000 taken by another program: APP_PORT=8080 (and PUBLIC_BASE_URL=http://localhost:8080) in .env.
 # SMS and e-mails are not sent in this mode: the codes are on http://localhost:8000/dev/outbox.
 # The production server uses deploy/docker-compose.prod.yml instead (docs/launch.md).
 services:
@@ -24,7 +25,7 @@ services:
       DATABASE_URL: postgresql+psycopg://abdex:abdex@db:5432/abdex
       RUN_BACKGROUND_WORKER: "false"
     ports:
-      - "8000:8000"
+      - "${APP_PORT:-8000}:8000"   # APP_PORT in .env when 8000 is taken on this computer
     volumes:
       - storage:/data/storage
     depends_on:

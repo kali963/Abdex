@@ -44,6 +44,7 @@ def tick() -> dict:
     from app.modules.orders.series import generate_due
     from app.modules.orders.service import expire_bidding
     from app.modules.support.service import escalate_overdue
+    from app.modules.notifications.telegram_bot import poll as telegram_poll
     from app.modules.webhooks.service import process as process_webhooks
 
     stats = {"journal": flush_journal()}
@@ -55,7 +56,7 @@ def tick() -> dict:
 
     for name, job in (("outbox", process_outbox), ("bidding", expire_bidding), ("sla", escalate_overdue),
                       ("security", security_scan), ("etd", process_etd), ("esf", process_esf),
-                      ("webhooks", process_webhooks)):  # outbound HTTP last: it must not delay the timers
+                      ("webhooks", process_webhooks), ("telegram", telegram_poll)):  # outbound HTTP last: it must not delay the timers
         _run(name, job, stats)
     if time.time() - _last_hourly > 600:
         _last_hourly = time.time()
