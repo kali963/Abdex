@@ -7,10 +7,15 @@
 <div class="grid two">
 <section class="card">
   <h2>Telegram</h2>
-  {% if tg and tg.address %}<p><span class="badge ok">{{ _("ntf.tg_linked") }}</span></p>
-  {% elif tg and tg.link_code %}<p>{{ _("ntf.tg_instructions") }}</p><div class="secret">/start {{ tg.link_code }}</div>
-  {% else %}<p>{{ _("ntf.tg_text") }}</p>{% endif %}
-  <form method="post" action="/account/notifications/telegram" class="actions">{{ ui.csrf() }}<button class="btn">{{ _("ntf.tg_link") }}</button></form>
+  {% if not tg_bot.enabled %}<p class="muted">{{ _("ntf.tg_off") }}</p>
+  {% elif tg and tg.address %}<p><span class="badge ok">{{ _("ntf.tg_linked") }}</span>{% if tg_bot.username %} · <a href="https://t.me/{{ tg_bot.username }}" target="_blank" rel="noopener">@{{ tg_bot.username }}</a>{% endif %}</p>
+  {% elif tg and tg.link_code %}
+    {% if tg_bot.username %}<p>{{ _("ntf.tg_open_text") }}</p>
+    <p><a class="btn primary" href="https://t.me/{{ tg_bot.username }}?start={{ tg.link_code }}" target="_blank" rel="noopener">{{ _("ntf.tg_open") }} @{{ tg_bot.username }}</a></p>
+    <p class="muted">{{ _("ntf.tg_manual", bot="@" ~ tg_bot.username) }}</p>{% else %}<p>{{ _("ntf.tg_instructions") }}</p>{% endif %}
+    <div class="secret">/start {{ tg.link_code }}</div>
+  {% else %}<p>{{ _("ntf.tg_text") }}</p>{% if tg_bot.username %}<p class="muted">{{ _("ntf.tg_bot_name") }} <a href="https://t.me/{{ tg_bot.username }}" target="_blank" rel="noopener">@{{ tg_bot.username }}</a></p>{% endif %}{% endif %}
+  {% if tg_bot.enabled %}<form method="post" action="/account/notifications/telegram" class="actions">{{ ui.csrf() }}<button class="btn">{{ _("ntf.tg_link") }}</button></form>{% endif %}
 </section>
 {% if push_key %}
 <section class="card" id="push" data-push-key="{{ push_key }}" data-push-on="{{ _('push.on') }}" data-push-off="{{ _('push.off') }}" data-push-denied="{{ _('push.denied') }}" data-push-unsupported="{{ _('push.unsupported') }}">

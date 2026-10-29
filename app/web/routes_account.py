@@ -353,7 +353,13 @@ def notif_settings(request: Request, db: Session = Depends(get_db), me: Principa
     return render(request, "account/notifications.html", {
         "tg": links.get("telegram"), "categories": USER_CATEGORIES, "channels": USER_CHANNELS,
         "disabled": disabled, "prefs": prefs_for(db, me.user.id), "hours": [(h, f"{h:02d}:00") for h in range(24)],
-        "push_key": _push_key(), "push_count": _push_count(db, me.user.id)})
+        "push_key": _push_key(), "push_count": _push_count(db, me.user.id), "tg_bot": _tg_bot()})
+
+
+def _tg_bot() -> dict:
+    from app.modules.notifications import telegram_bot
+
+    return {"enabled": telegram_bot.enabled(), "username": telegram_bot.bot_username() if telegram_bot.enabled() else ""}
 
 
 def _push_key() -> str:
