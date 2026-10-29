@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.biometrics") }}{% endblock %}
+{% block content %}
+<h1>{{ _("admin.biometrics") }}</h1>
+<p class="muted">{{ _("bio.admin_intro") }}</p>
+<h2>{{ _("bio.queue") }} ({{ pending|length }})</h2>
+<div class="table-wrap"><table><thead><tr><th>{{ _("bio.driver") }}</th><th>{{ _("pool.company") }}</th><th>{{ _("common.date") }}</th><th></th></tr></thead>
+<tbody>{% for c, d in pending %}<tr><td>{{ d.full_name }}{% if d.reverify_reason %} <span class="badge warn">{{ _("bio.reverify_short") }}</span>{% endif %}</td>
+<td>{% set co = companies.get(d.company_id) %}{{ co.name if co else "—" }}</td><td>{{ fmt_dt(c.created_at) }}</td>
+<td><a class="btn small primary" href="/admin/biometrics/{{ c.id }}">{{ _("bio.review") }}</a></td></tr>
+{% else %}<tr><td colspan="4" class="empty">{{ _("bio.queue_empty") }}</td></tr>{% endfor %}</tbody></table></div>
+<h2>{{ _("bio.decided") }}</h2>
+<div class="table-wrap"><table><thead><tr><th>{{ _("bio.driver") }}</th><th>{{ _("common.status") }}</th><th>{{ _("admin.reason") }}</th><th>{{ _("common.date") }}</th></tr></thead>
+<tbody>{% for c, d in decided %}<tr><td><a href="/admin/biometrics/{{ c.id }}">{{ d.full_name }}</a></td>
+<td><span class="badge {{ 'ok' if c.status == 'passed' else ('warn' if c.status in ('withdrawn', 'unavailable') else 'err') }}">{{ _("bio.st." ~ c.status) }}</span></td>
+<td>{{ _("bio.rr." ~ c.review_reason) if c.review_reason else "—" }}</td><td>{{ fmt_dt(c.reviewed_at or c.created_at) }}</td></tr>
+{% else %}<tr><td colspan="4" class="empty">{{ _("common.empty") }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

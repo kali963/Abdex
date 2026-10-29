@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}{{ _("admin.biometrics") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ _("bio.review_title") }}</h1><a class="btn small" href="/admin/biometrics">{{ _("admin.biometrics") }}</a></div>
+<section class="card">
+  <dl class="kv">
+    <dt>{{ _("bio.driver") }}</dt><dd>{{ driver.full_name if driver else "—" }}{% if driver and driver.iin %} · {{ _("fleet.iin") }} ••••{{ driver.iin[-4:] }}{% endif %}</dd>
+    <dt>{{ _("pool.company") }}</dt><dd>{{ company.name if company else "—" }}</dd>
+    <dt>{{ _("common.date") }}</dt><dd>{{ fmt_dt(check.created_at) }}</dd>
+    <dt>{{ _("common.status") }}</dt><dd><span class="badge {{ 'ok' if check.status == 'passed' else ('warn' if check.status in ('pending', 'withdrawn', 'unavailable') else 'err') }}">{{ _("bio.st." ~ check.status) }}</span></dd>
+    {% if reviewer %}<dt>{{ _("bio.reviewed_by") }}</dt><dd>{{ reviewer.full_name }} · {{ fmt_dt(check.reviewed_at) }}{% if check.review_reason %} · {{ _("bio.rr." ~ check.review_reason) }}{% endif %}{% if check.review_comment %}<br><small>{{ check.review_comment }}</small>{% endif %}</dd>{% endif %}
+  </dl>
+</section>
+{% if check.selfie_file_id or check.document_file_id %}
+<div class="bio-photos">
+  {% for fid, label in ((check.selfie_file_id, "bio.selfie"), (check.selfie2_file_id, "bio.selfie2"), (check.document_file_id, "bio.document")) %}{% if fid %}
+  <figure class="card"><a href="{{ file_url(fid) }}" target="_blank" rel="noopener"><img src="{{ file_url(fid) }}" alt="{{ _(label) }}" loading="lazy"></a><figcaption>{{ _(label) }}</figcaption></figure>
+  {% endif %}{% endfor %}
+</div>
+{% else %}<p class="muted">{{ _("bio.images_gone") }}</p>{% endif %}
+{% if check.status == "pending" %}
+<form class="card stack" method="post" action="/admin/biometrics/{{ check.id }}">{{ ui.csrf() }}
+  <h2>{{ _("admin.decision") }}</h2>
+  <p class="muted">{{ _("bio.review_hint") }}</p>
+  {{ ui.checkbox("face_match", _("bio.cf.face_match")) }}
+  {{ ui.checkbox("live", _("bio.cf.live")) }}
+  {{ ui.checkbox("document_ok", _("bio.cf.document_ok")) }}
+  <div class="row"><button class="btn ok" name="decision" value="approve">{{ _("admin.approve") }}</button></div>
+  <hr>
+  <div class="field"><label for="f-reason">{{ _("bio.reject_reason") }}</label><select id="f-reason" name="reason"><option value="">—</option>{% for r in reasons %}<option value="{{ r }}">{{ _("bio.rr." ~ r) }}</option>{% endfor %}</select></div>
+  {{ ui.textarea("comment", _("admin.comment"), "", rows=2) }}
+  <div class="row"><button class="btn danger" name="decision" value="reject">{{ _("admin.reject") }}</button></div>
+</form>
+{% endif %}
+{% endblock %}

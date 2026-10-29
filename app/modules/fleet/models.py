@@ -114,9 +114,16 @@ class BiometricCheck(Model):
     match: Mapped[bool] = mapped_column(Boolean, default=False)
     liveness: Mapped[bool] = mapped_column(Boolean, default=False)
     score: Mapped[int] = mapped_column(Integer, default=0)  # 0..100
-    status: Mapped[str] = mapped_column(String(20), default="passed")  # passed / failed / unavailable
+    # pending (waits for the moderator) / passed / failed / withdrawn (consent revoked before the decision) /
+    # unavailable (automatic provider down)
+    status: Mapped[str] = mapped_column(String(20), default="passed", index=True)
     selfie_file_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("stored_files.id"))
+    selfie2_file_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("stored_files.id"))
     document_file_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("stored_files.id"))
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
+    review_reason: Mapped[str] = mapped_column(String(40), default="")
+    review_comment: Mapped[str] = mapped_column(String(500), default="")
     images_delete_after: Mapped[datetime | None] = mapped_column(AwareDateTime)
     images_deleted_at: Mapped[datetime | None] = mapped_column(AwareDateTime)
     valid_until: Mapped[date | None] = mapped_column(Date)

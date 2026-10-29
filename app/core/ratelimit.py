@@ -41,7 +41,7 @@ LIMITS = {
 
 DEFAULTS = dict(LIMITS)
 _overrides: dict[str, tuple[int, int]] = {}
-_loaded_at = 0.0
+_loaded_at = float("-inf")  # load at the first use, even right after boot (monotonic time)
 REFRESH_SECONDS = 60
 loader = None  # set at start-up: returns {"bucket": [limit, window_seconds]} from the platform setting
 

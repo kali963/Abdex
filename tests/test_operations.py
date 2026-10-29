@@ -315,3 +315,24 @@ def test_log_lines_carry_request_and_trace_ids(client_app):
     finally:
         logging.getLogger("abdex.http").removeHandler(h)
     assert any(x["trace_id"] == trace and x["request_id"] == "req-log-1" for x in lines), lines
+
+
+def test_caches_reload_right_after_boot(client_app, monkeypatch):
+    """time.monotonic() starts near zero at boot: an invalidated cache must still be reloaded then (a reset to
+    0.0 counted as "fresh" during the first minute — CI runners showed it as a flaky test)."""
+    import time as _time
+
+    from app.modules.accounts import permissions
+    from app.modules.platform import processing
+
+    monkeypatch.setattr(_time, "monotonic", lambda: 5.0)  # five seconds after boot
+    monkeypatch.setitem(processing._cache, "adapters", {"stale-adapter"})
+    monkeypatch.setitem(processing._cache, "at", 4.0)
+    processing.invalidate()
+    assert "stale-adapter" not in processing.registered_adapters()
+    monkeypatch.setitem(permissions._cache, "perms", {"stale": set()})
+    monkeypatch.setitem(permissions._cache, "at", 4.0)
+    permissions.invalidate()
+    assert "stale" not in permissions._load()["perms"]
+    processing.invalidate()
+    permissions.invalidate()

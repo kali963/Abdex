@@ -54,7 +54,7 @@ DEFAULT_RECORDS = {
                     "Только во время рейса, отключается после выгрузки", "Срок хранения сделки", ""),
 }
 
-_cache: dict = {"at": 0.0, "adapters": None}
+_cache: dict = {"at": float("-inf"), "adapters": None}  # -inf: never fresh (monotonic time starts at boot)
 
 
 def seed(db: Session) -> None:
@@ -69,7 +69,7 @@ def seed(db: Session) -> None:
 
 
 def invalidate() -> None:
-    _cache["at"] = 0.0
+    _cache["at"] = float("-inf")
 
 
 def registered_adapters() -> set[str]:

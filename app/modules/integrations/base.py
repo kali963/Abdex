@@ -76,7 +76,7 @@ class CircuitBreaker:
 
 
 QUOTA_SETTING = "integrations.daily_quota"
-_quota_cache: tuple[float, dict] = (0.0, {})
+_quota_cache: tuple[float, dict] = (float("-inf"), {})  # monotonic time starts at boot
 _quota_local: dict[str, int] = {}
 _quota_lock = threading.Lock()
 

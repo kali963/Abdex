@@ -38,6 +38,7 @@ def assert_file_access(db: Session, me: Principal, file_id) -> None:
     from app.modules.fleet.models import BiometricCheck, Driver
 
     bio = db.execute(select(BiometricCheck).where(or_(BiometricCheck.selfie_file_id == file_id,
+                                                      BiometricCheck.selfie2_file_id == file_id,
                                                       BiometricCheck.document_file_id == file_id))).scalars().first()
     if bio is not None:
         # SEC-DAT-10: biometric images are seen by the driver alone (and the moderator above), not the employer
