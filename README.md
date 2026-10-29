@@ -31,6 +31,8 @@ INITIAL_ADMIN_PHONE=+77010000000 INITIAL_ADMIN_NAME="Админ" INITIAL_ADMIN_P
   uvicorn app.main:app --reload
 ```
 
+В Docker на своём компьютере (Kali, Debian, Ubuntu) — [docs/local-docker.md](docs/local-docker.md).
+
 Откройте <http://localhost:8000> (база `var/abdex.db`). SMS и письма в режиме разработки никуда не уходят: их
 видно на странице `/dev/outbox`. Тесты: `pytest` (тестовые компании и сделки создаются только в тестовой базе,
 `tests/demo_data.py`).

@@ -76,3 +76,13 @@ def test_login_page_has_no_demo_accounts(client_app):
     page = client_app.get("/login").text
     assert "AbdexDemo2026" not in page and "admin@abdex.kz" not in page
     assert "Vercel" not in client_app.get("/").text
+
+
+def test_dev_secret_key_is_shared_between_processes(tmp_path):
+    """Without SECRET_KEY every process of a development install uses the same key (no random logouts)."""
+    from app.config import _dev_secret_key
+
+    first = _dev_secret_key(tmp_path / "storage")
+    assert len(first) > 40
+    assert _dev_secret_key(tmp_path / "storage") == first  # a second process reads the same key
+    assert oct((tmp_path / "storage" / ".dev-secret-key").stat().st_mode)[-3:] == "600"
