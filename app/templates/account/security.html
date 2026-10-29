@@ -36,7 +36,7 @@
       <button class="btn primary">{{ _("account.2fa_enable") }}</button></form>
   {% endif %}
 </section>
-{% if eds_login %}
+{% if eds_login or egov_login %}
 <section class="card panel-3d" id="eds">
   <h2>🔐 {{ _("eds.login_title") }}</h2>
   <p class="muted">{{ _("eds.login_text") }}</p>
@@ -45,10 +45,19 @@
     <form method="post" action="/account/eds/unlink">{{ ui.csrf() }}<button class="btn danger">{{ _("eds.unlink") }}</button></form>
   {% else %}
     <p><span class="badge">{{ _("account.2fa_off") }}</span></p>
-    <div class="eds stack">
-      <button type="button" class="btn primary" data-eds-auth data-key="auth" data-mode="{{ eds_mode }}" data-challenge="/login/eds/challenge" data-action="/account/eds/link" {% if eds_mode == "dev" %}data-cert="/dev/eds/login-certificate"{% endif %} data-wait="{{ _('eds.wait') }}" data-fail="{{ _('eds.fail') }}">{{ _("eds.link") }}</button>
+    {% if eds_login %}<div class="eds stack">
+      <button type="button" class="btn primary" data-eds-auth data-key="auth" data-mode="{{ eds_mode }}" data-challenge="/login/eds/challenge" data-action="/account/eds/link" {% if eds_mode == "dev" %}data-cert="/dev/eds/login-certificate"{% endif %} data-wait="{{ _('eds.wait') }}" data-fail="{{ _('eds.fail') }}">💻 {{ _("eds.link") }}</button>
       <small class="muted" data-eds-status>{{ _("eds.note_dev") if eds_mode == "dev" else _("eds.note") }}</small>
-    </div>
+    </div>{% endif %}
+    {% if egov_login %}<div class="egov stack" data-egov data-start="/account/egov/link/start" data-wait="{{ _('egov.wait') }}" data-fail="{{ _('eds.fail') }}" data-expired="{{ _('egov.expired') }}">
+      <button type="button" class="btn{{ '' if eds_login else ' primary' }}" data-egov-start>📱 {{ _("egov.link_btn") }}</button>
+      <div class="egov-qr" data-egov-panel hidden>
+        <img data-egov-qr alt="{{ _('egov.qr_alt') }}" width="200" height="200">
+        <p><small class="muted">{{ _("egov.scan_link") }}</small></p>
+        <p class="row egov-links"><a class="btn small" data-egov-deeplink="mgov" hidden rel="noopener">{{ _("egov.open_mgov") }}</a> <a class="btn small" data-egov-deeplink="business" hidden rel="noopener">{{ _("egov.open_business") }}</a></p>
+      </div>
+      <small class="muted" data-egov-status></small>
+    </div>{% endif %}
   {% endif %}
 </section>
 {% endif %}
@@ -78,4 +87,4 @@
 </section>
 </div>
 {% endblock %}
-{% block scripts %}{% if eds_login %}<script src="/static/js/eds.js?v=7" data-nolayer="{{ _('eds.no_ncalayer') }}" data-install="{{ _('eds.install_ncalayer') }}" data-lna="{{ _('eds.lna') }}" defer></script>{% endif %}{% endblock %}
+{% block scripts %}{% if eds_login or egov_login %}<script src="/static/js/eds.js?v=7" data-nolayer="{{ _('eds.no_ncalayer') }}" data-install="{{ _('eds.install_ncalayer') }}" data-lna="{{ _('eds.lna') }}" defer></script>{% endif %}{% endblock %}
