@@ -96,12 +96,39 @@ class Settings:
         return self.app_env in {"development", "test"}
 
 
+def _dev_secret_key(storage_dir: Path) -> str:
+    """Development without SECRET_KEY: one random key shared by every process (several web workers, the
+    background worker) through a file in the storage directory. A key per process would make a session
+    created by one process unknown to the others — random logouts and "form expired" errors."""
+    import time
+
+    path = storage_dir / ".dev-secret-key"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            for _ in range(50):  # another process may be writing it right now
+                value = path.read_text(encoding="utf-8").strip()
+                if value:
+                    return value
+                time.sleep(0.05)
+        else:
+            value = secrets.token_urlsafe(48)
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(value)
+            return value
+    except OSError:
+        pass
+    return secrets.token_urlsafe(48)
+
+
 def load_settings() -> Settings:
     s = Settings()
     if not s.secret_key:
         if s.is_production:
             raise RuntimeError("SECRET_KEY must be set in production")
-        object.__setattr__(s, "secret_key", secrets.token_urlsafe(48))
+        object.__setattr__(s, "secret_key", _dev_secret_key(s.storage_dir))
     for name in ("eds_ncanode_url", "payment_provider_url", "fx_rates_url"):  # external endpoints: http(s) only
         value = getattr(s, name)
         if value and not value.startswith(("https://", "http://")):

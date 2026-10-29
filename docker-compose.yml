@@ -1,5 +1,8 @@
-# Local / pre-production stack: app + background worker + PostgreSQL.
-# Start:  docker compose up --build   ->  http://localhost:8000
+# Local stack for trying the site on your own computer: app + background worker + PostgreSQL.
+#   cp .env.example .env      # fill in INITIAL_ADMIN_* / INITIAL_USER_* (passwords of 12+ characters)
+#   docker compose up -d --build   ->  http://localhost:8000
+# SMS and e-mails are not sent in this mode: the codes are on http://localhost:8000/dev/outbox.
+# The production server uses deploy/docker-compose.prod.yml instead (docs/launch.md).
 services:
   db:
     image: postgres:16-alpine
@@ -33,11 +36,15 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://abdex:abdex@db:5432/abdex
+      MIGRATE_ON_START: "false"   # the app container migrates; the worker waits for it
     command: ["python", "-m", "app.worker"]
+    healthcheck:
+      disable: true               # no web server in this container
     volumes:
       - storage:/data/storage
     depends_on:
-      - app
+      app:
+        condition: service_healthy
 
   # GOV-DS-02: verification of NCA RK signatures (NCALayer, eGov mobile, eGov Business) — CMS, chain, OCSP, TSP.
   # Start with:  docker compose --profile eds up -d   and set EDS_NCANODE_URL=http://ncanode:14579 in .env.
