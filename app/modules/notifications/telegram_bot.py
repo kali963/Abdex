@@ -27,7 +27,7 @@ from app.core.audit import audit
 
 log = logging.getLogger("abdex.telegram")
 OFFSET_SETTING = "telegram.update_offset"
-_username_cache: tuple[float, str] = (0.0, "")
+_username_cache: tuple[float, str] = (float("-inf"), "")
 
 
 def enabled() -> bool:

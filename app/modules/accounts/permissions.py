@@ -78,11 +78,11 @@ LOCKED = {(STAFF_ADMIN, "admin.access"), (STAFF_ADMIN, "admin.settings"), (ROLE_
 NEVER = {(STAFF_AUDITOR, p) for p in STAFF_PERMISSIONS if p not in ("admin.access", "admin.audit")}
 
 CACHE_TTL = 30.0
-_cache: dict = {"at": 0.0, "perms": None, "roles": None}
+_cache: dict = {"at": float("-inf"), "perms": None, "roles": None}  # -inf: never fresh (monotonic starts at boot)
 
 
 def invalidate() -> None:
-    _cache["at"] = 0.0
+    _cache["at"] = float("-inf")
 
 
 def _load() -> dict:
